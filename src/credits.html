@@ -20,22 +20,26 @@
     </script>
 </head>
 <body class="popup-window">
-    <div style="display:flex; align-items:center; margin-bottom:20px;">
-        <img id="credits-logo" src="./assets/icon.png" alt="Diamond File Converter Logo">
-        <h1 style="margin:0; text-align:left;">Diamond File Converter</h1>
-    </div>
-    <p>• Created by TheFuturisticIdiot - <a href="#" onclick="shell.openExternal('https://github.com/TheFuturisticIdiot/diamond-file-converter'); return false;">https://github.com/TheFuturisticIdiot/diamond-file-converter</a></p>
-    <p>• Logo designed by TheFuturisticIdiot - <a href="#" onclick="shell.openExternal('https://youtube.com/TheFuturisticIdiot'); return false;">https://youtube.com/TheFuturisticIdiot</a></p>
-    <p>• This software is licensed under the Apache 2.0 license.</p>
-    <hr>
-    <p>• If you enjoy this software, consider donating or joining our community!</p>
-    <div style="display:flex; flex-direction:column; gap:8px;">
-        <button id="btn-donate" class="btn">Donate on Buy Me a Coffee</button>
-        <button id="btn-discord" class="btn">Join our Discord Server</button>
-        <button id="btn-github" class="btn">View Source Code on GitHub</button>
+    <div>
+        <div>
+            <div style="display:flex;">
+                <img id="credits-logo" src="./assets/icon.png" alt="Diamond File Converter Logo">
+                <h2>Diamond File Converter</h2>
+            </div>
+            <p>• Created by TheFuturisticIdiot - <a href="#" onclick="shell.openExternal('https://github.com/TheFuturisticIdiot/diamond-file-converter'); return false;">https://github.com/TheFuturisticIdiot/diamond-file-converter</a></p>
+            <p>• Logo designed by TheFuturisticIdiot - <a href="#" onclick="shell.openExternal('https://youtube.com/TheFuturisticIdiot'); return false;">https://youtube.com/TheFuturisticIdiot</a></p>
+            <p>• This software is licensed under the Apache 2.0 license.</p>
+            <hr>
+            <p>• If you enjoy this software, consider donating or joining our community!</p>
+            <div>
+                <button id="btn-donate" class="btn">Donate on Buy Me a Coffee</button>
+                <button id="btn-discord" class="btn">Join our Discord Server</button>
+                <button id="btn-github" class="btn">View Source Code on GitHub</button>
+            </div>
+        </div>
     </div>
     <script>
-        document.querySelector("h1").innerText += ` v${require("../package.json").version}`;
+        document.querySelector("h2").innerText += ` v${require("../package.json").version}`;
 
         document.getElementById("btn-donate").addEventListener("click", () => {
             shell.openExternal("https://www.buymeacoffee.com/willtda");

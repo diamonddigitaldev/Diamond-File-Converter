@@ -48,6 +48,7 @@ body.popup-window .btn {
     display: block;
     width: 100%;
     padding: 10px;
+    margin-top: 20px;
     font-size: 16px;
     background-color: var(--bs-secondary-bg);
     color: var(--bs-body-color);

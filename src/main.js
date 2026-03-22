@@ -109,8 +109,8 @@ function createWindow() {
 
 function createCreditsWindow() {
     const creditsWindow = new BrowserWindow({
-        width: 600,
-        height: 400,
+        width: 750,
+        height: 450,
         parent: mainWindow,
         modal: true,
         resizable: false,
