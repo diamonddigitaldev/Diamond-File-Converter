@@ -1,0 +1,43 @@
+{
+    "name": "diamond-file-converter",
+    "version": "1.0.0",
+    "description": "A file converter app.",
+    "main": "src/main.js",
+    "scripts": {
+        "start": "electron .",
+        "build": "electron-builder"
+    },
+    "devDependencies": {
+        "electron": "^41.0.3",
+        "electron-builder": "^26.8.1"
+    },
+    "dependencies": {
+        "bootstrap": "^5.3.3",
+        "electron-store": "^11.0.2",
+        "electron-updater": "^6.8.3",
+        "fluent-ffmpeg": "^2.1.3",
+        "ffmpeg-static": "^5.2.0",
+        "material-icons": "^1.13.14"
+    },
+    "build": {
+        "appId": "com.yourname.file-converter",
+        "productName": "File Converter",
+        "copyright": "Copyright © 2025 Your Name",
+        "extraResources": [
+            { "from": "node_modules/ffmpeg-static/ffmpeg.exe", "to": "ffmpeg/ffmpeg.exe" }
+        ],
+        "win": {
+            "target": "nsis",
+            "icon": "src/assets/icon.ico"
+        },
+        "nsis": {
+            "perMachine": true,
+            "createDesktopShortcut": true
+        },
+        "publish": {
+            "provider": "github",
+            "owner": "your-github-username",
+            "repo": "your-repo-name"
+        }
+    }
+}
