@@ -292,7 +292,7 @@ function setupAutoUpdater() {
             cancelId: 1
         }).then(result => {
             if (result.response === 0) autoUpdater.downloadUpdate();
-            if (result.response === 2) shell.openExternal(`https://github.com/TheFuturisticIdiot/diamond-file-converter/releases/tag/${info.version}`);
+            if (result.response === 2) shell.openExternal(`https://github.com/WillTDA/diamond-file-converter/releases/tag/${info.version}`);
         });
     });
 
@@ -330,7 +330,7 @@ function checkForUpdatesManually() {
                 detail: `v${app.getVersion()} is the latest version.`,
                 buttons: ["OK", "View Changelog"]
             }).then(r => {
-                if (r.response === 1) shell.openExternal(`https://github.com/TheFuturisticIdiot/diamond-file-converter/releases/tag/${app.getVersion()}`);
+                if (r.response === 1) shell.openExternal(`https://github.com/WillTDA/diamond-file-converter/releases/tag/${app.getVersion()}`);
             });
         }
     }).catch(err => {

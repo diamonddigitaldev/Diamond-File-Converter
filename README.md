@@ -29,7 +29,7 @@
 
 ## Installation
 
-1. Download the latest release from the [releases page](https://github.com/TheFuturisticIdiot/diamond-file-converter/releases).
+1. Download the latest release from the [releases page](https://github.com/WillTDA/diamond-file-converter/releases).
 2. Run the installer and follow the on-screen instructions.
 3. Launch Diamond File Converter and start converting!
 
@@ -45,7 +45,7 @@
 
 1. Clone the repository:
    ```
-   git clone https://github.com/TheFuturisticIdiot/diamond-file-converter.git
+   git clone https://github.com/WillTDA/diamond-file-converter.git
    ```
 
 2. Install dependencies:
@@ -82,8 +82,8 @@ Diamond File Converter is licensed under the Apache 2.0 License. See the [LICENS
 ## Contact Us
 
 - 🎮 Need help or want to chat? [Join our Discord Server](https://diamonddigital.dev/discord)!
-- 🐛 Found a bug? [Open an issue](https://github.com/TheFuturisticIdiot/diamond-file-converter/issues) on our GitHub repository.
-- 💡 Have a feature request? [Submit it here](https://github.com/TheFuturisticIdiot/diamond-file-converter/issues/new?labels=enhancement)!
+- 🐛 Found a bug? [Open an issue](https://github.com/WillTDA/diamond-file-converter/issues) on our GitHub repository.
+- 💡 Have a feature request? [Submit it here](https://github.com/WillTDA/diamond-file-converter/issues/new?labels=enhancement)!
 
 ---
 

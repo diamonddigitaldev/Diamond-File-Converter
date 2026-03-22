@@ -13,7 +13,7 @@
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/TheFuturisticIdiot/Diamond-File-Converter"
+        "url": "https://github.com/WillTDA/Diamond-File-Converter"
     },
     "build": {
         "appId": "com.diamonddigitaldev.diamondfileconverter",
@@ -24,7 +24,7 @@
         ],
         "publish": {
             "provider": "github",
-            "owner": "TheFuturisticIdiot",
+            "owner": "WillTDA",
             "repo": "Diamond-File-Converter"
         },
         "win": {
