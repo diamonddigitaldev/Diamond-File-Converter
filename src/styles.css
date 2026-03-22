@@ -275,3 +275,13 @@ body.popup-window a:hover {
 .converting-spin {
     animation: spin 1.4s linear infinite;
 }
+
+/* ── Credits logo ────────────────────────────────────────────────────────── */
+
+#credits-logo {
+    width: 24px;
+    height: 24px;
+    pointer-events: none;
+    margin-right: 10px;
+    flex-shrink: 0;
+}

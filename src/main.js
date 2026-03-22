@@ -107,10 +107,35 @@ function createWindow() {
     });
 }
 
+function createCreditsWindow() {
+    const creditsWindow = new BrowserWindow({
+        width: 600,
+        height: 400,
+        parent: mainWindow,
+        modal: true,
+        resizable: false,
+        minimizable: false,
+        maximizable: false,
+        fullscreenable: false,
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false
+        },
+        icon: getIconPath()
+    });
+    creditsWindow.on("minimize", (e) => {
+        e.preventDefault();
+        creditsWindow.show();
+        creditsWindow.focus();
+    });
+    creditsWindow.setMenu(null);
+    creditsWindow.loadFile(path.join(__dirname, "credits.html"));
+}
+
 function setupMenu() {
     const template = [
         {
-            label: APP_NAME,
+            label: "Menu",
             submenu: [
                 {
                     label: "Open File",
@@ -137,6 +162,11 @@ function setupMenu() {
                     role: "quit"
                 }
             ]
+        },
+        {
+            label: "Credits",
+            accelerator: "C",
+            click: () => { createCreditsWindow(); }
         }
     ];
 
@@ -262,7 +292,7 @@ function setupAutoUpdater() {
             cancelId: 1
         }).then(result => {
             if (result.response === 0) autoUpdater.downloadUpdate();
-            if (result.response === 2) shell.openExternal(`https://github.com/your-username/your-repo/releases/tag/${info.version}`);
+            if (result.response === 2) shell.openExternal(`https://github.com/TheFuturisticIdiot/diamond-file-converter/releases/tag/${info.version}`);
         });
     });
 
@@ -300,7 +330,7 @@ function checkForUpdatesManually() {
                 detail: `v${app.getVersion()} is the latest version.`,
                 buttons: ["OK", "View Changelog"]
             }).then(r => {
-                if (r.response === 1) shell.openExternal(`https://github.com/your-username/your-repo/releases/tag/${app.getVersion()}`);
+                if (r.response === 1) shell.openExternal(`https://github.com/TheFuturisticIdiot/diamond-file-converter/releases/tag/${app.getVersion()}`);
             });
         }
     }).catch(err => {
