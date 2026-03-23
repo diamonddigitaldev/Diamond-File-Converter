@@ -1,6 +1,6 @@
 :root {
-    --accent: #9740fb;
-    --accent-hover: #b06cff;
+    --accent: #28a745;
+    --accent-hover: #34d058;
 }
 
 [data-bs-theme="dark"] {
@@ -62,14 +62,15 @@ body.popup-window .btn:hover {
     background-color: var(--bs-tertiary-bg);
 }
 
-body.popup-window a {
-    color: var(--accent);
+body.popup-window span {
+    color: #5dd879;
     text-decoration: none;
-    transition: color 0.2s;
+    cursor: pointer;
+    transition: all 0.3s;
 }
 
-body.popup-window a:hover {
-    color: var(--accent-hover);
+body.popup-window span:hover {
+    color: #28a745;
     text-decoration: underline;
 }
 
@@ -93,7 +94,7 @@ body.popup-window a:hover {
 .drop-zone:hover,
 .drop-zone.drag-over {
     border-color: var(--accent);
-    background-color: rgba(151, 64, 251, 0.06);
+    background-color: rgba(40, 167, 69, 0.06);
 }
 
 .drop-icon {
@@ -280,9 +281,11 @@ body.popup-window a:hover {
 /* ── Credits logo ────────────────────────────────────────────────────────── */
 
 #credits-logo {
+    margin: 0;
     width: 24px;
     height: 24px;
     pointer-events: none;
+    vertical-align: middle;
+    margin-top: 5px;
     margin-right: 10px;
-    flex-shrink: 0;
 }

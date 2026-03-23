@@ -51,9 +51,9 @@ let conversionCancelled = false;
 
 function getIconPath() {
     switch (process.platform) {
-        case "darwin": return path.join(__dirname, "assets", "icon.icns");
-        case "linux":  return path.join(__dirname, "assets", "icon.png");
-        default:       return path.join(__dirname, "assets", "icon.ico");
+        case "darwin": return path.join(__dirname, "assets", "diamondfileconverter.icns");
+        case "linux":  return path.join(__dirname, "assets", "diamondfileconverter.png");
+        default:       return path.join(__dirname, "assets", "diamondfileconverter.ico");
     }
 }
 
@@ -81,10 +81,7 @@ function createWindow() {
     });
 
     mainWindow.loadFile(path.join(__dirname, "index.html"));
-
-    if (!app.isPackaged) {
-        mainWindow.webContents.openDevTools();
-    }
+    // mainWindow.webContents.openDevTools();
 
     // debounced save so we dont spam the disk with updates
     let saveBoundsTimeout;
@@ -257,6 +254,10 @@ ipcMain.handle(IPC.CONVERT_FILE, async (_event, filePath, targetExt) => {
             })
             .on("error", (err) => {
                 activeConversion = null;
+                // clean up partial output file on cancel or failure
+                if (fs.existsSync(outputPath)) {
+                    try { fs.unlinkSync(outputPath); } catch (e) { log(LOG.WARN, "Could not delete partial file:", e.message); }
+                }
                 if (conversionCancelled) {
                     conversionCancelled = false;
                     resolve(null);

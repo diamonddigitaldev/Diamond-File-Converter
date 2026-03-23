@@ -1,59 +1,59 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Diamond File Converter | Credits</title>
     <link rel="stylesheet" href="../node_modules/bootstrap/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="../node_modules/material-icons/iconfont/round.css">
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="../node_modules/material-icons/iconfont/round.css">
     <script>
-        (() => {
-            const mql = window.matchMedia("(prefers-color-scheme: dark)");
-            const apply = () => document.documentElement.setAttribute("data-bs-theme", mql.matches ? "dark" : "light");
-            apply();
-            mql.addEventListener("change", apply);
-        })();
+        const theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-bs-theme', theme);
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+            document.documentElement.setAttribute('data-bs-theme', e.matches ? 'dark' : 'light');
+        });
     </script>
     <script>
         const { shell } = require("electron");
     </script>
 </head>
+
 <body class="popup-window">
     <div>
         <div>
             <div style="display:flex;">
-                <img id="credits-logo" src="./assets/icon.png" alt="Diamond File Converter Logo">
-                <h2>Diamond File Converter</h2>
+                <img id="credits-logo" src="./assets/diamondfileconverter.png" alt="Diamond File Converter Logo">
+            <h2>Diamond File Converter</h2>
             </div>
-            <p>• Created and maintained by Diamond Digital Development. - <a href="#" onclick="shell.openExternal('https://github.com/diamonddigitaldev/diamond-file-converter'); return false;">https://github.com/diamonddigitaldev/Diamond-File-Converter</a></p>
-            <p>• Logo designed by TheFuturisticIdiot - <a href="#" onclick="shell.openExternal('https://youtube.com/TheFuturisticIdiot'); return false;">https://youtube.com/TheFuturisticIdiot</a></p>
+            <p>• Created and maintained by <span onclick="shell.openExternal('https://diamonddigital.dev')">Diamond Digital Development</span>.</p>
+            <p>• Logo designed by <span onclick="shell.openExternal('https://youtube.com/TheFuturisticIdiot')">TheFuturisticIdiot</span>.</p>
             <p>• This software is licensed under the Apache 2.0 license.</p>
             <hr>
-            <p>• If you enjoy this software, consider donating or joining our community!</p>
+            <p>• If you enjoy this software, consider donating to support development!</p>
             <div>
-                <button id="btn-donate" class="btn">Donate on Buy Me a Coffee</button>
-                <button id="btn-discord" class="btn">Join our Discord Server</button>
-                <button id="btn-github" class="btn">View Source Code on GitHub</button>
+                <button id="donate" class="btn">Donate on Buy Me a Coffee</button>
+                <button id="github" class="btn">View Source Code on GitHub</button>
             </div>
         </div>
     </div>
+
     <script>
         document.querySelector("h2").innerText += ` v${require("../package.json").version}`;
 
-        document.getElementById("btn-donate").addEventListener("click", () => {
-            shell.openExternal("https://www.buymeacoffee.com/willtda");
-        });
-        document.getElementById("btn-discord").addEventListener("click", () => {
-            shell.openExternal("https://diamonddigital.dev/discord");
-        });
-        document.getElementById("btn-github").addEventListener("click", () => {
-            shell.openExternal("https://github.com/diamonddigitaldev/diamond-file-converter");
+        document.getElementById("donate").addEventListener("click", () => {
+            shell.openExternal("https://buymeacoff.ee/willtda");
         });
 
-        document.addEventListener("keydown", (event) => {
-            if (event.key === "Escape") window.close();
+        document.getElementById("github").addEventListener("click", () => {
+            shell.openExternal("https://github.com/diamonddigitaldev/Diamond-File-Converter");
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') window.close();
         });
     </script>
 </body>
+
 </html>

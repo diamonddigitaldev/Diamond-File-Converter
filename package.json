@@ -31,7 +31,7 @@
             "target": [
                 "nsis"
             ],
-            "icon": "src/assets/icon.ico"
+            "icon": "src/assets/diamondfileconverter.ico"
         },
         "nsis": {
             "perMachine": true,
