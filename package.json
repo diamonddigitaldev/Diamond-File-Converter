@@ -13,7 +13,7 @@
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/WillTDA/Diamond-File-Converter"
+        "url": "https://github.com/diamonddigitaldev/Diamond-File-Converter"
     },
     "build": {
         "appId": "com.diamonddigitaldev.diamondfileconverter",
@@ -24,7 +24,7 @@
         ],
         "publish": {
             "provider": "github",
-            "owner": "WillTDA",
+            "owner": "diamonddigitaldev",
             "repo": "Diamond-File-Converter"
         },
         "win": {
@@ -35,7 +35,8 @@
         },
         "nsis": {
             "perMachine": true,
-            "createDesktopShortcut": true
+            "createDesktopShortcut": true,
+            "menuCategory": "Diamond Digital Development"
         }
     },
     "keywords": [],
