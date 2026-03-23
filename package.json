@@ -1,7 +1,7 @@
 {
     "name": "diamond-file-converter",
     "version": "1.0.0",
-    "description": "An open-source file converter for Windows built with Electron.",
+    "description": "An Electron-based Windows app for converting audio, video, and image files.",
     "main": "src/main.js",
     "funding": {
         "type": "buymeacoffee",
