@@ -1,5 +1,5 @@
 <div align="center">
-   <img alt="Diamond File Converter Logo" src="./src/assets/diamondfileconverter.png" style="width:100px;height:auto;margin-bottom:1rem;" />
+   <img alt="Diamond File Converter Logo" src="./docs/img/diamondfileconverter.png" style="width:100px;height:auto;margin-bottom:1rem;" />
 
    # Diamond File Converter
 
