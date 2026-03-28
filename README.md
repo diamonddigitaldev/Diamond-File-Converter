@@ -75,7 +75,7 @@ Diamond File Converter is licensed under the Apache 2.0 License. See the [LICENS
 
 ## Acknowledgements
 
-- Logo designed by [TheFuturisticIdiot](https://youtube.com/TheFuturisticIdiot)
+- Logo designed by [TheFuturisticIdiot](https://github.com/TheFuturisticIdiot)
 - Built with [Electron](https://www.electronjs.org/)
 - Conversion powered by [FFmpeg](https://ffmpeg.org/) via [fluent-ffmpeg](https://github.com/fluent-ffmpeg/node-fluent-ffmpeg)
 
