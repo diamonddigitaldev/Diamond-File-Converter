@@ -91,7 +91,7 @@ body.popup-window span:hover {
     text-align: center;
 }
 
-.drop-zone:hover,
+.drop-zone:hover:not(:has(button:hover)),
 .drop-zone.drag-over {
     border-color: var(--accent);
     background-color: rgba(40, 167, 69, 0.06);
@@ -239,6 +239,8 @@ body.popup-window span:hover {
 
 .file-remove-btn .material-icons-round {
     font-size: 14px;
+    line-height: 1;
+    display: block;
 }
 
 /* ── Done file list ──────────────────────────────────────────────────────── */
