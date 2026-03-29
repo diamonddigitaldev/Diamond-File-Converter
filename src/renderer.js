@@ -18,7 +18,6 @@ function generateId() {
     return Math.random().toString(36).slice(2, 9);
 }
 
-const pluralFiles = n => `${n} File${n !== 1 ? "s" : ""}`;
 
 const TYPE_ORDER = { video: 0, audio: 1, image: 2 };
 const TYPE_ICONS  = { audio: "audio_file", video: "video_file", image: "image" };
@@ -100,7 +99,7 @@ function renderFileList() {
     container.innerHTML = "";
 
     const count = jobs.length;
-    document.getElementById("dz-file-count").textContent = `${pluralFiles(count)} Queued`;
+    document.getElementById("dz-file-count").textContent = `${count} ${count !== 1 ? "Files" : "File"} Queued`;
 
     let prevType = null;
     for (const job of jobs) {
@@ -235,7 +234,7 @@ function renderDoneList() {
     const errorCount = jobs.filter(j => j.status === "error").length;
     const cancelledCount = jobs.filter(j => j.status === "cancelled").length;
 
-    let summary = `${pluralFiles(doneCount)} converted`;
+    let summary = `${doneCount} ${doneCount !== 1 ? "files" : "file"} converted`;
     if (errorCount > 0) summary += `, ${errorCount} failed`;
     if (cancelledCount > 0) summary += `, ${cancelledCount} cancelled`;
     document.getElementById("done-summary").textContent = summary;
@@ -243,43 +242,42 @@ function renderDoneList() {
     const listEl = document.getElementById("done-file-list");
     listEl.innerHTML = "";
 
+    const STATUS_ICON = {
+        done:      { text: "check_circle", cls: "text-success"   },
+        error:     { text: "error",        cls: "text-danger"     },
+        cancelled: { text: "cancel",       cls: "text-secondary"  },
+    };
+
     for (const job of jobs) {
         const row = document.createElement("div");
-        row.className = "done-file-row";
+        row.className = "file-row";
 
-        const STATUS_ICON = {
-            done:      { text: "check_circle", cls: "text-success"   },
-            error:     { text: "error",        cls: "text-danger"     },
-            cancelled: { text: "cancel",       cls: "text-secondary"  },
-        };
         const { text: iconText, cls } = STATUS_ICON[job.status] ?? STATUS_ICON.cancelled;
         const icon = document.createElement("span");
         icon.className = `material-icons-round ${cls}`;
         icon.textContent = iconText;
 
         const name = document.createElement("span");
-        name.className = "small text-truncate";
+        name.className = "file-row-name small";
         name.textContent = path.basename(job.status === "done" ? job.outputPath : job.filePath);
         name.title = job.status === "done" ? job.outputPath : job.filePath;
 
         row.appendChild(icon);
         row.appendChild(name);
+
+        if (job.status === "done") {
+            const openBtn = document.createElement("button");
+            openBtn.className = "file-open-btn";
+            openBtn.title = "Show in folder";
+            const openIcon = document.createElement("span");
+            openIcon.className = "material-icons-round";
+            openIcon.textContent = "open_in_new";
+            openBtn.appendChild(openIcon);
+            openBtn.addEventListener("click", () => ipcRenderer.invoke(IPC.SHOW_IN_FOLDER, job.outputPath));
+            row.appendChild(openBtn);
+        }
+
         listEl.appendChild(row);
-    }
-
-    const foldersEl = document.getElementById("done-folder-btns");
-    foldersEl.innerHTML = "";
-    const folders = [...new Set(
-        jobs.filter(j => j.status === "done").map(j => path.dirname(j.outputPath))
-    )];
-
-    for (const folder of folders) {
-        const btn = document.createElement("button");
-        btn.className = "btn btn-sm btn-primary";
-        btn.innerHTML = `<span class="material-icons-round me-1" style="vertical-align:middle;font-size:15px">folder_open</span>Open Folder`;
-        if (folders.length > 1) btn.title = folder;
-        btn.addEventListener("click", () => ipcRenderer.invoke(IPC.OPEN_FOLDER, folder));
-        foldersEl.appendChild(btn);
     }
 }
 

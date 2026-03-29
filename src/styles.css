@@ -245,21 +245,27 @@ body.popup-window span:hover {
 
 /* ── Done file list ──────────────────────────────────────────────────────── */
 
-.done-file-row {
-    display: flex;
+.file-open-btn {
+    border: none;
+    background: none;
+    color: var(--bs-secondary-color);
+    display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.2rem 0;
-    min-width: 0;
-}
-
-.done-file-row .material-icons-round {
-    font-size: 16px;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
     flex-shrink: 0;
+    transition: color 120ms ease;
 }
 
-.done-file-row .text-truncate {
-    min-width: 0;
+.file-open-btn:hover {
+    color: var(--bs-primary);
+}
+
+.file-open-btn .material-icons-round {
+    font-size: 16px;
+    line-height: 1;
+    display: block;
 }
 
 /* ── Done card ───────────────────────────────────────────────────────────── */

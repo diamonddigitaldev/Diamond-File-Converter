@@ -190,6 +190,11 @@ ipcMain.handle(IPC.OPEN_FOLDER, (_event, folderPath) => {
     shell.openPath(folderPath);
 });
 
+// IPC: show a file in its parent folder (highlights the file)
+ipcMain.handle(IPC.SHOW_IN_FOLDER, (_event, filePath) => {
+    shell.showItemInFolder(filePath);
+});
+
 // IPC: cancel an in progress conversion
 ipcMain.handle(IPC.CANCEL_CONVERT, () => {
     if (activeConversion) {

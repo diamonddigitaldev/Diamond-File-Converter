@@ -17,6 +17,7 @@ const IPC = {
     CONVERT_FILE:          "convert-file",
     CANCEL_CONVERT:        "cancel-convert",
     OPEN_FOLDER:           "open-folder",
+    SHOW_IN_FOLDER:        "show-in-folder",
     CONVERSION_PROGRESS:   "conversion-progress",   // push: percent (0-100)
     FILE_OPENED_FROM_MENU: "file-opened-from-menu", // push: file path string
 };
