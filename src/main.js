@@ -283,26 +283,34 @@ function setupAutoUpdater() {
     autoUpdater.autoInstallOnAppQuit = true;
 
     autoUpdater.on(IPC.UPDATE_AVAILABLE, (info) => {
+        const currentVersion = app.getVersion();
+        const newVersion = info.version;
         dialog.showMessageBox(mainWindow, {
             type: "info",
             title: "Update Available",
-            message: "A new version is available!",
-            detail: `Current: v${app.getVersion()}\nNew: v${info.version}\n\nWould you like to download and install it?`,
-            buttons: ["Yes, Update Now", "Not Now", "View Changelog"],
+            message: "A new version of Diamond File Converter is available!",
+            detail: `Current version: ${currentVersion}\nNew version: ${newVersion}\n\nWould you like to download and install this update?`,
+            buttons: ["Yes, Update Now", "No, Later", "View Changelog"],
             defaultId: 0,
             cancelId: 1
         }).then(result => {
             if (result.response === 0) autoUpdater.downloadUpdate();
-            if (result.response === 2) shell.openExternal(`https://github.com/diamonddigitaldev/diamond-file-converter/releases/tag/${info.version}`);
+            if (result.response === 2) shell.openExternal(`https://github.com/diamonddigitaldev/diamond-file-converter/releases/tag/${newVersion}`);
         });
+    });
+
+    autoUpdater.on("update-not-available", () => log(LOG.INFO, "No updates available"));
+
+    autoUpdater.on("download-progress", (progress) => {
+        log(LOG.INFO, `Download progress: ${Math.round(progress.percent)}%`);
     });
 
     autoUpdater.on("update-downloaded", (info) => {
         dialog.showMessageBox(mainWindow, {
             type: "info",
             title: "Update Ready",
-            message: "Update downloaded.",
-            detail: `v${info.version} is ready. The app will restart to install it.`,
+            message: "Update downloaded successfully!",
+            detail: `Version ${info.version} is ready to install. The application will restart to complete the update.`,
             buttons: ["Install Now", "Install on Quit"],
             defaultId: 0,
             cancelId: 1
@@ -311,7 +319,6 @@ function setupAutoUpdater() {
         });
     });
 
-    autoUpdater.on("update-not-available", () => log(LOG.INFO, "No updates available"));
     autoUpdater.on("error", (err) => log(LOG.ERROR, "Auto-updater error:", err.message));
 
     // delay startup check so the window is ready to show a dialog
@@ -328,7 +335,7 @@ function checkForUpdatesManually() {
                 type: "info",
                 title: "No Updates",
                 message: "You're up to date!",
-                detail: `v${app.getVersion()} is the latest version.`,
+                detail: `Diamond File Converter ${app.getVersion()} is the latest version.`,
                 buttons: ["OK", "View Changelog"]
             }).then(r => {
                 if (r.response === 1) shell.openExternal(`https://github.com/diamonddigitaldev/diamond-file-converter/releases/tag/${app.getVersion()}`);
@@ -346,7 +353,7 @@ function checkForUpdatesManually() {
 }
 
 app.whenReady().then(() => {
-    log(LOG.INFO, "App ready");
+    log(LOG.INFO, "=== App ready ===");
     ffmpeg.setFfmpegPath(getFfmpegPath());
     createWindow();
     setupMenu();
