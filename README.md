@@ -50,7 +50,7 @@
 
 2. Install dependencies:
    ```
-   cd diamond-file-converter
+   cd Diamond-File-Converter
    npm install
    ```
 
