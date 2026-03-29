@@ -18,7 +18,7 @@ function generateId() {
     return Math.random().toString(36).slice(2, 9);
 }
 
-const pluralFiles = n => `${n} file${n !== 1 ? "s" : ""}`;
+const pluralFiles = n => `${n} File${n !== 1 ? "s" : ""}`;
 
 const TYPE_ORDER = { video: 0, audio: 1, image: 2 };
 const TYPE_ICONS  = { audio: "audio_file", video: "video_file", image: "image" };
@@ -100,7 +100,7 @@ function renderFileList() {
     container.innerHTML = "";
 
     const count = jobs.length;
-    document.getElementById("dz-file-count").textContent = `${pluralFiles(count)} queued`;
+    document.getElementById("dz-file-count").textContent = `${pluralFiles(count)} Queued`;
 
     let prevType = null;
     for (const job of jobs) {

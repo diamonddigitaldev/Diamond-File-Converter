@@ -27,14 +27,16 @@
         <div id="drop-zone" class="drop-zone text-center mb-3">
             <div id="dz-empty">
                 <span class="material-icons-round drop-icon">upload_file</span>
-                <p class="drop-label mb-2">Drop files here or click to browse</p>
-                <button id="browse-btn" class="btn btn-sm btn-secondary">Browse</button>
+                <p class="drop-label mb-1">Drag & Drop Files Here</p>
+                <p class="text-secondary small mb-2">or</p>
+                <button id="browse-btn" class="btn btn-sm btn-secondary">Select Files</button>
             </div>
             <div id="dz-has-files" class="d-none">
-                <span class="material-icons-round text-secondary" style="font-size:28px">add_circle_outline</span>
-                <p class="drop-label small mb-2"><span id="dz-file-count"></span> — drop more or browse</p>
+                <span class="material-icons-round accent" style="font-size:28px">add_circle_outline</span>
+                <p class="drop-label mb-1"><span id="dz-file-count"></span></p>
+                <p class="text-secondary small mb-2">drag and drop more files or</p>
                 <div class="d-flex gap-2 justify-content-center">
-                    <button id="browse-more-btn" class="btn btn-sm btn-secondary">Browse</button>
+                    <button id="browse-more-btn" class="btn btn-sm btn-secondary">Select More Files</button>
                     <button id="btn-clear-all" class="btn btn-sm btn-outline-secondary">Clear All</button>
                 </div>
             </div>
