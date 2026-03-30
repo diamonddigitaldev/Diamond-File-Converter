@@ -291,7 +291,7 @@ ipcMain.handle(IPC.CONVERT_FILE, async (_event, filePath, targetExt) => {
                     dialog.showMessageBox(mainWindow, {
                         type: "error",
                         title: "Conversion Failed",
-                        message: "The conversion failed.",
+                        message: `Failed to extract frames from ${path.basename(filePath)}.`,
                         detail: err.message,
                         buttons: ["OK"]
                     });
@@ -350,7 +350,7 @@ ipcMain.handle(IPC.CONVERT_FILE, async (_event, filePath, targetExt) => {
                 dialog.showMessageBox(mainWindow, {
                     type: "error",
                     title: "Conversion Failed",
-                    message: "The conversion failed.",
+                    message: `Failed to convert ${path.basename(filePath)} to .${targetExt}.`,
                     detail: err.message,
                     buttons: ["OK"]
                 });
