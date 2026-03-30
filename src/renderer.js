@@ -217,11 +217,13 @@ async function startQueue() {
         job.status = "converting";
         const outputPath = await ipcRenderer.invoke(IPC.CONVERT_FILE, job.filePath, job.targetExt);
 
-        if (outputPath) {
+        if (outputPath === "cancelled" || cancelRequested) {
+            job.status = "cancelled";
+        } else if (outputPath) {
             job.status = "done";
             job.outputPath = outputPath;
         } else {
-            job.status = cancelRequested ? "cancelled" : "error";
+            job.status = "error";
         }
     }
 
@@ -234,9 +236,12 @@ function renderDoneList() {
     const errorCount = jobs.filter(j => j.status === "error").length;
     const cancelledCount = jobs.filter(j => j.status === "cancelled").length;
 
-    let summary = `${doneCount} ${doneCount !== 1 ? "files" : "file"} converted`;
-    if (errorCount > 0) summary += `, ${errorCount} failed`;
-    if (cancelledCount > 0) summary += `, ${cancelledCount} cancelled`;
+    const parts = [];
+    if (doneCount > 0) parts.push(`${doneCount} ${doneCount !== 1 ? "files" : "file"} converted`);
+    if (errorCount > 0) parts.push(`${errorCount} ${parts.length === 0 ? (errorCount !== 1 ? "files " : "file ") : ""}failed`);
+    if (cancelledCount > 0) parts.push(`${cancelledCount} ${parts.length === 0 ? (cancelledCount !== 1 ? "files " : "file ") : ""}cancelled`);
+    let summary = parts.join(", ");
+    if (!summary) summary = "No files converted";
     document.getElementById("done-summary").textContent = summary;
 
     const listEl = document.getElementById("done-file-list");
@@ -252,14 +257,21 @@ function renderDoneList() {
         const row = document.createElement("div");
         row.className = "file-row";
 
+        const isDir = job.status === "done" && fs.statSync(job.outputPath).isDirectory();
+
         const { text: iconText, cls } = STATUS_ICON[job.status] ?? STATUS_ICON.cancelled;
         const icon = document.createElement("span");
         icon.className = `material-icons-round ${cls}`;
-        icon.textContent = iconText;
+        icon.textContent = isDir ? "folder" : iconText;
 
         const name = document.createElement("span");
         name.className = "file-row-name small";
-        name.textContent = path.basename(job.status === "done" ? job.outputPath : job.filePath);
+        if (isDir) {
+            const frameCount = fs.readdirSync(job.outputPath).length;
+            name.textContent = `${path.basename(job.outputPath)}/ (${frameCount} ${frameCount !== 1 ? "frames" : "frame"})`;
+        } else {
+            name.textContent = path.basename(job.status === "done" ? job.outputPath : job.filePath);
+        }
         name.title = job.status === "done" ? job.outputPath : job.filePath;
 
         row.appendChild(icon);
@@ -268,12 +280,18 @@ function renderDoneList() {
         if (job.status === "done") {
             const openBtn = document.createElement("button");
             openBtn.className = "file-open-btn";
-            openBtn.title = "Show in folder";
+            openBtn.title = isDir ? "Open folder" : "Show in folder";
             const openIcon = document.createElement("span");
             openIcon.className = "material-icons-round";
-            openIcon.textContent = "open_in_new";
+            openIcon.textContent = isDir ? "folder_open" : "open_in_new";
             openBtn.appendChild(openIcon);
-            openBtn.addEventListener("click", () => ipcRenderer.invoke(IPC.SHOW_IN_FOLDER, job.outputPath));
+            openBtn.addEventListener("click", () => {
+                if (isDir) {
+                    ipcRenderer.invoke(IPC.OPEN_FOLDER, job.outputPath);
+                } else {
+                    ipcRenderer.invoke(IPC.SHOW_IN_FOLDER, job.outputPath);
+                }
+            });
             row.appendChild(openBtn);
         }
 

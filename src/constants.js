@@ -88,4 +88,10 @@ const EXT_ALIASES = {
     jfif: "jpg",
 };
 
-module.exports = { APP_NAME, IPC, WINDOW, LOG, AUDIO_FORMATS, VIDEO_FORMATS, IMAGE_FORMATS, CONVERSION_MAP, SUPPORTED_EXTENSIONS, EXT_ALIASES };
+const STATIC_IMAGE_EXTS = new Set(["jpg", "png", "webp", "bmp", "tiff"]);
+
+function isGifToStaticImage(sourceExt, targetExt) {
+    return sourceExt === "gif" && STATIC_IMAGE_EXTS.has(targetExt);
+}
+
+module.exports = { APP_NAME, IPC, WINDOW, LOG, AUDIO_FORMATS, VIDEO_FORMATS, IMAGE_FORMATS, CONVERSION_MAP, SUPPORTED_EXTENSIONS, EXT_ALIASES, isGifToStaticImage };
