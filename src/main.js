@@ -252,7 +252,7 @@ ipcMain.handle(IPC.CONVERT_FILE, async (_event, filePath, targetExt) => {
                 defaultId: 2,
                 cancelId: 0
             });
-            if (response === 0) return null;
+            if (response === 0) return "cancelled";
             if (response === 1) fs.rmSync(outputDir, { recursive: true, force: true });
             if (response === 2) outputDir = getUniqueDirPath(outputDir);
         }
@@ -314,7 +314,7 @@ ipcMain.handle(IPC.CONVERT_FILE, async (_event, filePath, targetExt) => {
             defaultId: 2,
             cancelId: 0
         });
-        if (response === 0) return null;
+        if (response === 0) return "cancelled";
         if (response === 2) outputPath = getUniquePath(outputPath);
     }
 

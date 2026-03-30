@@ -217,11 +217,13 @@ async function startQueue() {
         job.status = "converting";
         const outputPath = await ipcRenderer.invoke(IPC.CONVERT_FILE, job.filePath, job.targetExt);
 
-        if (outputPath) {
+        if (outputPath === "cancelled" || cancelRequested) {
+            job.status = "cancelled";
+        } else if (outputPath) {
             job.status = "done";
             job.outputPath = outputPath;
         } else {
-            job.status = cancelRequested ? "cancelled" : "error";
+            job.status = "error";
         }
     }
 
@@ -234,9 +236,12 @@ function renderDoneList() {
     const errorCount = jobs.filter(j => j.status === "error").length;
     const cancelledCount = jobs.filter(j => j.status === "cancelled").length;
 
-    let summary = `${doneCount} ${doneCount !== 1 ? "files" : "file"} converted`;
-    if (errorCount > 0) summary += `, ${errorCount} failed`;
-    if (cancelledCount > 0) summary += `, ${cancelledCount} cancelled`;
+    const parts = [];
+    if (doneCount > 0) parts.push(`${doneCount} ${doneCount !== 1 ? "files" : "file"} converted`);
+    if (errorCount > 0) parts.push(`${errorCount} ${parts.length === 0 ? (errorCount !== 1 ? "files " : "file ") : ""}failed`);
+    if (cancelledCount > 0) parts.push(`${cancelledCount} ${parts.length === 0 ? (cancelledCount !== 1 ? "files " : "file ") : ""}cancelled`);
+    let summary = parts.join(", ");
+    if (!summary) summary = "No files converted";
     document.getElementById("done-summary").textContent = summary;
 
     const listEl = document.getElementById("done-file-list");
