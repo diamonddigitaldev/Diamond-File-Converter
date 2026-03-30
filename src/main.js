@@ -3,7 +3,7 @@ const Store = require("electron-store").default;
 const ffmpeg = require("fluent-ffmpeg");
 const fs = require("fs");
 const path = require("path");
-const { APP_NAME, IPC, WINDOW, LOG, AUDIO_FORMATS, VIDEO_FORMATS, IMAGE_FORMATS, SUPPORTED_EXTENSIONS } = require("./constants");
+const { APP_NAME, IPC, WINDOW, LOG, AUDIO_FORMATS, VIDEO_FORMATS, IMAGE_FORMATS, SUPPORTED_EXTENSIONS, EXT_ALIASES, isGifToStaticImage } = require("./constants");
 
 const LOG_LEVELS = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3 };
 
@@ -220,9 +220,87 @@ function getUniquePath(filePath) {
     return candidate;
 }
 
+// finds the next available directory name: "dir (1)", "dir (2)"...
+function getUniqueDirPath(dirPath) {
+    if (!fs.existsSync(dirPath)) return dirPath;
+    let i = 1;
+    let candidate;
+    do {
+        candidate = `${dirPath} (${i})`;
+        i++;
+    } while (fs.existsSync(candidate));
+    return candidate;
+}
+
 // IPC: run a conversion
 ipcMain.handle(IPC.CONVERT_FILE, async (_event, filePath, targetExt) => {
     const stem = path.basename(filePath, path.extname(filePath));
+    const rawExt = path.extname(filePath).slice(1).toLowerCase();
+    const sourceExt = EXT_ALIASES[rawExt] ?? rawExt;
+
+    // GIF -> static image: extract all frames into a folder
+    if (isGifToStaticImage(sourceExt, targetExt)) {
+        let outputDir = path.join(path.dirname(filePath), stem);
+
+        if (fs.existsSync(outputDir)) {
+            const { response } = await dialog.showMessageBox(mainWindow, {
+                type: "question",
+                title: "Folder Already Exists",
+                message: `"${path.basename(outputDir)}" folder already exists.`,
+                detail: "What would you like to do?",
+                buttons: ["Cancel", "Overwrite", "Save as New"],
+                defaultId: 2,
+                cancelId: 0
+            });
+            if (response === 0) return null;
+            if (response === 1) fs.rmSync(outputDir, { recursive: true, force: true });
+            if (response === 2) outputDir = getUniqueDirPath(outputDir);
+        }
+
+        fs.mkdirSync(outputDir, { recursive: true });
+        const outputPattern = path.join(outputDir, `frame_%03d.${targetExt}`);
+
+        conversionCancelled = false;
+        return new Promise((resolve) => {
+            const command = ffmpeg(filePath);
+            activeConversion = command;
+
+            command
+                .on("progress", (progress) => {
+                    const percent = Math.round(progress.percent || 0);
+                    if (mainWindow && !mainWindow.isDestroyed()) {
+                        mainWindow.webContents.send(IPC.CONVERSION_PROGRESS, percent);
+                    }
+                })
+                .on("end", () => {
+                    activeConversion = null;
+                    log(LOG.INFO, `Extracted frames: ${path.basename(filePath)} -> ${path.basename(outputDir)}/`);
+                    resolve(outputDir);
+                })
+                .on("error", (err) => {
+                    activeConversion = null;
+                    if (fs.existsSync(outputDir)) {
+                        try { fs.rmSync(outputDir, { recursive: true, force: true }); } catch (e) { log(LOG.WARN, "Could not delete output dir:", e.message); }
+                    }
+                    if (conversionCancelled) {
+                        conversionCancelled = false;
+                        resolve(null);
+                        return;
+                    }
+                    log(LOG.ERROR, "Frame extraction error:", err.message);
+                    dialog.showMessageBox(mainWindow, {
+                        type: "error",
+                        title: "Conversion Failed",
+                        message: "The conversion failed.",
+                        detail: err.message,
+                        buttons: ["OK"]
+                    });
+                    resolve(null);
+                })
+                .save(outputPattern);
+        });
+    }
+
     let outputPath = path.join(path.dirname(filePath), `${stem}.${targetExt}`);
 
     // handle file conflict
