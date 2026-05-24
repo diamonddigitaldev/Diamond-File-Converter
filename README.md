@@ -18,14 +18,15 @@
 
 </div>
 
+
 ## Features
 
-- 🎵 <b>Audio Conversion</b> | Convert between MP3, WAV, FLAC, OGG, AAC, M4A, OPUS, and WMA.
-- 🎬 <b>Video Conversion</b> | Convert between MP4, MKV, WebM, AVI, MOV, WMV, and FLV.
-- 🖼️ <b>Image Conversion</b> | Convert between JPG, PNG, WebP, GIF, BMP, and TIFF.
-- 📂 <b>Drag & Drop</b> | Drop a file onto the app or use the file browser to get started.
-- ⚡ <b>Bundled FFmpeg</b> | No system installs required — FFmpeg is included with the app.
-- 🎨 <b>Modern UI</b> | Clean, minimal interface with dark mode support.
+- <b>Audio Conversion</b> | Convert between MP3, WAV, FLAC, OGG, AAC, M4A, OPUS, and WMA.
+- <b>Video Conversion</b> | Convert between MP4, MKV, WebM, AVI, MOV, WMV, and FLV.
+- <b>Image Conversion</b> | Convert between JPG, PNG, WebP, GIF, BMP, and TIFF.
+- <b>Drag & Drop</b> | Drop a file onto the app or use the file browser to get started.
+- <b>Bundled FFmpeg</b> | No system installs required — FFmpeg is included with the app.
+- <b>Modern UI</b> | Clean, minimal interface with dark mode support.
 
 ## Installation
 
@@ -81,9 +82,9 @@ Diamond File Converter is licensed under the Apache 2.0 License. See the [LICENS
 
 ## Contact Us
 
-- 🎮 Need help or want to chat? [Join our Discord Server](https://diamonddigital.dev/discord)!
-- 🐛 Found a bug? [Open an issue](https://github.com/diamonddigitaldev/Diamond-File-Converter/issues) on our GitHub repository.
-- 💡 Have a feature request? [Submit it here](https://github.com/diamonddigitaldev/Diamond-File-Converter/issues/new?labels=enhancement)!
+- Need help or want to chat? [Join our Discord Server](https://diamonddigital.dev/discord)!
+- Found a bug? [Open an issue](https://github.com/diamonddigitaldev/Diamond-File-Converter/issues) on our GitHub repository.
+- Have a feature request? [Submit it here](https://github.com/diamonddigitaldev/Diamond-File-Converter/issues/new?labels=enhancement)!
 
 ---
 
