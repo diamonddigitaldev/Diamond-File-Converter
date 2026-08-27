@@ -477,8 +477,23 @@ body.popup-window span:hover {
     transition: opacity var(--dur-state), transform var(--dur-state);
 }
 
-.toast-note .material-icons-round { font-size: 18px; flex-shrink: 0; }
+/* The icon and the dismiss button must centre on the FIRST line of the body,
+   not on the whole toast — a wrapped message would otherwise drag them down.
+   align-items: flex-start alone is not enough: material-icons ships
+   line-height: 1, so an 18px glyph box shares its top edge with the body's
+   21px line box and ends up 1.5px high. Giving both the same height as that
+   line box and centring within it lines the glyph up exactly. */
+.toast-note .material-icons-round {
+    font-size: 18px;
+    flex-shrink: 0;
+    height: calc(0.875rem * 1.5);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .toast-note .toast-body { flex: 1 1 auto; min-width: 0; }
+
 .toast-note .toast-close {
     background: none; border: none; padding: 0; cursor: pointer;
     color: inherit; opacity: 0.7; flex-shrink: 0;

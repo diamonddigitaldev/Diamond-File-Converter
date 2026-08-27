@@ -169,21 +169,46 @@ function removeJobs(ids) {
     render();
 }
 
+/** Can this source actually produce that format? */
+function canTarget(job, targetExt) {
+    return display.commonTargets([job.ext], TARGETS).some(t => t.ext === targetExt);
+}
+
+/**
+ * Set — or clear — the target format on a set of jobs.
+ *
+ * `targetExt` may be null or "", which is the "Choose format…" placeholder and
+ * means "no format chosen". Clearing is always allowed and must skip the
+ * validity guard below, which only applies to real formats.
+ */
 function setTarget(ids, targetExt) {
     const set = new Set(ids);
+    const next = targetExt || null;
+
     for (const job of jobs) {
         if (!set.has(job.id)) continue;
-        // Guard against a stale bulk option: never assign a target the source
-        // cannot actually produce.
-        const allowed = FORMATS.conversionMap[job.ext]?.targets ?? [];
-        const crossKind = display.commonTargets([job.ext], TARGETS).map(t => t.ext);
-        if (!allowed.some(t => t.ext === targetExt) && !crossKind.includes(targetExt)) continue;
-        job.targetExt = targetExt;
-        if (job.status === "error" || job.status === "cancelled") {
+        // The per-card select is disabled mid-run, but the bulk bar can still
+        // reach a running job.
+        if (job.status === "running") continue;
+        // Guard against a stale bulk option: never assign a format the source
+        // cannot produce. Does not apply when clearing.
+        if (next !== null && !canTarget(job, next)) continue;
+        if (job.targetExt === next) continue;
+
+        job.targetExt = next;
+
+        // A job that already finished, failed or was cancelled becomes runnable
+        // again under a new target, so send it back to pending rather than
+        // leaving a stale "Done" or an old error sitting on the card.
+        if (job.status !== "pending") {
             job.status = "pending";
             job.error = null;
             job.progress = 0;
+            job.outputPath = null;
+            job.isDirectory = false;
+            job.fileCount = 0;
         }
+
         updateCard(job);
     }
     renderActionBar();
@@ -602,8 +627,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         render();
     });
 
+    // An empty value is the placeholder, which clears the target across the
+    // selection — pass it through rather than ignoring it.
     $("bulk-target").addEventListener("change", (e) => {
-        if (e.target.value) setTarget([...selection], e.target.value);
+        setTarget([...selection], e.target.value);
     });
     $("bulk-remove").addEventListener("click", () => removeJobs([...selection]));
     $("bulk-deselect").addEventListener("click", clearSelection);
