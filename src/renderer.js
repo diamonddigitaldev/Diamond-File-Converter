@@ -77,7 +77,7 @@ function addFiles(filePaths) {
     // broken. Say so.
     if (rejected > 0) {
         toast(
-            `${rejected} ${rejected === 1 ? "file was" : "files were"} skipped — not a supported format.`,
+            `${display.countOf(rejected, "file")} ${display.plural(rejected, "was", "were")} skipped — not a supported format.`,
             added > 0 ? "warning" : "danger"
         );
     }
@@ -92,9 +92,9 @@ async function ingestPaths(inputPaths) {
         const added = addFiles(result.files);
 
         if (result.truncated) {
-            toast(`Stopped after ${result.files.length} files — the folder is very large.`, "warning");
+            toast(`Stopped after ${display.countOf(result.files.length, "file")} — the folder is very large.`, "warning");
         } else if (added > 0 && result.skipped > 0) {
-            toast(`Added ${added} ${added === 1 ? "file" : "files"}, skipped ${result.skipped} unsupported.`, "info");
+            toast(`Added ${display.countOf(added, "file")}, skipped ${display.countOf(result.skipped, "unsupported file")}.`, "info");
         } else if (added === 0 && result.files.length === 0 && result.skipped > 0) {
             toast("No supported media found in that folder.", "warning");
         }
@@ -442,14 +442,32 @@ function renderActionBar() {
     const total = jobs.length;
     const ready = jobs.filter(j => j.targetExt).length;
     const withoutTarget = total - ready;
+    const running = jobs.filter(j => j.status === "running").length;
+    const settled = jobs.filter(j => j.status !== "pending" && j.status !== "running").length;
 
-    $("queue-summary").textContent = converting
-        ? display.summarise(jobs)
-        : `${total} ${total === 1 ? "file" : "files"} queued`;
+    // Once anything has finished, the outcome is what matters. This used to be
+    // tied to `converting`, so the moment a run ended the bar snapped back to
+    // "1 file queued" — describing files that had just been converted as still
+    // waiting. And while a run was under way with nothing finished yet, the
+    // summary read "Nothing converted", which is true but reads like a failure.
+    if (settled > 0) {
+        $("queue-summary").textContent = display.summarise(jobs);
+    } else if (converting) {
+        $("queue-summary").textContent = `Converting ${display.countOf(ready, "file")}…`;
+    } else {
+        $("queue-summary").textContent = `${display.countOf(total, "file")} queued`;
+    }
 
-    $("queue-detail").textContent = converting
-        ? `${jobs.filter(j => j.status === "running").length} running`
-        : (withoutTarget > 0 ? `${withoutTarget} still need a format` : "Ready to convert");
+    if (converting) {
+        $("queue-detail").textContent = `${running} running`;
+    } else if (withoutTarget > 0) {
+        $("queue-detail").textContent =
+            `${display.countOf(withoutTarget, "file")} still ${display.plural(withoutTarget, "needs", "need")} a format`;
+    } else {
+        // After a finished run "Ready to convert" would be misleading, so the
+        // outcome in the summary is left to speak for itself.
+        $("queue-detail").textContent = settled > 0 ? "" : "Ready to convert";
+    }
 
     const percent = display.overallProgress(jobs);
     $("overall-bar").style.width = `${percent}%`;
@@ -553,13 +571,13 @@ function announce(results) {
         // carries each individual reason.
         const detail = failed.length === 1 ? ` — ${failed[0].error ?? "unknown error"}` : "";
         toast(
-            `${failed.length} ${failed.length === 1 ? "file" : "files"} failed to convert${detail}`,
+            `${display.countOf(failed.length, "file")} failed to convert${detail}`,
             "danger",
             0
         );
     }
     if (done > 0) {
-        toast(`${done} ${done === 1 ? "file" : "files"} converted.`, "success");
+        toast(`${display.countOf(done, "file")} converted.`, "success");
     } else if (failed.length === 0 && cancelled > 0) {
         toast("Conversion cancelled.", "info");
     }

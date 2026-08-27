@@ -23,6 +23,29 @@
         SKIPPED: "skipped",
     };
 
+    // -- Pluralisation -------------------------------------------------------
+    //
+    // Every count shown in the UI goes through these, rather than each call
+    // site writing its own ternary. Doing it inline is how "1 still need a
+    // format" and "1 frames" got shipped.
+
+    /**
+     * The wording that agrees with a count. `one` is used when n is exactly 1;
+     * `many` defaults to `one` with an "s" appended.
+     *
+     *   plural(1, "file")            -> "file"
+     *   plural(3, "file")            -> "files"
+     *   plural(1, "needs", "need")   -> "needs"
+     */
+    function plural(n, one, many) {
+        return n === 1 ? one : (many === undefined ? one + "s" : many);
+    }
+
+    /** The count with its agreeing noun: "1 file", "3 files". */
+    function countOf(n, one, many) {
+        return `${n} ${plural(n, one, many)}`;
+    }
+
     /** Seconds to a compact clock: 9:05, 1:02:03. Null for unknown. */
     function formatDuration(seconds) {
         if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return null;
@@ -90,7 +113,7 @@
                 return { text: "Converting", tone: "running" };
             case STATUS.DONE:
                 return {
-                    text: job.isDirectory ? `${job.fileCount} frames` : "Done",
+                    text: job.isDirectory ? countOf(job.fileCount, "frame") : "Done",
                     tone: "success",
                 };
             case STATUS.ERROR:
@@ -108,13 +131,13 @@
 
     /** "3 files converted, 1 failed" — the post-run summary. */
     function summarise(jobs) {
-        const count = (status) => jobs.filter(j => j.status === status).length;
-        const done = count(STATUS.DONE);
-        const failed = count(STATUS.ERROR);
-        const cancelled = count(STATUS.CANCELLED) + count(STATUS.SKIPPED);
+        const tally = (status) => jobs.filter(j => j.status === status).length;
+        const done = tally(STATUS.DONE);
+        const failed = tally(STATUS.ERROR);
+        const cancelled = tally(STATUS.CANCELLED) + tally(STATUS.SKIPPED);
 
         const parts = [];
-        if (done > 0) parts.push(`${done} ${done !== 1 ? "files" : "file"} converted`);
+        if (done > 0) parts.push(`${countOf(done, "file")} converted`);
         if (failed > 0) parts.push(`${failed} failed`);
         if (cancelled > 0) parts.push(`${cancelled} cancelled`);
 
@@ -244,6 +267,8 @@
 
     return {
         STATUS,
+        plural,
+        countOf,
         formatDuration,
         formatBytes,
         formatEta,

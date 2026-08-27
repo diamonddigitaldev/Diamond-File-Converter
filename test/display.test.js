@@ -272,3 +272,69 @@ test("every target the grid can offer carries what the UI needs to render it", (
         }
     }
 });
+
+// ---------------------------------------------------------------------------
+// pluralisation
+//
+// "1 still need a format" and "1 frames" both shipped because each call site
+// wrote its own ternary. Everything counted now goes through these helpers.
+// ---------------------------------------------------------------------------
+
+test("plural: picks the singular only at exactly one", () => {
+    assert.equal(d.plural(1, "file"), "file");
+    assert.equal(d.plural(0, "file"), "files");
+    assert.equal(d.plural(2, "file"), "files");
+    assert.equal(d.plural(100, "file"), "files");
+});
+
+test("plural: takes an explicit plural for irregular words", () => {
+    assert.equal(d.plural(1, "needs", "need"), "needs");
+    assert.equal(d.plural(3, "needs", "need"), "need");
+    assert.equal(d.plural(1, "was", "were"), "was");
+    assert.equal(d.plural(0, "was", "were"), "were");
+});
+
+test("countOf: pairs the number with the agreeing noun", () => {
+    assert.equal(d.countOf(1, "file"), "1 file");
+    assert.equal(d.countOf(3, "file"), "3 files");
+    assert.equal(d.countOf(0, "file"), "0 files");
+    assert.equal(d.countOf(1, "unsupported file"), "1 unsupported file");
+    assert.equal(d.countOf(2, "unsupported file"), "2 unsupported files");
+});
+
+test("a single extracted frame is '1 frame', not '1 frames'", () => {
+    assert.equal(d.describeStatus({ status: STATUS.DONE, isDirectory: true, fileCount: 1 }).text, "1 frame");
+    assert.equal(d.describeStatus({ status: STATUS.DONE, isDirectory: true, fileCount: 30 }).text, "30 frames");
+});
+
+test("summary agrees at one", () => {
+    assert.equal(d.summarise([{ status: STATUS.DONE }]), "1 file converted");
+    assert.equal(d.summarise([{ status: STATUS.DONE }, { status: STATUS.DONE }]), "2 files converted");
+});
+
+/** Drop comments so an example in a doc block is not read as real code. */
+function stripSource(code) {
+    return code
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/(^|[^:])\/\/.*$/gm, "$1");
+}
+
+test("no inline pluralisation ternaries remain in the UI code", () => {
+    // Catches the `n === 1 ? "file" : "files"` shape that caused the bugs.
+    const pattern = /\?\s*["'](\w+)["']\s*:\s*["']\1s["']/;
+    for (const rel of ["src/renderer.js", "src/core/display.js"]) {
+        const code = stripSource(fs.readFileSync(path.join(__dirname, "..", rel), "utf8"));
+        const hit = code.match(pattern);
+        assert.equal(hit, null,
+            `${rel} still pluralises inline (${hit && hit[0]}) — use display.plural/countOf`);
+    }
+});
+
+test("every counted string in the renderer goes through the helper", () => {
+    const code = stripSource(fs.readFileSync(path.join(__dirname, "..", "src", "renderer.js"), "utf8"));
+    // Template literals that interpolate a count straight before a plural noun,
+    // e.g. `${n} files`, without going through countOf.
+    const raw = [...code.matchAll(/\$\{(?!display\.(countOf|plural))[^}]+\}\s+(files|frames|folders)\b/g)];
+    assert.deepEqual(raw.map(m => m[0]), [],
+        "found a raw count followed by a plural noun — route it through display.countOf");
+});
