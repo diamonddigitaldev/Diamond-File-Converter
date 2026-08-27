@@ -54,12 +54,14 @@ const IPC = {
     FILES_OPENED: "files:opened", // push: string[] of paths from menu/argv/shell
 };
 
-// window size constraints
+// Window size constraints. Widened for the card grid — the v1 single column
+// was 700px, which fits only two cards per row. Existing users keep their
+// saved bounds; this only changes the first-run default.
 const WINDOW = {
-    DEFAULT_WIDTH:  700,
-    DEFAULT_HEIGHT: 1000,
-    MIN_WIDTH:      600,
-    MIN_HEIGHT:     600,
+    DEFAULT_WIDTH:  1100,
+    DEFAULT_HEIGHT: 780,
+    MIN_WIDTH:      720,
+    MIN_HEIGHT:     560,
 };
 
 // Windows spawns one process per file when several are selected in Explorer,

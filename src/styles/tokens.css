@@ -81,6 +81,13 @@
     --bs-focus-ring-color: rgba(var(--accent-rgb), 0.25);
 }
 
+/* Bootstrap's progress bar has the same problem as .btn-primary below: .progress
+   sets --bs-progress-bar-bg to a literal #0d6efd rather than to var(--bs-primary),
+   so an accent-bound primary leaves the bar Bootstrap blue. */
+.progress {
+    --bs-progress-bar-bg: var(--accent);
+}
+
 /* Bootstrap derives .btn-primary from its own component-level variables, not
    from --bs-primary, so the button needs the accent applied directly. */
 .btn-primary {

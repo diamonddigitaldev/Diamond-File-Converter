@@ -341,15 +341,11 @@ ipcMain.handle(IPC.JOB_RUN, async (_event, spec) => {
 
     const result = await runJobToCompletion(job);
 
+    // Failures are reported on the card and in a toast, not as a blocking
+    // dialog. v1 opened one modal per failed file mid-queue, which with a
+    // concurrency pool would stack several at once and halt the whole batch.
     if (result.status === STATUS.ERROR) {
         log(LOG.ERROR, `Conversion failed for ${job.inputPath}: ${result.error}`);
-        dialog.showMessageBox(mainWindow, {
-            type: "error",
-            title: "Conversion Failed",
-            message: `Could not convert ${path.basename(job.inputPath)}.`,
-            detail: result.error ?? "ffmpeg did not report a reason.",
-            buttons: ["OK"],
-        });
     }
 
     return result;
@@ -403,6 +399,11 @@ ipcMain.handle(IPC.APP_GET_FORMATS, () => ({
     conversionMap: formats.buildLegacyConversionMap(),
     aliases: formats.EXT_ALIASES,
     supported: formats.SUPPORTED_EXTENSIONS,
+    // The full capability graph, including cross-kind targets. core/display.js
+    // takes this as an argument because the renderer cannot require formats.js.
+    targetsByExt: Object.fromEntries(
+        formats.SUPPORTED_EXTENSIONS.map(ext => [ext, formats.targetsFor(ext)])
+    ),
 }));
 
 ipcMain.handle(IPC.SETTINGS_GET, () => store.get("settings"));

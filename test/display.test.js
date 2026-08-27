@@ -1,0 +1,274 @@
+"use strict";
+
+const test = require("node:test");
+const assert = require("node:assert/strict");
+
+const fs = require("fs");
+const path = require("path");
+
+const d = require("../src/core/display");
+const { STATUS } = require("../src/core/job");
+const formats = require("../src/core/formats");
+
+// The renderer receives this map over IPC; display.js takes it as an argument
+// because it cannot require core/formats itself.
+const TARGETS = Object.fromEntries(
+    formats.SUPPORTED_EXTENSIONS.map(ext => [ext, formats.targetsFor(ext)])
+);
+
+// ---------------------------------------------------------------------------
+// formatting
+// ---------------------------------------------------------------------------
+
+test("display: durations read as clocks, and unknown stays unknown", () => {
+    assert.equal(d.formatDuration(0), "0:00");
+    assert.equal(d.formatDuration(65), "1:05");
+    assert.equal(d.formatDuration(3723), "1:02:03");
+    assert.equal(d.formatDuration(59.6), "1:00", "rounds rather than truncating");
+    assert.equal(d.formatDuration(null), null);
+    assert.equal(d.formatDuration(-1), null);
+    assert.equal(d.formatDuration(NaN), null);
+});
+
+test("display: byte sizes stay short", () => {
+    assert.equal(d.formatBytes(0), "0 B");
+    assert.equal(d.formatBytes(512), "512 B");
+    assert.equal(d.formatBytes(1024), "1.0 KB");
+    assert.equal(d.formatBytes(1536), "1.5 KB");
+    assert.equal(d.formatBytes(1048576), "1.0 MB");
+    assert.equal(d.formatBytes(15 * 1048576), "15 MB", "drops the decimal above 10");
+    assert.equal(d.formatBytes(null), null);
+});
+
+test("display: eta is terse", () => {
+    assert.equal(d.formatEta(45), "45s");
+    assert.equal(d.formatEta(125), "2m 05s");
+    assert.equal(d.formatEta(3700), "1h 01m");
+    assert.equal(d.formatEta(null), null);
+});
+
+// ---------------------------------------------------------------------------
+// card content
+// ---------------------------------------------------------------------------
+
+test("display: metadata line is null until the probe lands", () => {
+    // The card must render before this returns anything.
+    assert.equal(d.describeMeta(null, "mp4"), null);
+    assert.equal(d.describeMeta({ ok: false }, "mp4"), null);
+});
+
+test("display: metadata line covers video and audio differently", () => {
+    const video = d.describeMeta({
+        ok: true, duration: 65, size: 1048576, hasVideo: true,
+        video: { width: 1920, height: 1080, codec: "h264" },
+    }, "mp4");
+    assert.equal(video, "1920×1080 · 1:05 · h264 · 1.0 MB");
+
+    const audio = d.describeMeta({
+        ok: true, duration: 185, size: 5242880, hasVideo: false,
+        audio: { codec: "mp3" },
+    }, "mp3");
+    assert.equal(audio, "3:05 · mp3 · 5.0 MB");
+});
+
+test("display: a probe with nothing useful falls back to the extension", () => {
+    assert.equal(d.describeMeta({ ok: true }, "png"), "PNG");
+});
+
+test("display: status tells the user what to do when no format is chosen", () => {
+    const noTarget = d.describeStatus({ status: STATUS.PENDING, targetExt: null });
+    assert.equal(noTarget.tone, "warning");
+    assert.match(noTarget.text, /format/i);
+
+    assert.equal(d.describeStatus({ status: STATUS.PENDING, targetExt: "mp4" }).tone, "ready");
+    assert.equal(d.describeStatus({ status: STATUS.RUNNING }).tone, "running");
+    assert.equal(d.describeStatus({ status: STATUS.CANCELLED }).tone, "muted");
+});
+
+test("display: a finished job surfaces its real failure reason", () => {
+    const failed = d.describeStatus({ status: STATUS.ERROR, error: "Invalid data found" });
+    assert.equal(failed.text, "Invalid data found");
+    assert.equal(failed.tone, "danger");
+});
+
+test("display: a frames job reports its frame count, not just 'Done'", () => {
+    const frames = d.describeStatus({ status: STATUS.DONE, isDirectory: true, fileCount: 30 });
+    assert.equal(frames.text, "30 frames");
+
+    const single = d.describeStatus({ status: STATUS.DONE, isDirectory: false });
+    assert.equal(single.text, "Done");
+});
+
+test("display: summary counts every outcome", () => {
+    const jobs = [
+        { status: STATUS.DONE }, { status: STATUS.DONE },
+        { status: STATUS.ERROR },
+        { status: STATUS.CANCELLED }, { status: STATUS.SKIPPED },
+    ];
+    assert.equal(d.summarise(jobs), "2 files converted, 1 failed, 2 cancelled");
+    assert.equal(d.summarise([{ status: STATUS.DONE }]), "1 file converted");
+    assert.equal(d.summarise([]), "Nothing converted");
+});
+
+test("display: overall progress counts finished jobs as complete", () => {
+    assert.equal(d.overallProgress([]), 0);
+    assert.equal(d.overallProgress([{ status: STATUS.DONE }, { status: STATUS.PENDING, progress: 0 }]), 50);
+    assert.equal(d.overallProgress([{ status: STATUS.RUNNING, progress: 50 }]), 50);
+    // A failed job is finished, not stuck — it must not hold the bar back.
+    assert.equal(d.overallProgress([{ status: STATUS.ERROR }, { status: STATUS.DONE }]), 100);
+});
+
+// ---------------------------------------------------------------------------
+// selection
+// ---------------------------------------------------------------------------
+
+const IDS = ["a", "b", "c", "d", "e"];
+
+test("selection: a plain click replaces the selection", () => {
+    const r = d.resolveSelection(IDS, new Set(["a"]), "c", {}, "a");
+    assert.deepEqual([...r.selection], ["c"]);
+    assert.equal(r.anchor, "c");
+});
+
+test("selection: ctrl+click toggles", () => {
+    const added = d.resolveSelection(IDS, new Set(["a"]), "c", { ctrl: true }, "a");
+    assert.deepEqual([...added.selection].sort(), ["a", "c"]);
+
+    const removed = d.resolveSelection(IDS, new Set(["a", "c"]), "c", { ctrl: true }, "a");
+    assert.deepEqual([...removed.selection], ["a"]);
+});
+
+test("selection: shift+click selects a range in either direction", () => {
+    const forward = d.resolveSelection(IDS, new Set(["b"]), "d", { shift: true }, "b");
+    assert.deepEqual([...forward.selection], ["b", "c", "d"]);
+
+    const backward = d.resolveSelection(IDS, new Set(["d"]), "b", { shift: true }, "d");
+    assert.deepEqual([...backward.selection], ["b", "c", "d"]);
+
+    assert.equal(forward.anchor, "b", "the anchor survives a shift range");
+});
+
+test("selection: ctrl+shift extends rather than replacing", () => {
+    const r = d.resolveSelection(IDS, new Set(["e"]), "c", { ctrl: true, shift: true }, "b");
+    assert.deepEqual([...r.selection].sort(), ["b", "c", "e"]);
+});
+
+test("selection: clicking inside a multi-selection keeps it", () => {
+    // Otherwise acting on a group would collapse it to one card first.
+    const r = d.resolveSelection(IDS, new Set(["a", "b", "c"]), "b", {}, "a");
+    assert.deepEqual([...r.selection].sort(), ["a", "b", "c"]);
+    assert.equal(r.anchor, "b");
+});
+
+test("selection: clicking outside a multi-selection replaces it", () => {
+    const r = d.resolveSelection(IDS, new Set(["a", "b"]), "e", {}, "a");
+    assert.deepEqual([...r.selection], ["e"]);
+});
+
+test("selection: a stale anchor degrades to a plain click", () => {
+    const r = d.resolveSelection(IDS, new Set(), "c", { shift: true }, "zzz");
+    assert.deepEqual([...r.selection], ["c"]);
+});
+
+test("selection: removals cannot strand ids", () => {
+    const pruned = d.pruneSelection(new Set(["a", "gone", "c"]), IDS);
+    assert.deepEqual([...pruned].sort(), ["a", "c"]);
+});
+
+// ---------------------------------------------------------------------------
+// bulk target resolution
+// ---------------------------------------------------------------------------
+
+test("targets: a single source offers everything it can become", () => {
+    const t = d.commonTargets(["mp4"], TARGETS);
+    const exts = t.map(x => x.ext);
+    assert.ok(exts.includes("mkv"), "same-kind");
+    assert.ok(exts.includes("mp3"), "cross-kind extraction");
+    assert.ok(exts.includes("png"), "frame export");
+});
+
+test("targets: a mixed selection offers only the intersection", () => {
+    // Video and audio share audio targets, but a video-only target such as mkv
+    // must not be offered, or bulk-setting it would produce invalid jobs.
+    const t = d.commonTargets(["mp4", "mp3"], TARGETS).map(x => x.ext);
+    assert.ok(t.includes("mp3"));
+    assert.ok(t.includes("flac"));
+    assert.ok(!t.includes("mkv"), "mp3 cannot become mkv");
+    assert.ok(!t.includes("png"), "mp3 cannot become png");
+});
+
+test("targets: an impossible mix offers nothing rather than something invalid", () => {
+    // Images cannot become audio, audio cannot become images.
+    assert.deepEqual(d.commonTargets(["mp3", "png"], TARGETS), []);
+});
+
+test("targets: empty and unknown input is handled", () => {
+    assert.deepEqual(d.commonTargets([], TARGETS), []);
+    assert.deepEqual(d.commonTargets([null, undefined], TARGETS), []);
+});
+
+test("targets: grouping puts same-kind formats first", () => {
+    const groups = d.groupTargets(d.commonTargets(["mp4"], TARGETS));
+    assert.equal(groups[0].group, "Video", "video sources lead with video targets");
+    assert.ok(groups.length > 1, "cross-kind groups still offered");
+});
+
+test("display: kind icons cover every kind and fall back safely", () => {
+    assert.equal(d.iconForKind("audio"), "audio_file");
+    assert.equal(d.iconForKind("video"), "video_file");
+    assert.equal(d.iconForKind("image"), "image");
+    assert.equal(d.iconForKind("nonsense"), "insert_drive_file");
+});
+
+// ---------------------------------------------------------------------------
+// dual-load guards
+//
+// display.js is required here in Node AND loaded as a plain <script> by the
+// renderer, which has no Node access. Either of these regressing would leave
+// the grid unable to render, so they are asserted rather than assumed.
+// ---------------------------------------------------------------------------
+
+const DISPLAY_SRC = fs.readFileSync(path.join(__dirname, "..", "src", "core", "display.js"), "utf8");
+
+test("display.js has no requires, so it can load as a plain browser script", () => {
+    const code = DISPLAY_SRC
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/(^|[^:])\/\/.*$/gm, "$1");
+    assert.ok(!/\brequire\s*\(/.test(code), "display.js must not call require()");
+    assert.match(DISPLAY_SRC, /module\.exports\s*=\s*factory\(\)/, "must still export for Node");
+    assert.match(DISPLAY_SRC, /root\.display\s*=\s*factory\(\)/, "must still attach to window for the renderer");
+});
+
+test("display.js STATUS mirrors core/job.js exactly", () => {
+    // display.js inlines these because it cannot import job.js.
+    assert.deepEqual(d.STATUS, STATUS);
+});
+
+test("the renderer only reaches display through the global it exports", () => {
+    const renderer = fs.readFileSync(path.join(__dirname, "..", "src", "renderer.js"), "utf8");
+    assert.ok(!/\brequire\s*\(/.test(
+        renderer.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1")
+    ), "renderer.js must not call require()");
+    assert.match(renderer, /window\.display/, "renderer must take display from the global");
+
+    // Compare actual <script src> order, not raw substring positions — prose in
+    // a comment can otherwise mention a filename ahead of its real tag.
+    const html = fs.readFileSync(path.join(__dirname, "..", "src", "index.html"), "utf8");
+    const srcs = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map(m => m[1]);
+
+    const displayAt = srcs.findIndex(s => s.endsWith("core/display.js"));
+    const rendererAt = srcs.findIndex(s => s.endsWith("renderer.js"));
+
+    assert.ok(displayAt !== -1, "index.html must load core/display.js");
+    assert.ok(rendererAt !== -1, "index.html must load renderer.js");
+    assert.ok(displayAt < rendererAt, "display.js must be loaded before renderer.js");
+});
+
+test("every target the grid can offer carries what the UI needs to render it", () => {
+    for (const [ext, targets] of Object.entries(TARGETS)) {
+        for (const t of targets) {
+            assert.ok(t.ext && t.label && t.group, `${ext} -> target missing ext/label/group`);
+            assert.equal(typeof t.sameKind, "boolean", `${ext} -> ${t.ext} missing sameKind`);
+        }
+    }
+});

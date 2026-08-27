@@ -7,8 +7,13 @@ html {
 
 body {
     margin: 0;
-    overflow-x: hidden;
+    height: 100vh;
+    overflow: hidden;
     font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    /* Chrome is unselectable so dragging the UI does not select text, but
+       filenames, paths and error messages stay selectable — see .card-name,
+       .card-meta, .status-text and .toast-note. v1 set this globally, which
+       meant a user could not copy an error to report it. */
     user-select: none;
 }
 
@@ -22,6 +27,7 @@ body.popup-window {
     background-color: var(--bs-body-bg);
     color: var(--bs-body-color);
     padding: 20px;
+    height: auto;
     overflow: auto;
 }
 
@@ -74,7 +80,7 @@ body.popup-window span:hover {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    width: min(580px, 100%);
+    width: min(520px, 100%);
     min-height: 200px;
     border: 2px dashed var(--bs-border-color);
     border-radius: var(--radius-zone);
@@ -85,7 +91,8 @@ body.popup-window span:hover {
     text-align: center;
 }
 
-.drop-zone:hover:not(:has(button:hover)) {
+.drop-zone:hover:not(:has(button:hover)),
+.drop-zone.drag-over {
     border-color: rgba(var(--accent-rgb), var(--wash-hover-border));
     background-color: rgba(var(--accent-rgb), var(--wash-hover-fill));
 }
@@ -107,91 +114,143 @@ body.popup-window span:hover {
     margin: 0.75rem 0 0;
 }
 
-/* ── Format grid ─────────────────────────────────────────────────────────── */
+/* ── App shell ───────────────────────────────────────────────────────────── */
 
-.format-group-label {
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--bs-secondary-color);
-    margin: 1.25rem 0 0.5rem;
-    text-align: center;
-}
-
-.format-btn-row {
+.app-shell {
     display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.5rem;
+    flex-direction: column;
+    height: 100vh;
+    padding: 1rem 1.25rem;
+    gap: 0.75rem;
 }
 
-.btn-format {
-    background-color: var(--bs-secondary-bg);
-    color: var(--bs-body-color);
-    border: 1px solid var(--bs-border-color);
-    border-radius: 6px;
-    padding: 0.4rem 1.1rem;
-    font-size: 0.85rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.15s, border-color 0.15s, color 0.15s;
-}
-
-.btn-format:hover,
-.btn-format.selected {
-    background-color: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
-}
-
-/* ── File list (queue state) ─────────────────────────────────────────────── */
-
-#file-list {
-    max-height: 280px;
-    overflow-y: auto;
-    border: 1px solid var(--bs-border-color);
-    border-radius: var(--radius-card);
-    padding: 0.25rem 0.6rem;
-}
-
-#file-list::-webkit-scrollbar { width: var(--scrollbar-width); }
-#file-list::-webkit-scrollbar-track { background: transparent; }
-#file-list::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
-#file-list::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
-
-.file-row {
+.app-header {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.35rem 0;
-    border-bottom: 1px solid var(--bs-border-color);
-}
-
-.file-row:last-child {
-    border-bottom: none;
-}
-
-.file-group-divider {
-    height: 4px;
-    background-color: var(--bs-border-color);
-    margin: 2px 0;
-    border-radius: 1px;
-}
-
-.file-row .material-icons-round {
-    font-size: 18px;
+    justify-content: space-between;
+    gap: 1rem;
     flex-shrink: 0;
 }
 
-.file-row-name {
+.app-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.empty-state {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+}
+
+/* Once there are cards the whole grid area is the drop target, so there is no
+   separate zone to aim at. */
+.app-shell.drag-over .grid-scroll {
+    border-color: rgba(var(--accent-rgb), var(--wash-active-border));
+    background-color: rgba(var(--accent-rgb), var(--wash-active-fill));
+}
+
+/* ── Bulk edit bar ───────────────────────────────────────────────────────── */
+
+.bulk-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-shrink: 0;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-card);
+    background-color: rgba(var(--accent-rgb), var(--wash-semantic-fill));
+    border: 1px solid rgba(var(--accent-rgb), var(--wash-semantic-border));
+}
+
+.bulk-sep {
+    width: 1px;
+    align-self: stretch;
+    background-color: var(--bs-border-color);
+    margin: 0 0.25rem;
+}
+
+.bulk-select {
+    width: auto;
+    min-width: 150px;
+}
+
+/* ── Grid ────────────────────────────────────────────────────────────────── */
+
+.grid-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--radius-card);
+    padding: 0.85rem;
+    transition: border-color var(--dur-state) var(--ease-state),
+                background-color var(--dur-state) var(--ease-state);
+}
+
+.grid-scroll::-webkit-scrollbar { width: var(--scrollbar-width); }
+.grid-scroll::-webkit-scrollbar-track { background: transparent; }
+.grid-scroll::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+.grid-scroll::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+
+.job-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
+    gap: 0.75rem;
+    align-content: start;
+}
+
+/* ── Job card ────────────────────────────────────────────────────────────── */
+
+.job-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border-radius: var(--radius-card);
+    border: 1px solid var(--bs-border-color);
+    background-color: var(--bs-body-bg);
+    cursor: pointer;
+    transition: border-color var(--dur-micro) var(--ease-micro),
+                background-color var(--dur-micro) var(--ease-micro);
+}
+
+.job-card:hover {
+    border-color: rgba(var(--accent-rgb), var(--wash-hover-border));
+}
+
+.job-card.selected {
+    border-color: rgba(var(--accent-rgb), var(--wash-active-border));
+    background-color: rgba(var(--accent-rgb), var(--wash-active-fill));
+}
+
+.card-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.card-head .kind-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+    color: var(--bs-secondary-color);
+}
+
+.card-name {
     flex: 1 1 0;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-size: 0.875rem;
+    font-weight: 500;
+    user-select: text;
 }
 
-.file-remove-btn {
+.card-remove {
     width: 20px;
     height: 20px;
     border-radius: 50%;
@@ -209,48 +268,159 @@ body.popup-window span:hover {
                 border-color var(--dur-micro) var(--ease-micro);
 }
 
-.file-remove-btn:hover {
+.card-remove:hover {
     background-color: var(--bs-danger);
     border-color: var(--bs-danger);
     color: #fff;
 }
 
-.file-remove-btn .material-icons-round {
+.card-remove .material-icons-round {
     font-size: 14px;
     line-height: 1;
     display: block;
 }
 
-/* ── Done file list ──────────────────────────────────────────────────────── */
-
-.file-open-btn {
-    border: none;
-    background: none;
+.card-meta {
+    font-size: 0.78rem;
     color: var(--bs-secondary-color);
-    display: inline-flex;
+    min-height: 1.2em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    user-select: text;
+}
+
+.card-meta.pending {
+    opacity: var(--opacity-disabled);
+}
+
+.card-convert {
+    display: flex;
     align-items: center;
-    justify-content: center;
-    padding: 0;
-    cursor: pointer;
+    gap: 0.4rem;
+}
+
+.card-from {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--bs-secondary-color);
     flex-shrink: 0;
-    transition: color var(--dur-micro) var(--ease-micro);
 }
 
-.file-open-btn:hover {
-    color: var(--bs-primary);
+.card-arrow {
+    font-size: 15px;
+    color: var(--bs-secondary-color);
+    flex-shrink: 0;
 }
 
-.file-open-btn .material-icons-round {
-    font-size: 16px;
-    line-height: 1;
-    display: block;
+.card-target {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.8rem;
+    padding: 0.15rem 1.4rem 0.15rem 0.5rem;
 }
 
-/* ── Done card ───────────────────────────────────────────────────────────── */
+/* ── Card status strip ───────────────────────────────────────────────────── */
 
-.done-card {
+.card-status {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    min-height: 1.4em;
+}
+
+.status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background-color: var(--bs-secondary-color);
+}
+
+.status-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    user-select: text;
+}
+
+.tone-ready   .status-dot { background-color: var(--accent); }
+.tone-ready   .status-text { color: var(--bs-secondary-color); }
+.tone-warning .status-dot { background-color: var(--bs-warning); }
+.tone-warning .status-text { color: var(--bs-warning); }
+.tone-danger  .status-dot { background-color: var(--bs-danger); }
+.tone-danger  .status-text { color: var(--bs-danger); }
+.tone-success .status-dot { background-color: var(--bs-success); }
+.tone-success .status-text { color: var(--bs-success); }
+.tone-muted   .status-dot { background-color: var(--bs-secondary-color); opacity: var(--opacity-muted); }
+.tone-muted   .status-text { color: var(--bs-secondary-color); opacity: var(--opacity-muted); }
+
+/* Work-in-progress pulses, matching the house status-card pattern. */
+@keyframes status-pulse {
+    0%   { opacity: 0.75; }
+    50%  { opacity: 0.4; }
+    100% { opacity: 0.75; }
+}
+
+.tone-running .status-dot {
+    background-color: var(--accent);
+    animation: status-pulse var(--dur-ambient) infinite var(--ease-state);
+}
+
+.tone-running .status-text { color: var(--accent); }
+
+.card-progress {
+    height: 4px;
+    border-radius: 2px;
     background-color: var(--bs-secondary-bg);
-    border: 1px solid var(--bs-border-color);
+    overflow: hidden;
+}
+
+.card-progress .bar {
+    height: 100%;
+    background-color: var(--accent);
+    border-radius: 2px;
+    transition: width var(--dur-state) linear;
+}
+
+/* Unknown duration: motion instead of a frozen bar. */
+.card-progress.indeterminate .bar {
+    width: 40% !important;
+    animation: slide 1.1s ease-in-out infinite;
+    transition: none;
+}
+
+@keyframes slide {
+    0%   { margin-left: -40%; }
+    100% { margin-left: 100%; }
+}
+
+.card-actions {
+    display: flex;
+    gap: 0.35rem;
+}
+
+.card-actions .btn {
+    --bs-btn-padding-y: 0.1rem;
+    --bs-btn-padding-x: 0.45rem;
+    --bs-btn-font-size: 0.72rem;
+}
+
+/* ── Action bar ──────────────────────────────────────────────────────────── */
+
+.action-bar {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    flex-shrink: 0;
+    padding-top: 0.25rem;
+}
+
+.action-status {
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 /* ── Spinner ─────────────────────────────────────────────────────────────── */
@@ -263,6 +433,62 @@ body.popup-window span:hover {
 .converting-spin {
     animation: spin 1.4s linear infinite;
 }
+
+/* ── Toast ───────────────────────────────────────────────────────────────── */
+
+/* The house spec puts this at top:16px, which suits a web page whose content
+   starts below the fold. Here that sits directly on top of the app header and
+   hides the title and toolbar, so it clears the header instead. */
+.toast-host {
+    position: fixed;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1080;
+    width: min(720px, calc(100% - 2rem));
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    pointer-events: none;
+}
+
+.toast-note {
+    border-left: 4px solid;
+    border-radius: 6px;
+    padding: 0.7rem 1rem;
+    font-size: 0.875rem;
+    box-shadow: var(--bs-box-shadow);
+    pointer-events: auto;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    animation: toast-in var(--dur-state) var(--ease-state);
+    user-select: text;
+}
+
+@keyframes toast-in {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.toast-note.leaving {
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: opacity var(--dur-state), transform var(--dur-state);
+}
+
+.toast-note .material-icons-round { font-size: 18px; flex-shrink: 0; }
+.toast-note .toast-body { flex: 1 1 auto; min-width: 0; }
+.toast-note .toast-close {
+    background: none; border: none; padding: 0; cursor: pointer;
+    color: inherit; opacity: 0.7; flex-shrink: 0;
+}
+.toast-note .toast-close:hover { opacity: 1; }
+
+.toast-info    { background-color: var(--bs-info);    border-left-color: var(--bs-info);    color: #000; }
+.toast-success { background-color: var(--bs-success); border-left-color: var(--bs-success); color: #fff; }
+.toast-warning { background-color: var(--bs-warning); border-left-color: var(--bs-warning); color: #000; }
+.toast-danger  { background-color: var(--bs-danger);  border-left-color: var(--bs-danger);  color: #fff; }
 
 /* ── Credits logo ────────────────────────────────────────────────────────── */
 

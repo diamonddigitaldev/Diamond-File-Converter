@@ -1,429 +1,652 @@
-// Renderer.
+// Renderer — job card grid.
 //
-// Runs with contextIsolation on and no Node access. Everything that used to be
-// a require() now goes through window.electronAPI / window.pathAPI, exposed by
-// preload.js.
+// Runs with contextIsolation on and no Node access. Everything reaches the main
+// process through window.electronAPI, exposed by preload.js.
+//
+// The v1 UI was a single-column list with one shared target format per media
+// kind and a strictly sequential convert loop. This is a grid of independently
+// configurable job cards that run through the runner's concurrency pool.
 
 const api = window.electronAPI;
 const p = window.pathAPI;
 
+// -- State -------------------------------------------------------------------
+
+/** @type {Array<{id,filePath,ext,kind,targetExt,meta,status,progress,error,outputPath,isDirectory,fileCount}>} */
 let jobs = [];
-// each job: { id, filePath, ext, type, targetExt, status, progress, outputPath, isDirectory, fileCount, error }
-// status: "pending" | "converting" | "done" | "error" | "cancelled"
+let selection = new Set();
+let selectionAnchor = null;
+let converting = false;
 
-let selectedFormats = {};
-// keyed by type: { audio: "mp3", video: null, image: "jpg" }
+// Loaded as a plain script by index.html — the renderer has no Node access,
+// and functions cannot cross the IPC bridge, so it cannot be required.
+const display = window.display;
 
-let cancelRequested = false;
-let activeJobId = null;
+// Populated from main at startup so the format graph has one source of truth.
+let FORMATS = null;
+let TARGETS = null;
 
-// Populated from the main process at startup, so the format graph has a single
-// source of truth instead of being duplicated on both sides of the bridge.
-let CONVERSION_MAP = {};
-let EXT_ALIASES = {};
+const el = {};
 
-const actionAreas = ["convert", "progress", "done"];
+function $(id) {
+    if (!el[id]) el[id] = document.getElementById(id);
+    return el[id];
+}
 
 function generateId() {
-    return Math.random().toString(36).slice(2, 9);
+    return `c${Math.random().toString(36).slice(2, 9)}`;
 }
 
-const TYPE_ORDER = { video: 0, audio: 1, image: 2 };
-const TYPE_ICONS  = { audio: "audio_file", video: "video_file", image: "image" };
-
-function sortJobs() {
-    jobs.sort((a, b) => {
-        const byType = (TYPE_ORDER[a.type] ?? 99) - (TYPE_ORDER[b.type] ?? 99);
-        if (byType !== 0) return byType;
-        const byExt = a.ext.localeCompare(b.ext);
-        if (byExt !== 0) return byExt;
-        return p.basename(a.filePath).localeCompare(p.basename(b.filePath), undefined, { sensitivity: "base" });
-    });
-}
-
-function showAction(name) {
-    for (const a of actionAreas) {
-        document.getElementById(`action-${a}`).classList.toggle("d-none", a !== name);
-    }
-}
-
-function showState(name) {
-    const isEmpty = name === "empty";
-    const isQueue = name === "queue";
-    const showDropZone = isEmpty || isQueue;
-
-    document.getElementById("drop-zone").classList.toggle("d-none", !showDropZone);
-    document.getElementById("dz-empty").classList.toggle("d-none", !isEmpty);
-    document.getElementById("dz-has-files").classList.toggle("d-none", !isQueue);
-    document.getElementById("file-list-section").classList.toggle("d-none", !isQueue);
-    document.getElementById("format-section").classList.toggle("d-none", !isQueue);
-
-    if (isQueue) {
-        showAction("convert");
-    } else if (name === "converting") {
-        showAction("progress");
-    } else if (name === "done") {
-        showAction("done");
-    } else {
-        for (const a of actionAreas) {
-            document.getElementById(`action-${a}`).classList.add("d-none");
-        }
-    }
-}
+// -- Ingest ------------------------------------------------------------------
 
 function addFiles(filePaths) {
     let added = 0;
+    let rejected = 0;
+
     for (const filePath of filePaths) {
         const raw = p.extname(filePath).slice(1).toLowerCase();
-        const ext = EXT_ALIASES[raw] ?? raw;
-        const entry = CONVERSION_MAP[ext];
-        if (!entry) continue;
-        if (jobs.some(j => j.filePath === filePath)) continue; // skip duplicates
-        jobs.push({ id: generateId(), filePath, ext, type: entry.type, targetExt: null, status: "pending", progress: 0, outputPath: null });
+        const ext = FORMATS.aliases[raw] ?? raw;
+        const entry = FORMATS.conversionMap[ext];
+
+        if (!entry) { rejected++; continue; }
+        if (jobs.some(j => j.filePath === filePath)) continue;
+
+        jobs.push({
+            id: generateId(),
+            filePath,
+            ext,
+            kind: entry.type,
+            targetExt: null,
+            meta: null,
+            status: "pending",
+            progress: 0,
+            error: null,
+            outputPath: null,
+            isDirectory: false,
+            fileCount: 0,
+        });
         added++;
     }
+
     if (added > 0) {
-        sortJobs();
-        renderFileList();
-        renderFormatGrid();
-        updateConvertButton();
-        showState("queue");
+        render();
+        probeNewJobs();
     }
+
+    // v1 discarded unsupported files in silence, which read as the app being
+    // broken. Say so.
+    if (rejected > 0) {
+        toast(
+            `${rejected} ${rejected === 1 ? "file was" : "files were"} skipped — not a supported format.`,
+            added > 0 ? "warning" : "danger"
+        );
+    }
+    return added;
 }
 
-/**
- * Expand whatever was dropped or picked into a flat list of media files.
- * Directory walking happens in the main process now: v1 did a synchronous,
- * one-level-deep readdirSync on the UI thread and silently discarded anything
- * nested.
- */
+/** Expand folders in the main process, then queue whatever came back. */
 async function ingestPaths(inputPaths) {
-    if (inputPaths.length === 0) return;
+    if (!inputPaths || inputPaths.length === 0) return;
     try {
         const result = await api.scanPaths(inputPaths, {});
-        addFiles(result.files);
+        const added = addFiles(result.files);
+
+        if (result.truncated) {
+            toast(`Stopped after ${result.files.length} files — the folder is very large.`, "warning");
+        } else if (added > 0 && result.skipped > 0) {
+            toast(`Added ${added} ${added === 1 ? "file" : "files"}, skipped ${result.skipped} unsupported.`, "info");
+        } else if (added === 0 && result.files.length === 0 && result.skipped > 0) {
+            toast("No supported media found in that folder.", "warning");
+        }
+        for (const err of result.errors ?? []) {
+            toast(`Could not read ${p.basename(err.path)}: ${err.error}`, "danger");
+        }
     } catch (_) {
-        // Fall back to treating them as plain files rather than dropping the
-        // interaction entirely.
         addFiles(inputPaths);
     }
 }
 
-function removeJob(id) {
-    jobs = jobs.filter(j => j.id !== id);
-    if (jobs.length === 0) {
-        selectedFormats = {};
-        showState("empty");
-    } else {
-        renderFileList();
-        renderFormatGrid();
-        updateConvertButton();
+/**
+ * Probe anything that has not been probed yet. Cards are already on screen by
+ * this point — metadata only enriches them, so a slow or failing probe never
+ * blocks the UI.
+ */
+async function probeNewJobs() {
+    const pending = jobs.filter(j => j.meta === null);
+    for (const job of pending) {
+        job.meta = { pending: true };
+        api.probeFile(job.filePath).then((meta) => {
+            const current = jobs.find(j => j.id === job.id);
+            if (!current) return;
+            current.meta = meta;
+            updateCard(current);
+        }).catch(() => {
+            const current = jobs.find(j => j.id === job.id);
+            if (current) { current.meta = { ok: false }; updateCard(current); }
+        });
     }
 }
 
-function renderFileList() {
-    const container = document.getElementById("file-list");
-    container.innerHTML = "";
+// -- Selection ---------------------------------------------------------------
 
-    const count = jobs.length;
-    document.getElementById("dz-file-count").textContent = `${count} ${count !== 1 ? "Files" : "File"} Queued`;
+function orderedIds() {
+    return jobs.map(j => j.id);
+}
 
-    let prevType = null;
+function handleCardClick(jobId, event) {
+    const { selection: next, anchor } = display.resolveSelection(
+        orderedIds(), selection, jobId,
+        { ctrl: event.ctrlKey || event.metaKey, shift: event.shiftKey },
+        selectionAnchor
+    );
+    selection = next;
+    selectionAnchor = anchor;
+    renderSelection();
+}
+
+function selectAll() {
+    selection = new Set(orderedIds());
+    selectionAnchor = jobs.length > 0 ? jobs[0].id : null;
+    renderSelection();
+}
+
+function clearSelection() {
+    selection = new Set();
+    selectionAnchor = null;
+    renderSelection();
+}
+
+function selectedJobs() {
+    return jobs.filter(j => selection.has(j.id));
+}
+
+// -- Mutation ----------------------------------------------------------------
+
+function removeJobs(ids) {
+    const set = new Set(ids);
+    jobs = jobs.filter(j => !set.has(j.id));
+    selection = display.pruneSelection(selection, orderedIds());
+    render();
+}
+
+function setTarget(ids, targetExt) {
+    const set = new Set(ids);
     for (const job of jobs) {
-        if (prevType !== null && job.type !== prevType) {
-            const lastRow = container.lastElementChild;
-            if (lastRow) lastRow.style.borderBottom = "none";
-            const divider = document.createElement("div");
-            divider.className = "file-group-divider";
-            container.appendChild(divider);
+        if (!set.has(job.id)) continue;
+        // Guard against a stale bulk option: never assign a target the source
+        // cannot actually produce.
+        const allowed = FORMATS.conversionMap[job.ext]?.targets ?? [];
+        const crossKind = display.commonTargets([job.ext], TARGETS).map(t => t.ext);
+        if (!allowed.some(t => t.ext === targetExt) && !crossKind.includes(targetExt)) continue;
+        job.targetExt = targetExt;
+        if (job.status === "error" || job.status === "cancelled") {
+            job.status = "pending";
+            job.error = null;
+            job.progress = 0;
         }
-        prevType = job.type;
-
-        const row = document.createElement("div");
-        row.className = "file-row";
-
-        const icon = document.createElement("span");
-        icon.className = "material-icons-round text-secondary";
-        icon.textContent = TYPE_ICONS[job.type] ?? "insert_drive_file";
-
-        const name = document.createElement("span");
-        name.className = "file-row-name small";
-        name.textContent = p.basename(job.filePath);
-        name.title = job.filePath;
-
-        const removeBtn = document.createElement("button");
-        removeBtn.className = "file-remove-btn";
-        const removeIcon = document.createElement("span");
-        removeIcon.className = "material-icons-round";
-        removeIcon.textContent = "close";
-        removeBtn.appendChild(removeIcon);
-        removeBtn.addEventListener("click", () => removeJob(job.id));
-
-        row.appendChild(icon);
-        row.appendChild(name);
-        row.appendChild(removeBtn);
-        container.appendChild(row);
+        updateCard(job);
     }
+    renderActionBar();
 }
 
-function renderFormatGrid() {
-    const container = document.getElementById("format-grid");
-    container.innerHTML = "";
+// -- Rendering ---------------------------------------------------------------
 
-    // group jobs by type, but only show each type once in the format grid, since all jobs of the same type share the same target format options
-    const seen = new Set();
-    const typeEntries = [];
-    for (const job of jobs) {
-        if (!seen.has(job.type)) {
-            seen.add(job.type);
-            typeEntries.push({ type: job.type, entry: CONVERSION_MAP[job.ext] });
+function render() {
+    const hasJobs = jobs.length > 0;
+
+    $("empty-state").classList.toggle("d-none", hasJobs);
+    $("grid-scroll").classList.toggle("d-none", !hasJobs);
+    $("action-bar").classList.toggle("d-none", !hasJobs);
+
+    const grid = $("job-grid");
+    grid.innerHTML = "";
+    for (const job of jobs) grid.appendChild(buildCard(job));
+
+    renderSelection();
+    renderActionBar();
+}
+
+function buildCard(job) {
+    const card = document.createElement("div");
+    card.className = "job-card";
+    card.dataset.id = job.id;
+
+    // -- head
+    const head = document.createElement("div");
+    head.className = "card-head";
+
+    const icon = document.createElement("span");
+    icon.className = "material-icons-round kind-icon";
+    icon.textContent = display.iconForKind(job.kind);
+
+    const name = document.createElement("span");
+    name.className = "card-name";
+    name.textContent = p.basename(job.filePath);
+    name.title = job.filePath;
+
+    const remove = document.createElement("button");
+    remove.className = "card-remove";
+    remove.title = "Remove";
+    const removeIcon = document.createElement("span");
+    removeIcon.className = "material-icons-round";
+    removeIcon.textContent = "close";
+    remove.appendChild(removeIcon);
+    remove.addEventListener("click", (e) => {
+        e.stopPropagation();
+        removeJobs([job.id]);
+    });
+
+    head.append(icon, name, remove);
+
+    // -- meta
+    const meta = document.createElement("div");
+    meta.className = "card-meta";
+
+    // -- convert row
+    const convert = document.createElement("div");
+    convert.className = "card-convert";
+
+    const from = document.createElement("span");
+    from.className = "card-from";
+    from.textContent = job.ext.toUpperCase();
+
+    const arrow = document.createElement("span");
+    arrow.className = "material-icons-round card-arrow";
+    arrow.textContent = "arrow_forward";
+
+    const select = document.createElement("select");
+    select.className = "form-select form-select-sm card-target";
+    fillTargetSelect(select, display.commonTargets([job.ext], TARGETS), job.targetExt);
+    select.addEventListener("click", (e) => e.stopPropagation());
+    select.addEventListener("change", () => setTarget([job.id], select.value || null));
+
+    convert.append(from, arrow, select);
+
+    // -- status
+    const status = document.createElement("div");
+    status.className = "card-status";
+    const dot = document.createElement("span");
+    dot.className = "status-dot";
+    const statusText = document.createElement("span");
+    statusText.className = "status-text";
+    status.append(dot, statusText);
+
+    // -- progress
+    const progress = document.createElement("div");
+    progress.className = "card-progress d-none";
+    const bar = document.createElement("div");
+    bar.className = "bar";
+    bar.style.width = "0%";
+    progress.appendChild(bar);
+
+    // -- actions (revealed once a job finishes)
+    const actions = document.createElement("div");
+    actions.className = "card-actions d-none";
+
+    card.append(head, meta, convert, status, progress, actions);
+    card.addEventListener("click", (e) => handleCardClick(job.id, e));
+
+    paintCard(card, job);
+    return card;
+}
+
+function fillTargetSelect(select, targets, current) {
+    select.innerHTML = "";
+
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Choose format…";
+    select.appendChild(placeholder);
+
+    for (const { group, items } of display.groupTargets(targets)) {
+        const optgroup = document.createElement("optgroup");
+        optgroup.label = group;
+        for (const t of items) {
+            const option = document.createElement("option");
+            option.value = t.ext;
+            option.textContent = t.label;
+            optgroup.appendChild(option);
         }
+        select.appendChild(optgroup);
     }
 
-    for (const { type, entry } of typeEntries) {
-        const label = document.createElement("p");
-        label.className = "format-group-label";
-        label.textContent = type.charAt(0).toUpperCase() + type.slice(1);
-        container.appendChild(label);
-
-        const row = document.createElement("div");
-        row.className = "format-btn-row";
-
-        for (const t of entry.targets) {
-            const btn = document.createElement("button");
-            btn.className = "btn-format";
-            if (selectedFormats[type] === t.ext) btn.classList.add("selected");
-            btn.textContent = t.label;
-            btn.dataset.type = type;
-            btn.dataset.ext = t.ext;
-            btn.addEventListener("click", () => selectFormat(type, t.ext, btn));
-            row.appendChild(btn);
-        }
-        container.appendChild(row);
-    }
+    select.value = current ?? "";
 }
 
-function selectFormat(type, ext, btn) {
-    selectedFormats[type] = ext;
-    document.querySelectorAll(`.btn-format[data-type="${type}"]`).forEach(b => b.classList.remove("selected"));
-    btn.classList.add("selected");
-    updateConvertButton();
+/** Update one card in place, without rebuilding the grid. */
+function updateCard(job) {
+    const card = $("job-grid").querySelector(`[data-id="${job.id}"]`);
+    if (card) paintCard(card, job);
+    renderActionBar();
 }
 
-function updateConvertButton() {
-    const types = [...new Set(jobs.map(j => j.type))];
-    const allSelected = types.length > 0 && types.every(t => selectedFormats[t]);
-    document.getElementById("btn-start-convert").disabled = !allSelected;
-}
+function paintCard(card, job) {
+    const meta = card.querySelector(".card-meta");
+    const described = display.describeMeta(job.meta, job.ext);
+    meta.textContent = described ?? "Reading…";
+    meta.classList.toggle("pending", described === null);
+    if (described) meta.title = described;
 
-function setProgress(percent) {
-    const fill = document.getElementById("progress-bar-fill");
-    const label = document.getElementById("progress-label");
+    const { text, tone } = display.describeStatus(job);
+    const status = card.querySelector(".card-status");
+    status.className = `card-status tone-${tone}`;
+    const statusText = status.querySelector(".status-text");
+    statusText.textContent = text;
+    statusText.title = text;
 
-    if (percent == null) {
-        // No known duration, so show motion rather than the frozen 0% v1 sat at.
-        fill.style.width = "100%";
-        fill.classList.add("progress-bar-striped", "progress-bar-animated");
-        label.textContent = "";
-        return;
+    const running = job.status === "running";
+    const progress = card.querySelector(".card-progress");
+    progress.classList.toggle("d-none", !running);
+    progress.classList.toggle("indeterminate", running && job.progress === null);
+    if (running && typeof job.progress === "number") {
+        progress.querySelector(".bar").style.width = `${job.progress}%`;
     }
 
-    fill.classList.remove("progress-bar-striped", "progress-bar-animated");
-    fill.style.width = `${percent}%`;
-    label.textContent = `${Math.round(percent)}%`;
+    // The target select locks while the job is in flight.
+    const select = card.querySelector(".card-target");
+    select.disabled = running;
+    if (select.value !== (job.targetExt ?? "")) select.value = job.targetExt ?? "";
+
+    renderCardActions(card, job);
 }
 
-async function startQueue() {
-    cancelRequested = false;
+function renderCardActions(card, job) {
+    const actions = card.querySelector(".card-actions");
+    actions.innerHTML = "";
 
-    for (const job of jobs) {
-        job.targetExt = selectedFormats[job.type];
-        job.status = "pending";
+    const buttons = [];
+
+    if (job.status === "running") {
+        buttons.push(makeAction("Cancel", "btn-outline-danger", () => api.cancelJob(job.id)));
+    } else if (job.status === "done" && job.outputPath) {
+        buttons.push(makeAction(
+            job.isDirectory ? "Open folder" : "Show in folder",
+            "btn-outline-secondary",
+            () => (job.isDirectory ? api.openPath(job.outputPath) : api.showInFolder(job.outputPath))
+        ));
+    } else if (job.status === "error") {
+        buttons.push(makeAction("Retry", "btn-outline-secondary", () => {
+            job.status = "pending";
+            job.error = null;
+            job.progress = 0;
+            updateCard(job);
+        }));
     }
 
-    showState("converting");
+    actions.classList.toggle("d-none", buttons.length === 0);
+    for (const b of buttons) actions.appendChild(b);
+}
 
+function makeAction(label, variant, onClick) {
+    const btn = document.createElement("button");
+    btn.className = `btn btn-sm ${variant}`;
+    btn.textContent = label;
+    btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onClick();
+    });
+    return btn;
+}
+
+function renderSelection() {
+    for (const card of $("job-grid").children) {
+        card.classList.toggle("selected", selection.has(card.dataset.id));
+    }
+
+    const count = selection.size;
+    const bar = $("bulk-bar");
+    bar.classList.toggle("d-none", count === 0);
+    if (count === 0) return;
+
+    $("bulk-count").textContent = `${count} selected`;
+
+    // Offer only formats every selected source can actually produce, so a bulk
+    // change can never create an invalid job.
+    const targets = display.commonTargets(selectedJobs().map(j => j.ext), TARGETS);
+    const select = $("bulk-target");
+    const shared = [...new Set(selectedJobs().map(j => j.targetExt))];
+    fillTargetSelect(select, targets, shared.length === 1 ? shared[0] : null);
+
+    select.disabled = targets.length === 0 || converting;
+    $("bulk-target-note").textContent = targets.length === 0
+        ? "No format works for every selected file"
+        : "";
+}
+
+function renderActionBar() {
     const total = jobs.length;
+    const ready = jobs.filter(j => j.targetExt).length;
+    const withoutTarget = total - ready;
 
-    for (let i = 0; i < jobs.length; i++) {
-        const job = jobs[i];
+    $("queue-summary").textContent = converting
+        ? display.summarise(jobs)
+        : `${total} ${total === 1 ? "file" : "files"} queued`;
 
-        if (cancelRequested) {
-            job.status = "cancelled";
-            continue;
-        }
+    $("queue-detail").textContent = converting
+        ? `${jobs.filter(j => j.status === "running").length} running`
+        : (withoutTarget > 0 ? `${withoutTarget} still need a format` : "Ready to convert");
 
-        document.getElementById("progress-current-file").textContent = p.basename(job.filePath);
-        document.getElementById("progress-status").textContent = `File ${i + 1} of ${total}`;
-        setProgress(0);
+    const percent = display.overallProgress(jobs);
+    $("overall-bar").style.width = `${percent}%`;
 
-        job.status = "converting";
+    // House pattern: the primary action and its abort share one slot rather
+    // than sitting side by side, so only one is ever visible.
+    $("btn-convert").classList.toggle("d-none", converting);
+    $("btn-convert").disabled = ready === 0;
+    $("btn-cancel-all").classList.toggle("d-none", !converting);
+    $("btn-clear-all").disabled = converting;
+}
 
+// -- Toasts ------------------------------------------------------------------
+
+const TOAST_ICONS = { info: "info", success: "check_circle", warning: "warning", danger: "error" };
+
+function toast(message, type = "info", timeoutMs = 4500) {
+    const host = $("toast-host");
+
+    const note = document.createElement("div");
+    note.className = `toast-note toast-${type}`;
+
+    const icon = document.createElement("span");
+    icon.className = "material-icons-round";
+    icon.textContent = TOAST_ICONS[type] ?? "info";
+
+    const body = document.createElement("span");
+    body.className = "toast-body";
+    body.textContent = message;
+
+    const close = document.createElement("button");
+    close.className = "toast-close material-icons-round";
+    close.textContent = "close";
+    close.title = "Dismiss";
+    close.addEventListener("click", () => dismiss());
+
+    note.append(icon, body, close);
+    host.appendChild(note);
+
+    let timer = null;
+    function dismiss() {
+        if (!note.isConnected) return;
+        clearTimeout(timer);
+        note.classList.add("leaving");
+        setTimeout(() => note.remove(), 200);
+    }
+
+    if (timeoutMs > 0) timer = setTimeout(dismiss, timeoutMs);
+    return dismiss;
+}
+
+// -- Conversion --------------------------------------------------------------
+
+async function startConversion() {
+    const runnable = jobs.filter(j => j.targetExt);
+    if (runnable.length === 0) return;
+
+    converting = true;
+    for (const job of runnable) {
+        job.status = "pending";
+        job.progress = 0;
+        job.error = null;
+        updateCard(job);
+    }
+    renderActionBar();
+
+    // Every job is submitted at once; the runner's pool decides how many
+    // actually run in parallel. v1 awaited them one at a time.
+    const results = await Promise.all(runnable.map(async (job) => {
         const result = await api.runJob({
             id: job.id,
             inputPath: job.filePath,
             targetExt: job.targetExt,
         });
-        activeJobId = null;
+        applyResult(job, result);
+        return result;
+    }));
 
-        if (result.status === "cancelled" || cancelRequested) {
-            job.status = "cancelled";
-        } else if (result.status === "done") {
-            job.status = "done";
-            job.outputPath = result.outputPath;
-            job.isDirectory = result.isDirectory === true;
-            job.fileCount = result.fileCount ?? 1;
-        } else if (result.status === "skipped") {
-            job.status = "cancelled";
-        } else {
-            job.status = "error";
-            job.error = result.error ?? null;
-        }
-    }
-
-    renderDoneList();
-    showState("done");
+    converting = false;
+    render();
+    announce(results);
 }
 
-function renderDoneList() {
-    const doneCount = jobs.filter(j => j.status === "done").length;
-    const errorCount = jobs.filter(j => j.status === "error").length;
-    const cancelledCount = jobs.filter(j => j.status === "cancelled").length;
+function applyResult(job, result) {
+    job.status = result.status;
+    job.error = result.error ?? null;
+    job.outputPath = result.outputPath ?? null;
+    job.isDirectory = result.isDirectory === true;
+    job.fileCount = result.fileCount ?? 0;
+    if (result.status === "done") job.progress = 100;
+    updateCard(job);
+}
 
-    const parts = [];
-    if (doneCount > 0) parts.push(`${doneCount} ${doneCount !== 1 ? "files" : "file"} converted`);
-    if (errorCount > 0) parts.push(`${errorCount} ${parts.length === 0 ? (errorCount !== 1 ? "files " : "file ") : ""}failed`);
-    if (cancelledCount > 0) parts.push(`${cancelledCount} ${parts.length === 0 ? (cancelledCount !== 1 ? "files " : "file ") : ""}cancelled`);
-    let summary = parts.join(", ");
-    if (!summary) summary = "No files converted";
-    document.getElementById("done-summary").textContent = summary;
+function announce(results) {
+    const failed = results.filter(r => r.status === "error");
+    const done = results.filter(r => r.status === "done").length;
+    const cancelled = results.filter(r => r.status === "cancelled" || r.status === "skipped").length;
 
-    const listEl = document.getElementById("done-file-list");
-    listEl.innerHTML = "";
-
-    const STATUS_ICON = {
-        done:      { text: "check_circle", cls: "text-success"   },
-        error:     { text: "error",        cls: "text-danger"     },
-        cancelled: { text: "cancel",       cls: "text-secondary"  },
-    };
-
-    for (const job of jobs) {
-        const row = document.createElement("div");
-        row.className = "file-row";
-
-        // v1 called fs.statSync here to find out whether the output was a
-        // folder of frames. The job result carries that now, so the renderer
-        // needs no filesystem access at all.
-        const isDir = job.status === "done" && job.isDirectory === true;
-
-        const { text: iconText, cls } = STATUS_ICON[job.status] ?? STATUS_ICON.cancelled;
-        const icon = document.createElement("span");
-        icon.className = `material-icons-round ${cls}`;
-        icon.textContent = isDir ? "folder" : iconText;
-
-        const name = document.createElement("span");
-        name.className = "file-row-name small";
-        if (isDir) {
-            const frameCount = job.fileCount ?? 0;
-            name.textContent = `${p.basename(job.outputPath)}/ (${frameCount} ${frameCount !== 1 ? "frames" : "frame"})`;
-        } else {
-            name.textContent = p.basename(job.status === "done" ? job.outputPath : job.filePath);
-        }
-        name.title = job.status === "error" && job.error
-            ? job.error
-            : (job.status === "done" ? job.outputPath : job.filePath);
-
-        row.appendChild(icon);
-        row.appendChild(name);
-
-        if (job.status === "done") {
-            const openBtn = document.createElement("button");
-            openBtn.className = "file-open-btn";
-            openBtn.title = isDir ? "Open folder" : "Show in folder";
-            const openIcon = document.createElement("span");
-            openIcon.className = "material-icons-round";
-            openIcon.textContent = isDir ? "folder_open" : "open_in_new";
-            openBtn.appendChild(openIcon);
-            openBtn.addEventListener("click", () => {
-                if (isDir) api.openPath(job.outputPath);
-                else api.showInFolder(job.outputPath);
-            });
-            row.appendChild(openBtn);
-        }
-
-        listEl.appendChild(row);
+    if (failed.length > 0) {
+        // One toast, not one blocking dialog per failure. The per-card status
+        // carries each individual reason.
+        const detail = failed.length === 1 ? ` — ${failed[0].error ?? "unknown error"}` : "";
+        toast(
+            `${failed.length} ${failed.length === 1 ? "file" : "files"} failed to convert${detail}`,
+            "danger",
+            0
+        );
+    }
+    if (done > 0) {
+        toast(`${done} ${done === 1 ? "file" : "files"} converted.`, "success");
+    } else if (failed.length === 0 && cancelled > 0) {
+        toast("Conversion cancelled.", "info");
     }
 }
+
+// -- Wiring ------------------------------------------------------------------
 
 document.addEventListener("DOMContentLoaded", async () => {
-    const formats = await api.getFormats();
-    CONVERSION_MAP = formats.conversionMap;
-    EXT_ALIASES = formats.aliases;
+    FORMATS = await api.getFormats();
+    TARGETS = FORMATS.targetsByExt;
 
-    const dropZone = document.getElementById("drop-zone");
+    // Drag and drop. The document-level guard stops a stray drop navigating the
+    // window to the file and replacing the app with it.
+    const shell = document.querySelector(".app-shell");
+    let dragDepth = 0;
 
-    // A drop anywhere outside the zone would otherwise navigate the window to
-    // the dropped file, replacing the app with it. v1 had no such guard.
-    for (const type of ["dragover", "drop"]) {
-        document.addEventListener(type, (e) => e.preventDefault());
-    }
+    document.addEventListener("dragover", (e) => e.preventDefault());
+    document.addEventListener("drop", (e) => e.preventDefault());
 
-    dropZone.addEventListener("dragover", (e) => {
+    document.addEventListener("dragenter", (e) => {
         e.preventDefault();
-        dropZone.classList.add("drag-over");
+        dragDepth++;
+        shell.classList.add("drag-over");
+        if (jobs.length === 0) $("drop-zone").classList.add("drag-over");
     });
-    dropZone.addEventListener("dragleave", (e) => {
-        // dragleave fires when crossing onto a child element too, which made
-        // the v1 highlight flicker. Ignore those.
-        if (e.relatedTarget && dropZone.contains(e.relatedTarget)) return;
-        dropZone.classList.remove("drag-over");
+    document.addEventListener("dragleave", () => {
+        // dragleave also fires crossing onto child elements, so count depth
+        // rather than clearing on the first one — that is what made the v1
+        // highlight flicker.
+        dragDepth = Math.max(0, dragDepth - 1);
+        if (dragDepth === 0) {
+            shell.classList.remove("drag-over");
+            $("drop-zone").classList.remove("drag-over");
+        }
     });
-    dropZone.addEventListener("drop", (e) => {
-        e.preventDefault();
-        dropZone.classList.remove("drag-over");
+    document.addEventListener("drop", (e) => {
+        dragDepth = 0;
+        shell.classList.remove("drag-over");
+        $("drop-zone").classList.remove("drag-over");
         ingestPaths(api.getPathsForFiles(e.dataTransfer.files));
     });
 
-    dropZone.addEventListener("click", async (e) => {
+    async function browseFiles() {
+        const filePaths = await api.browseFiles();
+        if (filePaths) ingestPaths(filePaths);
+    }
+    async function browseFolder() {
+        const folders = await api.browseFolder();
+        if (folders) ingestPaths(folders);
+    }
+
+    $("browse-btn").addEventListener("click", browseFiles);
+    $("btn-add-files").addEventListener("click", browseFiles);
+    $("btn-add-folder").addEventListener("click", browseFolder);
+    $("drop-zone").addEventListener("click", (e) => {
         if (e.target.closest("button")) return;
-        const filePaths = await api.browseFiles();
-        if (filePaths) ingestPaths(filePaths);
+        browseFiles();
     });
 
-    async function browseFiles(e) {
-        e.stopPropagation();
-        const filePaths = await api.browseFiles();
-        if (filePaths) ingestPaths(filePaths);
-    }
-    document.getElementById("browse-btn").addEventListener("click", browseFiles);
-    document.getElementById("browse-more-btn").addEventListener("click", browseFiles);
-
-    document.getElementById("btn-start-convert").addEventListener("click", startQueue);
-
-    document.getElementById("btn-cancel").addEventListener("click", async () => {
-        cancelRequested = true;
-        await api.cancelAll();
-    });
-
-    function clearAll() {
+    $("btn-convert").addEventListener("click", startConversion);
+    $("btn-cancel-all").addEventListener("click", () => api.cancelAll());
+    $("btn-clear-all").addEventListener("click", () => {
         jobs = [];
-        selectedFormats = {};
-        showState("empty");
-    }
-    document.getElementById("btn-clear-all").addEventListener("click", (e) => { e.stopPropagation(); clearAll(); });
-    document.getElementById("btn-convert-another").addEventListener("click", clearAll);
+        clearSelection();
+        render();
+    });
+
+    $("bulk-target").addEventListener("change", (e) => {
+        if (e.target.value) setTarget([...selection], e.target.value);
+    });
+    $("bulk-remove").addEventListener("click", () => removeJobs([...selection]));
+    $("bulk-deselect").addEventListener("click", clearSelection);
+
+    // Clicking the grid background clears the selection.
+    $("grid-scroll").addEventListener("click", (e) => {
+        if (e.target === $("grid-scroll") || e.target === $("job-grid")) clearSelection();
+    });
+
+    document.addEventListener("keydown", (e) => {
+        const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName ?? "");
+        if (typing) return;
+
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+            e.preventDefault();
+            selectAll();
+        } else if (e.key === "Delete" && selection.size > 0 && !converting) {
+            e.preventDefault();
+            removeJobs([...selection]);
+        } else if (e.key === "Escape") {
+            clearSelection();
+        }
+    });
+
+    render();
 });
 
-// Progress now carries a jobId, so it can be matched to the file it belongs to
-// rather than being applied blindly as v1 did.
+// Progress carries a jobId, so it lands on the right card. v1 pushed a bare
+// integer with no way to tell which file it belonged to.
 api.onJobProgress(({ jobId, percent }) => {
     const job = jobs.find(j => j.id === jobId);
-    if (job) job.progress = percent ?? 0;
-    if (activeJobId === null || activeJobId === jobId) setProgress(percent);
+    if (!job) return;
+    job.progress = percent;
+    updateCard(job);
 });
 
 api.onJobStatus(({ jobId, status }) => {
-    if (status === "running") activeJobId = jobId;
+    const job = jobs.find(j => j.id === jobId);
+    if (!job || status === undefined) return;
+    if (status === "running") {
+        job.status = "running";
+        updateCard(job);
+    }
 });
 
 api.onFilesOpened((filePaths) => {
