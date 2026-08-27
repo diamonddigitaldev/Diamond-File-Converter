@@ -1,0 +1,223 @@
+# Manual Testing Checklist
+
+Steps a human needs to perform, covering what automated tests cannot judge:
+whether something *looks* right, *feels* right, and behaves correctly against
+the real filesystem, real dialogs and real Windows integration.
+
+A new section is appended for each version or fix. Do not rewrite earlier
+sections — the history is useful.
+
+**Before starting:**
+
+```
+npm install
+npm test          # expect 97 passing, 0 failing
+npm start
+```
+
+> If Electron exits immediately with `Cannot read properties of undefined
+> (reading 'getPath')`, the shell has `ELECTRON_RUN_AS_NODE=1` set, which makes
+> Electron run as plain Node. `unset ELECTRON_RUN_AS_NODE` and retry. This is
+> an environment quirk, not a bug in the app.
+
+**Test media you will need:** a folder containing a mix of video, audio and
+image files, at least one nested subfolder, at least one unsupported file
+(a `.txt` will do), one very large video, and one deliberately corrupt media
+file (rename a text file to `.mp4`).
+
+---
+
+## 2.0.0-alpha.1 — card grid, secure bridge, core architecture
+
+First release of the rebuilt interface. The whole UI changed, so this pass is
+broad rather than targeted.
+
+### Window and first run
+
+- [ ] App opens at roughly 1100×780 on a clean profile.
+- [ ] Window cannot be resized below about 720×560.
+- [ ] Resize and move the window, close and reopen — position and size are
+      remembered.
+- [ ] Menu bar shows **Menu** and **Credits**.
+- [ ] `Menu → Open Files` opens a file dialog filtered to supported types.
+- [ ] `Menu → Open Folder` opens a folder picker.
+- [ ] `Ctrl+O` opens the file dialog; `Ctrl+Shift+O` opens the folder picker.
+- [ ] `Credits` opens a modal window; it cannot be minimised; `Escape` closes
+      it; the version number shown matches `package.json`.
+- [ ] Credits links (Diamond Digital, TheFuturisticIdiot, Donate, GitHub) all
+      open in the external browser, not inside the app.
+
+### Empty state and ingest
+
+- [ ] Empty state shows the dashed drop zone, centred.
+- [ ] Hovering the drop zone tints it; the tint does **not** persist after the
+      pointer leaves.
+- [ ] Clicking the drop zone opens the file dialog. Clicking the **Select
+      Files** button inside it opens the dialog exactly once, not twice.
+- [ ] Drag a file over the window — the target area highlights. Drag out again
+      without dropping — the highlight clears. It must not flicker while moving
+      across cards.
+- [ ] Drop a single file: a card appears immediately.
+- [ ] Drop a folder containing nested subfolders: files from subfolders are
+      included, not just the top level.
+- [ ] Drop a folder containing an unsupported file: a toast reports how many
+      were skipped. **Nothing may be discarded silently.**
+- [ ] Drop the same file twice: it is not duplicated.
+- [ ] Drop a file onto the very edge of the window, outside the grid: the app
+      must **not** navigate away or replace itself with the file.
+
+### Cards and metadata
+
+- [ ] Each card shows a kind icon (video / audio / image), the filename, and a
+      metadata line.
+- [ ] Metadata fills in shortly after the card appears — resolution, duration,
+      codec and size. A card must never wait on this to render.
+- [ ] Hover a card: the background lightens slightly and the border tints.
+- [ ] A long filename truncates with an ellipsis and does not push the remove
+      button out of the card.
+- [ ] Hovering a truncated filename shows the full path as a tooltip.
+- [ ] The × button removes just that card.
+- [ ] Drop an MP3 that has embedded cover art: it is treated as audio, with no
+      resolution shown.
+
+### Text selection *(regression: filenames used to highlight on click-drag)*
+
+- [ ] Click and drag across a card's filename — **no text highlights.**
+- [ ] Same for the metadata line, the status text, the app title, the bulk bar
+      and the action bar.
+- [ ] Text inside a real input field can still be selected and edited.
+
+### Selecting cards
+
+- [ ] Click a card: it is selected and the bulk bar switches to "N selected".
+- [ ] Ctrl+click a second card: both selected.
+- [ ] Shift+click a third: the range between them is selected.
+- [ ] `Ctrl+A` selects every card; `Escape` clears the selection.
+- [ ] `Delete` removes the selected cards.
+- [ ] Click the checkbox in a card's top-left corner: it toggles only that card
+      and leaves the rest of the selection alone.
+- [ ] With some but not all cards selected, the select-all checkbox in the bulk
+      bar shows a dash (indeterminate), not a tick.
+- [ ] Ticking select-all selects everything; unticking clears it.
+- [ ] Click the empty grid background: the selection clears.
+
+### Choosing formats
+
+- [ ] With nothing selected, the bulk bar reads **"All N files"** and
+      **"Convert all to"**.
+- [ ] **The two-click flow:** drop a folder of images, choose one format from
+      the bulk bar, press Convert. Nothing else should be required. *(This is
+      how the previous version worked and must stay this quick.)*
+- [ ] With cards selected, the bar reads "N selected" / "Convert selected to",
+      and **Remove** and **Deselect** appear.
+- [ ] A per-card dropdown changes only that card.
+- [ ] Select a video and an audio file together: the bulk dropdown offers only
+      formats both can produce, and never a video-only container like MKV.
+- [ ] Select a video and an image together: no shared format exists, so the
+      dropdown is empty and the bar explains why.
+- [ ] Choose a format, then pick **"Choose format…"** again: the card returns to
+      the amber "Choose a format" state and Convert disables again.
+      *(Regression: this previously did nothing.)*
+- [ ] Convert stays disabled until at least one card has a format.
+- [ ] The footer detail line reads **"1 file still needs a format"** for one and
+      **"2 files still need a format"** for two. *(Regression: used to read
+      "1 still need a format".)*
+
+### Converting
+
+- [ ] Queue several files, choose formats, press Convert.
+- [ ] More than one file converts at once — cards show progress simultaneously.
+- [ ] Each card shows its own progress bar advancing.
+- [ ] A file with no readable duration (a still image) shows a moving
+      indeterminate bar, **never a bar frozen at 0%**.
+- [ ] The overall bar at the bottom is **accent green, not blue**, and matches
+      the card bars.
+- [ ] While converting, the Convert button is replaced by **Cancel** — the two
+      never appear side by side.
+- [ ] Per-card **Cancel** stops just that file; the others carry on.
+- [ ] Footer **Cancel** stops everything.
+- [ ] Cancel a job mid-run, then check the output folder: **no partial file is
+      left behind.**
+- [ ] On completion a success toast appears and the footer summary reads the
+      outcome (e.g. "3 files converted"), **not** "3 files queued".
+      *(Regression: it used to revert to "queued".)*
+- [ ] Completed cards offer **Show in folder**; clicking it reveals the file in
+      Explorer.
+- [ ] Output lands next to the source file, with the correct extension.
+
+### Conversions worth checking individually
+
+- [ ] Video → video (MP4 → MKV): plays correctly.
+- [ ] Video → audio (MP4 → MP3): audio only, correct duration.
+- [ ] Video → GIF: **colours look correct**, not a muddy 256-colour mess.
+- [ ] Video → PNG: output is a **folder** of numbered frames, and the card says
+      how many frames — "1 frame" for one, "12 frames" for twelve.
+- [ ] Animated GIF → PNG: also produces a folder of frames.
+- [ ] Image → image (PNG → JPG): correct, and transparency is flattened.
+- [ ] Audio → audio (FLAC → MP3): correct duration and audible quality.
+
+### Failure handling
+
+- [ ] Convert the deliberately corrupt file. It must fail **without a blocking
+      dialog**.
+- [ ] The failing card turns red and shows the real ffmpeg reason, not a
+      generic message.
+- [ ] Other files in the same batch keep going.
+- [ ] A **Retry** button appears on the failed card and works after changing the
+      format.
+- [ ] Convert to a format whose output already exists: a prompt offers Cancel /
+      Overwrite / Save as New, and each behaves as labelled.
+- [ ] Convert to a read-only folder: fails with a clear message rather than
+      hanging.
+
+### Toasts
+
+- [ ] Toasts appear centred below the header and **do not cover the app title
+      or the Add Files / Add Folder buttons.**
+- [ ] The icon lines up with the first line of text — check specifically on a
+      long wrapped message, where the icon must stay on the first line.
+- [ ] The × dismisses a toast; toasts auto-dismiss after a few seconds.
+- [ ] Several toasts stack rather than overlapping.
+- [ ] A failure toast stays until dismissed.
+
+### Appearance
+
+- [ ] Switch Windows to light mode: the app follows without restarting.
+- [ ] Switch back to dark: it follows again.
+- [ ] **In light mode**, the Convert button is accent green, **not Bootstrap
+      blue**. *(Regression: it was blue in light mode.)*
+- [ ] Clear All, Cancel and Convert are all the same height where they sit
+      together. *(Regression: Clear All was shorter.)*
+- [ ] Resize the window narrow and wide: cards reflow, and the page never
+      scrolls sideways.
+- [ ] With many files queued, the grid scrolls and the header, bulk bar and
+      action bar stay put.
+
+### Windows integration *(packaged build only)*
+
+```
+npm run build
+```
+
+- [ ] Installer runs and the app launches from the Start menu.
+- [ ] `resources/ffmpeg/` in the install directory contains **both**
+      `ffmpeg.exe` and `ffprobe.exe`.
+- [ ] Right-click a media file in Explorer: **"Convert with Diamond File
+      Converter"** appears and opens the app with that file queued.
+- [ ] Right-click a *folder*: the same entry appears and queues its contents.
+- [ ] Select several files in Explorer and use the entry: they arrive as **one
+      batch**, not one window per file.
+- [ ] With the app already running, use the Explorer entry again: files are
+      added to the existing window rather than opening a second one.
+- [ ] Double-click an associated media file: it opens in the app.
+- [ ] Uninstall, then right-click a media file: the context-menu entry is
+      **gone**. A leftover entry is a bug.
+
+### Security posture
+
+- [ ] Open DevTools (in a dev run) and check the console on both the main and
+      credits windows:
+  - [ ] `window.electronAPI` is defined
+  - [ ] `window.require` is `undefined`
+  - [ ] `window.process` is `undefined`
+- [ ] No errors in the console during a normal session.

@@ -240,6 +240,18 @@ function buildCard(job) {
     const head = document.createElement("div");
     head.className = "card-head";
 
+    // Explicit selection affordance. The whole card is still clickable, but a
+    // checkbox makes multi-select discoverable without knowing about ctrl+click.
+    const tick = document.createElement("input");
+    tick.type = "checkbox";
+    tick.className = "form-check-input card-select";
+    tick.title = "Select";
+    tick.addEventListener("click", (e) => {
+        e.stopPropagation();
+        // A checkbox always toggles just this card, whatever else is selected.
+        handleCardClick(job.id, { ctrlKey: true, shiftKey: false });
+    });
+
     const icon = document.createElement("span");
     icon.className = "material-icons-round kind-icon";
     icon.textContent = display.iconForKind(job.kind);
@@ -261,7 +273,7 @@ function buildCard(job) {
         removeJobs([job.id]);
     });
 
-    head.append(icon, name, remove);
+    head.append(tick, icon, name, remove);
 
     // -- meta
     const meta = document.createElement("div");
@@ -413,28 +425,54 @@ function makeAction(label, variant, onClick) {
     return btn;
 }
 
+/** The jobs a bulk action applies to: the selection, or everything if none. */
+function bulkScope() {
+    return selection.size > 0 ? selectedJobs() : jobs;
+}
+
 function renderSelection() {
     for (const card of $("job-grid").children) {
-        card.classList.toggle("selected", selection.has(card.dataset.id));
+        const isSelected = selection.has(card.dataset.id);
+        card.classList.toggle("selected", isSelected);
+        const tick = card.querySelector(".card-select");
+        if (tick) tick.checked = isSelected;
     }
 
     const count = selection.size;
     const bar = $("bulk-bar");
-    bar.classList.toggle("d-none", count === 0);
-    if (count === 0) return;
 
-    $("bulk-count").textContent = `${count} selected`;
+    // The bar is present whenever there are cards, not only when something is
+    // selected. With no selection it addresses every file, which keeps the old
+    // "drop a folder, pick one format, convert" flow to two clicks — selecting
+    // first would have made the common case strictly worse.
+    bar.classList.toggle("d-none", jobs.length === 0);
+    if (jobs.length === 0) return;
 
-    // Offer only formats every selected source can actually produce, so a bulk
+    const scope = bulkScope();
+    const everything = count === 0;
+
+    $("bulk-count").textContent = everything
+        ? `All ${display.countOf(jobs.length, "file")}`
+        : `${count} selected`;
+    $("bulk-target-label").textContent = everything ? "Convert all to" : "Convert selected to";
+
+    const selectAllBox = $("bulk-select-all");
+    selectAllBox.checked = count > 0 && count === jobs.length;
+    selectAllBox.indeterminate = count > 0 && count < jobs.length;
+
+    $("bulk-remove").classList.toggle("d-none", everything);
+    $("bulk-deselect").classList.toggle("d-none", everything);
+
+    // Offer only formats every source in scope can actually produce, so a bulk
     // change can never create an invalid job.
-    const targets = display.commonTargets(selectedJobs().map(j => j.ext), TARGETS);
+    const targets = display.commonTargets(scope.map(j => j.ext), TARGETS);
     const select = $("bulk-target");
-    const shared = [...new Set(selectedJobs().map(j => j.targetExt))];
+    const shared = [...new Set(scope.map(j => j.targetExt))];
     fillTargetSelect(select, targets, shared.length === 1 ? shared[0] : null);
 
     select.disabled = targets.length === 0 || converting;
     $("bulk-target-note").textContent = targets.length === 0
-        ? "No format works for every selected file"
+        ? `No format works for every ${everything ? "queued" : "selected"} file`
         : "";
 }
 
@@ -648,10 +686,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     // An empty value is the placeholder, which clears the target across the
     // selection — pass it through rather than ignoring it.
     $("bulk-target").addEventListener("change", (e) => {
-        setTarget([...selection], e.target.value);
+        setTarget(bulkScope().map(j => j.id), e.target.value);
     });
     $("bulk-remove").addEventListener("click", () => removeJobs([...selection]));
     $("bulk-deselect").addEventListener("click", clearSelection);
+    $("bulk-select-all").addEventListener("change", (e) => {
+        if (e.target.checked) selectAll();
+        else clearSelection();
+    });
 
     // Clicking the grid background clears the selection.
     $("grid-scroll").addEventListener("click", (e) => {

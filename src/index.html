@@ -45,15 +45,15 @@
 
         <!-- Bulk edit bar, shown when a selection exists -->
         <div id="bulk-bar" class="bulk-bar d-none">
-            <span class="material-icons-round" style="font-size:18px">checklist</span>
+            <input type="checkbox" id="bulk-select-all" class="form-check-input card-select" title="Select all">
             <span id="bulk-count" class="fw-semibold"></span>
             <div class="bulk-sep"></div>
-            <label class="small text-secondary" for="bulk-target">Convert all to</label>
+            <label class="small text-secondary" for="bulk-target" id="bulk-target-label">Convert all to</label>
             <select id="bulk-target" class="form-select form-select-sm bulk-select"></select>
             <span id="bulk-target-note" class="small text-secondary"></span>
             <div class="ms-auto d-flex gap-2">
                 <button id="bulk-remove" class="btn btn-sm btn-outline-danger">Remove</button>
-                <button id="bulk-deselect" class="btn btn-sm btn-outline-secondary">Deselect</button>
+                <button id="bulk-deselect" class="btn btn-sm btn-outline-secondary d-none">Deselect</button>
             </div>
         </div>
 
@@ -74,8 +74,8 @@
                 </div>
             </div>
             <div class="d-flex gap-2 align-items-center">
-                <button id="btn-clear-all" class="btn btn-sm btn-outline-secondary">Clear All</button>
-                <button id="btn-cancel-all" class="btn btn-sm btn-danger d-none">Cancel</button>
+                <button id="btn-clear-all" class="btn btn-outline-secondary">Clear All</button>
+                <button id="btn-cancel-all" class="btn btn-danger d-none">Cancel</button>
                 <button id="btn-convert" class="btn btn-primary" disabled>Convert</button>
             </div>
         </footer>

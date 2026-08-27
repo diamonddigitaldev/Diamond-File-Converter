@@ -10,11 +10,24 @@ body {
     height: 100vh;
     overflow: hidden;
     font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-    /* Chrome is unselectable so dragging the UI does not select text, but
-       filenames, paths and error messages stay selectable — see .card-name,
-       .card-meta, .status-text and .toast-note. v1 set this globally, which
-       meant a user could not copy an error to report it. */
+    /* No UI text is highlightable. Selecting chrome is never intentional — it
+       happens when a click-drag on a card catches the filename, which makes
+       the card feel broken. Form fields are the one exception, below.
+       Copying an error is served by a copy action (work-queue item 5), not by
+       letting the whole interface be selected. */
     user-select: none;
+}
+
+/* The one exception: real form fields have to accept text selection. */
+input,
+textarea {
+    user-select: text;
+}
+
+/* Nothing in the chrome should be draggable as an image or link either. */
+img,
+a {
+    -webkit-user-drag: none;
 }
 
 .accent {
@@ -220,6 +233,7 @@ body.popup-window span:hover {
 
 .job-card:hover {
     border-color: rgba(var(--accent-rgb), var(--wash-hover-border));
+    background-color: rgba(var(--accent-rgb), var(--wash-hover-fill));
 }
 
 .job-card.selected {
@@ -227,10 +241,36 @@ body.popup-window span:hover {
     background-color: rgba(var(--accent-rgb), var(--wash-active-fill));
 }
 
+/* A selected card that is also hovered must not read as less selected than one
+   that is merely hovered, so it keeps the stronger fill. */
+.job-card.selected:hover {
+    background-color: rgba(var(--accent-rgb), calc(var(--wash-active-fill) * 1.8));
+}
+
 .card-head {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+}
+
+/* Selection checkbox, top-left. The whole card is still clickable; this is an
+   explicit affordance so multi-select is discoverable without knowing that
+   ctrl+click works. */
+.card-select {
+    flex-shrink: 0;
+    margin: 0;
+    cursor: pointer;
+    --bs-form-check-bg: var(--bs-body-bg);
+}
+
+.card-select:checked {
+    background-color: var(--accent);
+    border-color: var(--accent);
+}
+
+.card-select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 0.2rem rgba(var(--accent-rgb), 0.25);
 }
 
 .card-head .kind-icon {
@@ -247,7 +287,6 @@ body.popup-window span:hover {
     white-space: nowrap;
     font-size: 0.875rem;
     font-weight: 500;
-    user-select: text;
 }
 
 .card-remove {
@@ -287,7 +326,6 @@ body.popup-window span:hover {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    user-select: text;
 }
 
 .card-meta.pending {
@@ -343,7 +381,6 @@ body.popup-window span:hover {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    user-select: text;
 }
 
 .tone-ready   .status-dot { background-color: var(--accent); }
@@ -463,7 +500,6 @@ body.popup-window span:hover {
     align-items: flex-start;
     gap: 0.5rem;
     animation: toast-in var(--dur-state) var(--ease-state);
-    user-select: text;
 }
 
 @keyframes toast-in {
