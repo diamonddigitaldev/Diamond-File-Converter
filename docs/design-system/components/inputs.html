@@ -1,0 +1,83 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>Inputs & Form Rows</title>
+<style>
+:root{
+  --accent:#9740fb; --accent-hover:#b06cff; --accent-muted:#c796ff; --accent-rgb:151,64,251;
+  --bg:#212529; --surface:#2b3035; --surface-2:#343a40; --border:#495057;
+  --text:#dee2e6; --text-dim:rgba(222,226,230,.75); --text-faint:rgba(222,226,230,.5);
+  --success:#198754; --warning:#ffc107; --danger:#dc3545; --info:#0dcaf0;
+  --success-rgb:25,135,84; --warning-rgb:255,193,7; --danger-rgb:220,53,69;
+  --radius-control:5px; --radius-card:8px; --radius-zone:12px;
+  --dur-micro:120ms; --dur-state:.2s; --dur-default:.3s;
+  --ease-standard:cubic-bezier(.4,0,.2,1);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;padding:40px;background:var(--bg);color:var(--text);
+  font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;font-size:16px;line-height:1.5;
+}
+h1{font-size:24px;margin:0 0 6px;font-weight:600;letter-spacing:-.01em}
+.sub{color:var(--text-dim);font-size:14px;margin:0 0 32px;max-width:70ch}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-faint);
+   margin:36px 0 14px;font-weight:600}
+h2:first-of-type{margin-top:0}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.stack{display:flex;flex-direction:column;gap:10px}
+.grid{display:grid;gap:14px}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);padding:18px}
+code,.mono{font-family:Consolas,'Courier New',monospace;font-size:12.5px}
+code{background:rgba(255,255,255,.07);padding:2px 6px;border-radius:4px;color:var(--accent-muted)}
+.note{font-size:13px;color:var(--text-dim);margin-top:10px;max-width:74ch}
+.note b{color:var(--text);font-weight:600}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{text-align:left;color:var(--text-faint);font-weight:600;font-size:11px;
+   text-transform:uppercase;letter-spacing:.08em;padding:0 14px 8px 0;border-bottom:1px solid var(--border)}
+td{padding:9px 14px 9px 0;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.swatch{width:26px;height:26px;border-radius:5px;border:1px solid rgba(255,255,255,.16);display:inline-block;vertical-align:middle}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:50rem;
+     background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border)}
+.caption{font-size:11.5px;color:var(--text-faint);margin-top:8px}
+</style>
+</head><body>
+<h1>Inputs & Form Rows</h1>
+<p class="sub">Stock Bootstrap form controls, arranged in a fixed three-part row that all the apps repeat.</p>
+
+<style>
+.frow{margin-bottom:1rem}
+.flabel{display:block;font-size:14px;margin-bottom:.4rem}
+.igroup{display:flex}
+.ctl{flex:1;padding:8px 12px;font-size:14px;background:var(--surface);border:1px solid var(--border);
+  color:var(--text);border-radius:var(--radius-control) 0 0 var(--radius-control);font-family:inherit;min-width:0}
+.igroup .ctl:only-child{border-radius:var(--radius-control)}
+.iaddon{padding:8px 12px;font-size:14px;background:var(--surface-2);border:1px solid var(--border);
+  border-left:none;border-radius:0 var(--radius-control) var(--radius-control) 0;color:var(--text-dim)}
+.help{font-size:13px;color:var(--text-dim);margin-top:.25rem;min-height:1.2em}
+.help.ok{color:#75b798}.help.warn{color:#ffda6a}.help.bad{color:#ea868f}
+</style>
+<h2>The row</h2>
+<div class="frow">
+  <label class="flabel">Output folder</label>
+  <div class="igroup"><input class="ctl" value="D:\Converted"><button class="iaddon" style="cursor:pointer">Browse</button></div>
+  <div class="help">Leave empty to write next to each source file.</div>
+</div>
+<div class="frow">
+  <label class="flabel">Concurrency</label>
+  <div class="igroup"><input class="ctl" type="number" value="4"><span class="iaddon">jobs at once</span></div>
+  <div class="help ok">Detected 8 cores.</div>
+</div>
+<p class="note">Always three parts, in this order: <b><code>label.form-label</code> above, full width · the control (optionally in an <code>.input-group</code> with a trailing button or addon) · a <code>.form-text</code> help line.</b></p>
+
+<h2>Help-line state vocabulary</h2>
+<div class="stack">
+  <div class="help">neutral — <code>form-text text-muted</code></div>
+  <div class="help ok">success — <code>text-success</code></div>
+  <div class="help warn">warning — <code>text-warning</code></div>
+  <div class="help bad">error — <code>text-danger</code></div>
+</div>
+<p class="note"><b>Reserve the space with <code>min-height: 1.2em</code>.</b> Without it the whole form jumps when a validation message appears. This trick is used on every status row in Dropgate.</p>
+<p class="note"><b>Disable, do not hide.</b> When the server restricts an option, Dropgate disables the <code>&lt;option&gt;</code> and rewrites its label to <code>"Unlimited (Disabled by Server)"</code> rather than removing it, so the capability stays discoverable.</p>
+
+</body></html>
