@@ -7,19 +7,51 @@ const LOG = {
     DEBUG: "DEBUG",
 };
 
-// ipc channel names
+// IPC channel names.
+//
+// Namespaced by domain. v1 kept a flat map that also carried an
+// electron-updater event name ("update-available") alongside real IPC
+// channels, which made the two easy to confuse.
 const IPC = {
-    GET_VERSION:           "get-version",
-    GET_SETTING:           "get-setting",
-    SET_SETTING:           "set-setting",
-    UPDATE_AVAILABLE:      "update-available",
-    BROWSE_FILE:           "browse-file",
-    CONVERT_FILE:          "convert-file",
-    CANCEL_CONVERT:        "cancel-convert",
-    OPEN_FOLDER:           "open-folder",
-    SHOW_IN_FOLDER:        "show-in-folder",
-    CONVERSION_PROGRESS:   "conversion-progress",   // push: percent (0-100)
-    FILE_OPENED_FROM_MENU: "file-opened-from-menu", // push: file path string
+    // Jobs and the queue. Progress and status both carry a jobId, which is
+    // what makes concurrency possible at all; v1 pushed a bare integer with
+    // no way to tell which file it belonged to.
+    JOB_RUN:          "job:run",          // invoke(job)   -> result
+    JOB_CANCEL:       "job:cancel",       // invoke(jobId) -> boolean
+    JOB_PROGRESS:     "job:progress",     // push { jobId, percent, speed, fps, eta }
+    JOB_STATUS:       "job:status",       // push { jobId, status, outputPath?, error? }
+    QUEUE_CANCEL_ALL: "queue:cancel-all",
+    QUEUE_SET_CONCURRENCY: "queue:set-concurrency",
+
+    // Inspection and ingest.
+    PROBE_FILE:     "probe:file",      // invoke(path)          -> metadata
+    FS_SCAN:        "fs:scan",         // invoke(paths, opts)   -> { files, skipped, ... }
+
+    // Dialogs.
+    DIALOG_BROWSE_FILES:  "dialog:browse-files",
+    DIALOG_BROWSE_FOLDER: "dialog:browse-folder",
+    DIALOG_CHOOSE_OUTPUT: "dialog:choose-output",
+
+    // Presets and pipelines. The store is wired; the editors are TODO.
+    PRESET_LIST:      "preset:list",
+    PRESET_SAVE:      "preset:save",
+    PRESET_DELETE:    "preset:delete",
+    PIPELINE_LIST:     "pipeline:list",
+    PIPELINE_SAVE:     "pipeline:save",
+    PIPELINE_DELETE:   "pipeline:delete",
+    PIPELINE_VALIDATE: "pipeline:validate",
+
+    // Shell and app.
+    SHELL_OPEN_PATH:      "shell:open-path",
+    SHELL_SHOW_IN_FOLDER: "shell:show-in-folder",
+    SHELL_OPEN_EXTERNAL:  "shell:open-external",
+    APP_GET_VERSION:      "app:get-version",
+    APP_GET_FORMATS:      "app:get-formats",
+    SETTINGS_GET:         "settings:get",
+    SETTINGS_SET:         "settings:set",
+
+    // Pushed from main.
+    FILES_OPENED: "files:opened", // push: string[] of paths from menu/argv/shell
 };
 
 // window size constraints
@@ -30,68 +62,26 @@ const WINDOW = {
     MIN_HEIGHT:     600,
 };
 
-// to add a new format, add an entry with ext and label to the appropriate array
-// to add a new format, group add a new array and call buildEntries in CONVERSION_MAP
-const AUDIO_FORMATS = [
-    { ext: "mp3",  label: "MP3"  },
-    { ext: "wav",  label: "WAV"  },
-    { ext: "flac", label: "FLAC" },
-    { ext: "ogg",  label: "OGG"  },
-    { ext: "aac",  label: "AAC"  },
-    { ext: "m4a",  label: "M4A"  },
-    { ext: "opus", label: "OPUS" },
-    { ext: "wma",  label: "WMA"  },
-];
+// Windows spawns one process per file when several are selected in Explorer,
+// so incoming paths are collected before being handed to the renderer.
+const ARGV_BATCH_DEBOUNCE_MS = 500;
 
-const VIDEO_FORMATS = [
-    { ext: "mp4",  label: "MP4"  },
-    { ext: "mkv",  label: "MKV"  },
-    { ext: "webm", label: "WebM" },
-    { ext: "avi",  label: "AVI"  },
-    { ext: "mov",  label: "MOV"  },
-    { ext: "wmv",  label: "WMV"  },
-    { ext: "flv",  label: "FLV"  },
-];
-
-const IMAGE_FORMATS = [
-    { ext: "jpg",  label: "JPG"  },
-    { ext: "png",  label: "PNG"  },
-    { ext: "webp", label: "WebP" },
-    { ext: "gif",  label: "GIF"  },
-    { ext: "bmp",  label: "BMP"  },
-    { ext: "tiff", label: "TIFF" },
-];
-
-function buildEntries(formats, type, group) {
-    const entries = {};
-    for (const fmt of formats) {
-        entries[fmt.ext] = {
-            type,
-            targets: formats.map(f => ({ ...f, group }))
-        };
-    }
-    return entries;
-}
-
-const CONVERSION_MAP = {
-    ...buildEntries(AUDIO_FORMATS, "audio", "Audio"),
-    ...buildEntries(VIDEO_FORMATS, "video", "Video"),
-    ...buildEntries(IMAGE_FORMATS, "image", "Image"),
+// Defaults written into electron-store on first run. v1 persisted nothing but
+// windowBounds, so there were no user settings at all.
+const SETTINGS_DEFAULTS = {
+    outputRouting:   "alongside",
+    outputDir:       null,
+    onConflict:      "unique",
+    concurrency:     null,   // null = derive from the CPU count
+    nameTemplate:    "{name}",
+    lastTargetByKind: {},
 };
 
-const SUPPORTED_EXTENSIONS = Object.keys(CONVERSION_MAP);
-
-// extension aliases, maps alternate extensions to their canonical key in CONVERSION_MAP
-const EXT_ALIASES = {
-    jpeg: "jpg",
-    tif:  "tiff",
-    jfif: "jpg",
+module.exports = {
+    APP_NAME,
+    IPC,
+    WINDOW,
+    LOG,
+    ARGV_BATCH_DEBOUNCE_MS,
+    SETTINGS_DEFAULTS,
 };
-
-const STATIC_IMAGE_EXTS = new Set(["jpg", "png", "webp", "bmp", "tiff"]);
-
-function isGifToStaticImage(sourceExt, targetExt) {
-    return sourceExt === "gif" && STATIC_IMAGE_EXTS.has(targetExt);
-}
-
-module.exports = { APP_NAME, IPC, WINDOW, LOG, AUDIO_FORMATS, VIDEO_FORMATS, IMAGE_FORMATS, CONVERSION_MAP, SUPPORTED_EXTENSIONS, EXT_ALIASES, isGifToStaticImage };

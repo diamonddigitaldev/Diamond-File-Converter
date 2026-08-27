@@ -1,12 +1,5 @@
-:root {
-    --accent: #28a745;
-    --accent-hover: #34d058;
-}
-
-[data-bs-theme="dark"] {
-    --bs-primary: var(--accent);
-    --bs-link-color: var(--accent);
-}
+/* App-specific styles. Shared house tokens live in styles/tokens.css, which
+   must be linked before this file. */
 
 html {
     height: 100%;
@@ -53,8 +46,8 @@ body.popup-window .btn {
     background-color: var(--bs-secondary-bg);
     color: var(--bs-body-color);
     border: none;
-    border-radius: 5px;
-    transition: background-color 0.3s;
+    border-radius: var(--radius-control);
+    transition: background-color var(--dur-default);
     cursor: pointer;
 }
 
@@ -63,14 +56,14 @@ body.popup-window .btn:hover {
 }
 
 body.popup-window span {
-    color: #5dd879;
+    color: var(--accent-muted);
     text-decoration: none;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: all var(--dur-default);
 }
 
 body.popup-window span:hover {
-    color: #28a745;
+    color: var(--accent);
     text-decoration: underline;
 }
 
@@ -84,46 +77,34 @@ body.popup-window span:hover {
     width: min(580px, 100%);
     min-height: 200px;
     border: 2px dashed var(--bs-border-color);
-    border-radius: 12px;
+    border-radius: var(--radius-zone);
     padding: 2rem;
     cursor: pointer;
-    transition: border-color 0.2s, background-color 0.2s;
+    transition: border-color var(--dur-state) var(--ease-state),
+                background-color var(--dur-state) var(--ease-state);
     text-align: center;
 }
 
-.drop-zone:hover:not(:has(button:hover)),
+.drop-zone:hover:not(:has(button:hover)) {
+    border-color: rgba(var(--accent-rgb), var(--wash-hover-border));
+    background-color: rgba(var(--accent-rgb), var(--wash-hover-fill));
+}
+
 .drop-zone.drag-over {
-    border-color: var(--accent);
-    background-color: rgba(40, 167, 69, 0.06);
+    border-color: rgba(var(--accent-rgb), var(--wash-active-border));
+    background-color: rgba(var(--accent-rgb), var(--wash-active-fill));
 }
 
 .drop-icon {
     font-size: 48px;
     color: var(--accent);
-    opacity: 0.75;
+    opacity: var(--opacity-muted);
 }
 
 .drop-label {
     color: var(--bs-secondary-color);
     font-size: 1.05rem;
     margin: 0.75rem 0 0;
-}
-
-/* ── Accent button + progress bar ────────────────────────────────────────── */
-
-.btn-accent {
-    background-color: var(--accent);
-    color: #fff;
-    border: none;
-}
-
-.btn-accent:hover {
-    background-color: var(--accent-hover);
-    color: #fff;
-}
-
-.bg-accent {
-    background-color: var(--accent) !important;
 }
 
 /* ── Format grid ─────────────────────────────────────────────────────────── */
@@ -163,25 +144,20 @@ body.popup-window span:hover {
     color: #fff;
 }
 
-.btn-format-disabled {
-    opacity: 0.4;
-    pointer-events: none;
-}
-
 /* ── File list (queue state) ─────────────────────────────────────────────── */
 
 #file-list {
     max-height: 280px;
     overflow-y: auto;
     border: 1px solid var(--bs-border-color);
-    border-radius: 8px;
+    border-radius: var(--radius-card);
     padding: 0.25rem 0.6rem;
 }
 
-#file-list::-webkit-scrollbar { width: 6px; }
+#file-list::-webkit-scrollbar { width: var(--scrollbar-width); }
 #file-list::-webkit-scrollbar-track { background: transparent; }
-#file-list::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.3); border-radius: 3px; }
-#file-list::-webkit-scrollbar-thumb:hover { background: rgba(128,128,128,0.5); }
+#file-list::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+#file-list::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
 .file-row {
     display: flex;
@@ -228,7 +204,9 @@ body.popup-window span:hover {
     padding: 0;
     cursor: pointer;
     flex-shrink: 0;
-    transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+    transition: background-color var(--dur-micro) var(--ease-micro),
+                color var(--dur-micro) var(--ease-micro),
+                border-color var(--dur-micro) var(--ease-micro);
 }
 
 .file-remove-btn:hover {
@@ -255,7 +233,7 @@ body.popup-window span:hover {
     padding: 0;
     cursor: pointer;
     flex-shrink: 0;
-    transition: color 120ms ease;
+    transition: color var(--dur-micro) var(--ease-micro);
 }
 
 .file-open-btn:hover {

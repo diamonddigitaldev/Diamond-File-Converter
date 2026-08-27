@@ -1,18 +1,30 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, shell, globalShortcut } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require("electron");
 const Store = require("electron-store").default;
-const ffmpeg = require("fluent-ffmpeg");
 const fs = require("fs");
 const path = require("path");
-const { APP_NAME, IPC, WINDOW, LOG, AUDIO_FORMATS, VIDEO_FORMATS, IMAGE_FORMATS, SUPPORTED_EXTENSIONS, EXT_ALIASES, isGifToStaticImage } = require("./constants");
+
+const { APP_NAME, IPC, WINDOW, LOG, ARGV_BATCH_DEBOUNCE_MS, SETTINGS_DEFAULTS } = require("./constants");
+const formats = require("./core/formats");
+const { createJob, validateJob, STATUS } = require("./core/job");
+const { JobRunner, defaultConcurrency } = require("./core/runner");
+const probe = require("./core/probe");
+const paths = require("./core/paths");
+const scan = require("./core/scan");
+const pipeline = require("./core/pipeline");
 
 const LOG_LEVELS = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3 };
 
 const FILE_DIALOG_FILTERS = [
-    { name: "Supported Files", extensions: SUPPORTED_EXTENSIONS },
-    { name: "Audio",           extensions: AUDIO_FORMATS.map(f => f.ext) },
-    { name: "Video",           extensions: VIDEO_FORMATS.map(f => f.ext) },
-    { name: "Image",           extensions: IMAGE_FORMATS.map(f => f.ext) },
+    { name: "Supported Files", extensions: formats.SUPPORTED_EXTENSIONS },
+    { name: "Audio", extensions: extensionsOfKind(formats.KIND.AUDIO) },
+    { name: "Video", extensions: extensionsOfKind(formats.KIND.VIDEO) },
+    { name: "Image", extensions: extensionsOfKind(formats.KIND.IMAGE) },
 ];
+
+function extensionsOfKind(kind) {
+    return Object.values(formats.FORMATS).filter(f => f.kind === kind).map(f => f.ext);
+}
+
 const LOG_LEVEL = LOG_LEVELS[String(process.env.LOG_LEVEL || "INFO").toUpperCase()] ?? LOG_LEVELS.INFO;
 
 const logFile = path.join(app.getPath("userData"), "debug.log");
@@ -41,13 +53,15 @@ const store = new Store({
         windowBounds: {
             width: WINDOW.DEFAULT_WIDTH,
             height: WINDOW.DEFAULT_HEIGHT,
-        }
+        },
+        settings: SETTINGS_DEFAULTS,
+        presets: [],
+        pipelines: [],
     }
 });
 
 let mainWindow;
-let activeConversion = null;
-let conversionCancelled = false;
+let runner = null;
 
 function getIconPath() {
     switch (process.platform) {
@@ -60,6 +74,11 @@ function getIconPath() {
 function getFfmpegPath() {
     if (app.isPackaged) return path.join(process.resourcesPath, "ffmpeg", "ffmpeg.exe");
     return require("ffmpeg-static"); // dev: executable path inside node_modules
+}
+
+function getFfprobePath() {
+    if (app.isPackaged) return path.join(process.resourcesPath, "ffmpeg", "ffprobe.exe");
+    return require("ffprobe-static").path;
 }
 
 function createWindow() {
@@ -75,13 +94,13 @@ function createWindow() {
         title: APP_NAME,
         icon: getIconPath(),
         webPreferences: {
-            nodeIntegration: true,
-            contextIsolation: false
+            preload: path.join(__dirname, "preload.js"),
+            contextIsolation: true,
+            nodeIntegration: false,
         }
     });
 
     mainWindow.loadFile(path.join(__dirname, "index.html"));
-    // mainWindow.webContents.openDevTools();
 
     // debounced save so we dont spam the disk with updates
     let saveBoundsTimeout;
@@ -102,6 +121,8 @@ function createWindow() {
     mainWindow.on("closed", () => {
         mainWindow = null;
     });
+
+    mainWindow.webContents.on("did-finish-load", flushPendingFiles);
 }
 
 function createCreditsWindow() {
@@ -115,8 +136,9 @@ function createCreditsWindow() {
         maximizable: false,
         fullscreenable: false,
         webPreferences: {
-            nodeIntegration: true,
-            contextIsolation: false
+            preload: path.join(__dirname, "preload.js"),
+            contextIsolation: true,
+            nodeIntegration: false,
         },
         icon: getIconPath()
     });
@@ -135,15 +157,27 @@ function setupMenu() {
             label: "Menu",
             submenu: [
                 {
-                    label: "Open File",
+                    label: "Open Files",
                     accelerator: "Ctrl+O",
                     click: async () => {
                         const result = await dialog.showOpenDialog(mainWindow, {
-                            properties: ["openFile"],
+                            properties: ["openFile", "multiSelections"],
                             filters: FILE_DIALOG_FILTERS,
                         });
                         if (!result.canceled && result.filePaths.length > 0) {
-                            mainWindow.webContents.send(IPC.FILE_OPENED_FROM_MENU, result.filePaths[0]);
+                            sendFilesToRenderer(result.filePaths);
+                        }
+                    }
+                },
+                {
+                    label: "Open Folder",
+                    accelerator: "Ctrl+Shift+O",
+                    click: async () => {
+                        const result = await dialog.showOpenDialog(mainWindow, {
+                            properties: ["openDirectory"],
+                        });
+                        if (!result.canceled && result.filePaths.length > 0) {
+                            sendFilesToRenderer(result.filePaths);
                         }
                     }
                 },
@@ -170,13 +204,169 @@ function setupMenu() {
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-// IPC: base handlers
-ipcMain.handle(IPC.GET_VERSION, () => app.getVersion());
-ipcMain.handle(IPC.GET_SETTING, (_event, key) => store.get(key));
-ipcMain.handle(IPC.SET_SETTING, (_event, key, value) => store.set(key, value));
+// ── Incoming files (file associations, "Open with", Explorer context menu) ───
+//
+// v1 had none of this: no open-file handler, no argv parsing, and
+// second-instance discarded the paths it was handed. Windows launches one
+// process per selected file, so arrivals are batched before being forwarded.
 
-// IPC: file browser, returns array of paths, or null if cancelled
-ipcMain.handle(IPC.BROWSE_FILE, async () => {
+let pendingFiles = [];
+let pendingTimer = null;
+
+function queueIncomingFiles(filePaths) {
+    const usable = filePaths.filter(p => typeof p === "string" && !p.startsWith("-"));
+    if (usable.length === 0) return;
+
+    pendingFiles.push(...usable);
+    clearTimeout(pendingTimer);
+    pendingTimer = setTimeout(flushPendingFiles, ARGV_BATCH_DEBOUNCE_MS);
+}
+
+function flushPendingFiles() {
+    if (pendingFiles.length === 0) return;
+    if (!mainWindow || mainWindow.webContents.isLoading()) return;
+
+    const batch = pendingFiles;
+    pendingFiles = [];
+    sendFilesToRenderer(batch);
+}
+
+function sendFilesToRenderer(filePaths) {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send(IPC.FILES_OPENED, filePaths);
+}
+
+/** Strip Electron's own arguments and keep anything that exists on disk. */
+function filePathsFromArgv(argv) {
+    return argv.slice(app.isPackaged ? 1 : 2).filter((arg) => {
+        if (typeof arg !== "string" || arg.startsWith("-")) return false;
+        try { return fs.existsSync(arg); } catch (_) { return false; }
+    });
+}
+
+// ── Conversion ───────────────────────────────────────────────────────────────
+
+function getRunner() {
+    if (runner) return runner;
+
+    const settings = store.get("settings") ?? SETTINGS_DEFAULTS;
+
+    runner = new JobRunner({
+        ffmpegPath: getFfmpegPath(),
+        concurrency: settings.concurrency ?? defaultConcurrency(),
+        conflictResolver: resolveConflict,
+    });
+
+    runner.on("progress", (payload) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send(IPC.JOB_PROGRESS, payload);
+        }
+    });
+
+    runner.on("status", (payload) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send(IPC.JOB_STATUS, payload);
+        }
+    });
+
+    return runner;
+}
+
+/**
+ * The output-exists prompt. Kept as a native dialog with v1's exact button
+ * set, so the behaviour users already know is unchanged.
+ */
+async function resolveConflict(job, candidatePath) {
+    const isDirectory = formats.producesDirectory(job.mode);
+    const result = await dialog.showMessageBox(mainWindow, {
+        type: "question",
+        title: "File Already Exists",
+        message: `${path.basename(candidatePath)} already exists.`,
+        detail: isDirectory
+            ? "A folder with this name is already in the destination."
+            : "A file with this name is already in the destination.",
+        buttons: ["Cancel", "Overwrite", "Save as New"],
+        defaultId: 2,
+        cancelId: 0,
+    });
+
+    if (result.response === 0) return { action: "cancel" };
+    if (result.response === 1) return { action: "write", outputPath: candidatePath };
+    return {
+        action: "write",
+        outputPath: isDirectory ? paths.getUniqueDirPath(candidatePath) : paths.getUniquePath(candidatePath),
+    };
+}
+
+/**
+ * Run one job to completion. The runner supports a full concurrency pool; this
+ * wrapper resolves when the given job settles so a caller can await a single
+ * conversion.
+ */
+function runJobToCompletion(job) {
+    return new Promise((resolve) => {
+        const active = getRunner();
+
+        const onStatus = (payload) => {
+            if (payload.jobId !== job.id) return;
+            if (payload.status === STATUS.RUNNING) return;
+            active.off("status", onStatus);
+            resolve(payload);
+        };
+
+        active.on("status", onStatus);
+        active.enqueue(job);
+        active.start();
+    });
+}
+
+// ── IPC ──────────────────────────────────────────────────────────────────────
+
+ipcMain.handle(IPC.JOB_RUN, async (_event, spec) => {
+    const job = createJob(spec);
+
+    // Metadata is what gives progress a denominator, so probe before running.
+    // A failed probe is not fatal; the job simply reports indeterminate progress.
+    if (!job.inputMeta) {
+        const meta = await probe.probe(job.inputPath);
+        if (meta.ok) job.inputMeta = meta;
+        else log(LOG.WARN, `Could not probe ${job.inputPath}: ${meta.error}`);
+    }
+
+    const validation = validateJob(job);
+    if (!validation.valid) {
+        log(LOG.ERROR, `Invalid job: ${validation.errors.join(" ")}`);
+        return { jobId: job.id, status: STATUS.ERROR, error: validation.errors[0] };
+    }
+
+    const result = await runJobToCompletion(job);
+
+    if (result.status === STATUS.ERROR) {
+        log(LOG.ERROR, `Conversion failed for ${job.inputPath}: ${result.error}`);
+        dialog.showMessageBox(mainWindow, {
+            type: "error",
+            title: "Conversion Failed",
+            message: `Could not convert ${path.basename(job.inputPath)}.`,
+            detail: result.error ?? "ffmpeg did not report a reason.",
+            buttons: ["OK"],
+        });
+    }
+
+    return result;
+});
+
+ipcMain.handle(IPC.JOB_CANCEL, (_event, jobId) => getRunner().cancel(jobId));
+ipcMain.handle(IPC.QUEUE_CANCEL_ALL, () => { getRunner().cancelAll(); });
+ipcMain.handle(IPC.QUEUE_SET_CONCURRENCY, (_event, n) => {
+    getRunner().setConcurrency(n);
+    store.set("settings.concurrency", n);
+});
+
+ipcMain.handle(IPC.PROBE_FILE, (_event, filePath) => probe.probe(filePath));
+
+ipcMain.handle(IPC.FS_SCAN, (_event, inputPaths, options) => scan.scanPaths(inputPaths ?? [], options ?? {}));
+
+ipcMain.handle(IPC.DIALOG_BROWSE_FILES, async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
         properties: ["openFile", "multiSelections"],
         filters: FILE_DIALOG_FILTERS,
@@ -185,187 +375,77 @@ ipcMain.handle(IPC.BROWSE_FILE, async () => {
     return result.filePaths;
 });
 
-// IPC: open output folder in explorer
-ipcMain.handle(IPC.OPEN_FOLDER, (_event, folderPath) => {
-    shell.openPath(folderPath);
+ipcMain.handle(IPC.DIALOG_BROWSE_FOLDER, async () => {
+    const result = await dialog.showOpenDialog(mainWindow, { properties: ["openDirectory"] });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths;
 });
 
-// IPC: show a file in its parent folder (highlights the file)
-ipcMain.handle(IPC.SHOW_IN_FOLDER, (_event, filePath) => {
-    shell.showItemInFolder(filePath);
-});
-
-// IPC: cancel an in progress conversion
-ipcMain.handle(IPC.CANCEL_CONVERT, () => {
-    if (activeConversion) {
-        conversionCancelled = true;
-        activeConversion.kill("SIGKILL");
-        activeConversion = null;
-        log(LOG.INFO, "Conversion cancelled by user");
-    }
-});
-
-// finds the next available filename: "file (1).ext", "file (2).ext"...
-function getUniquePath(filePath) {
-    if (!fs.existsSync(filePath)) return filePath;
-    const ext = path.extname(filePath);
-    const stem = path.basename(filePath, ext);
-    const dir = path.dirname(filePath);
-    let i = 1;
-    let candidate;
-    do {
-        candidate = path.join(dir, `${stem} (${i})${ext}`);
-        i++;
-    } while (fs.existsSync(candidate));
-    return candidate;
-}
-
-// finds the next available directory name: "dir (1)", "dir (2)"...
-function getUniqueDirPath(dirPath) {
-    if (!fs.existsSync(dirPath)) return dirPath;
-    let i = 1;
-    let candidate;
-    do {
-        candidate = `${dirPath} (${i})`;
-        i++;
-    } while (fs.existsSync(candidate));
-    return candidate;
-}
-
-// IPC: run a conversion
-ipcMain.handle(IPC.CONVERT_FILE, async (_event, filePath, targetExt) => {
-    const stem = path.basename(filePath, path.extname(filePath));
-    const rawExt = path.extname(filePath).slice(1).toLowerCase();
-    const sourceExt = EXT_ALIASES[rawExt] ?? rawExt;
-
-    // GIF -> static image: extract all frames into a folder
-    if (isGifToStaticImage(sourceExt, targetExt)) {
-        let outputDir = path.join(path.dirname(filePath), stem);
-
-        if (fs.existsSync(outputDir)) {
-            const { response } = await dialog.showMessageBox(mainWindow, {
-                type: "question",
-                title: "Folder Already Exists",
-                message: `"${path.basename(outputDir)}" folder already exists.`,
-                detail: "What would you like to do?",
-                buttons: ["Cancel", "Overwrite", "Save as New"],
-                defaultId: 2,
-                cancelId: 0
-            });
-            if (response === 0) return "cancelled";
-            if (response === 1) fs.rmSync(outputDir, { recursive: true, force: true });
-            if (response === 2) outputDir = getUniqueDirPath(outputDir);
-        }
-
-        fs.mkdirSync(outputDir, { recursive: true });
-        const outputPattern = path.join(outputDir, `frame_%03d.${targetExt}`);
-
-        conversionCancelled = false;
-        return new Promise((resolve) => {
-            const command = ffmpeg(filePath);
-            activeConversion = command;
-
-            command
-                .on("progress", (progress) => {
-                    const percent = Math.round(progress.percent || 0);
-                    if (mainWindow && !mainWindow.isDestroyed()) {
-                        mainWindow.webContents.send(IPC.CONVERSION_PROGRESS, percent);
-                    }
-                })
-                .on("end", () => {
-                    activeConversion = null;
-                    log(LOG.INFO, `Extracted frames: ${path.basename(filePath)} -> ${path.basename(outputDir)}/`);
-                    resolve(outputDir);
-                })
-                .on("error", (err) => {
-                    activeConversion = null;
-                    if (fs.existsSync(outputDir)) {
-                        try { fs.rmSync(outputDir, { recursive: true, force: true }); } catch (e) { log(LOG.WARN, "Could not delete output dir:", e.message); }
-                    }
-                    if (conversionCancelled) {
-                        conversionCancelled = false;
-                        resolve(null);
-                        return;
-                    }
-                    log(LOG.ERROR, "Frame extraction error:", err.message);
-                    dialog.showMessageBox(mainWindow, {
-                        type: "error",
-                        title: "Conversion Failed",
-                        message: `Failed to extract frames from ${path.basename(filePath)}.`,
-                        detail: err.message,
-                        buttons: ["OK"]
-                    });
-                    resolve(null);
-                })
-                .save(outputPattern);
-        });
-    }
-
-    let outputPath = path.join(path.dirname(filePath), `${stem}.${targetExt}`);
-
-    // handle file conflict
-    if (fs.existsSync(outputPath)) {
-        const { response } = await dialog.showMessageBox(mainWindow, {
-            type: "question",
-            title: "File Already Exists",
-            message: `${path.basename(outputPath)} already exists.`,
-            detail: "What would you like to do?",
-            buttons: ["Cancel", "Overwrite", "Save as New"],
-            defaultId: 2,
-            cancelId: 0
-        });
-        if (response === 0) return "cancelled";
-        if (response === 2) outputPath = getUniquePath(outputPath);
-    }
-
-    conversionCancelled = false;
-    return new Promise((resolve) => {
-        const command = ffmpeg(filePath);
-        activeConversion = command;
-
-        command
-            .on("progress", (progress) => {
-                const percent = Math.round(progress.percent || 0);
-                if (mainWindow && !mainWindow.isDestroyed()) {
-                    mainWindow.webContents.send(IPC.CONVERSION_PROGRESS, percent);
-                }
-            })
-            .on("end", () => {
-                activeConversion = null;
-                log(LOG.INFO, `Converted: ${path.basename(filePath)} -> ${path.basename(outputPath)}`);
-                resolve(outputPath);
-            })
-            .on("error", (err) => {
-                activeConversion = null;
-                // clean up partial output file on cancel or failure
-                if (fs.existsSync(outputPath)) {
-                    try { fs.unlinkSync(outputPath); } catch (e) { log(LOG.WARN, "Could not delete partial file:", e.message); }
-                }
-                if (conversionCancelled) {
-                    conversionCancelled = false;
-                    resolve(null);
-                    return;
-                }
-                log(LOG.ERROR, "Conversion error:", err.message);
-                dialog.showMessageBox(mainWindow, {
-                    type: "error",
-                    title: "Conversion Failed",
-                    message: `Failed to convert ${path.basename(filePath)} to .${targetExt}.`,
-                    detail: err.message,
-                    buttons: ["OK"]
-                });
-                resolve(null);
-            })
-            .save(outputPath);
+ipcMain.handle(IPC.DIALOG_CHOOSE_OUTPUT, async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ["openDirectory", "createDirectory"],
+        title: "Choose an output folder",
     });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths[0];
 });
+
+ipcMain.handle(IPC.SHELL_OPEN_PATH, (_event, target) => shell.openPath(target));
+ipcMain.handle(IPC.SHELL_SHOW_IN_FOLDER, (_event, target) => { shell.showItemInFolder(target); });
+ipcMain.handle(IPC.SHELL_OPEN_EXTERNAL, (_event, url) => {
+    // Only ever hand the OS an http(s) URL, whatever the page asked for.
+    if (typeof url === "string" && /^https?:\/\//i.test(url)) return shell.openExternal(url);
+    log(LOG.WARN, `Refused to open external URL: ${url}`);
+});
+
+ipcMain.handle(IPC.APP_GET_VERSION, () => app.getVersion());
+ipcMain.handle(IPC.APP_GET_FORMATS, () => ({
+    conversionMap: formats.buildLegacyConversionMap(),
+    aliases: formats.EXT_ALIASES,
+    supported: formats.SUPPORTED_EXTENSIONS,
+}));
+
+ipcMain.handle(IPC.SETTINGS_GET, () => store.get("settings"));
+ipcMain.handle(IPC.SETTINGS_SET, (_event, settings) => {
+    store.set("settings", { ...store.get("settings"), ...settings });
+    return store.get("settings");
+});
+
+ipcMain.handle(IPC.PRESET_LIST, () => store.get("presets"));
+ipcMain.handle(IPC.PRESET_SAVE, (_event, preset) => {
+    const presets = store.get("presets").filter(p => p.id !== preset.id);
+    presets.push(preset);
+    store.set("presets", presets);
+    return presets;
+});
+ipcMain.handle(IPC.PRESET_DELETE, (_event, id) => {
+    const presets = store.get("presets").filter(p => p.id !== id);
+    store.set("presets", presets);
+    return presets;
+});
+
+ipcMain.handle(IPC.PIPELINE_LIST, () => store.get("pipelines"));
+ipcMain.handle(IPC.PIPELINE_SAVE, (_event, graph) => {
+    const pipelines = store.get("pipelines").filter(p => p.id !== graph.id);
+    pipelines.push(graph);
+    store.set("pipelines", pipelines);
+    return pipelines;
+});
+ipcMain.handle(IPC.PIPELINE_DELETE, (_event, id) => {
+    const pipelines = store.get("pipelines").filter(p => p.id !== id);
+    store.set("pipelines", pipelines);
+    return pipelines;
+});
+ipcMain.handle(IPC.PIPELINE_VALIDATE, (_event, graph) => pipeline.validate(graph));
+
+// ── Auto-update ──────────────────────────────────────────────────────────────
 
 function setupAutoUpdater() {
     const { autoUpdater } = require("electron-updater");
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = true;
 
-    autoUpdater.on(IPC.UPDATE_AVAILABLE, (info) => {
+    autoUpdater.on("update-available", (info) => {
         const currentVersion = app.getVersion();
         const newVersion = info.version;
         dialog.showMessageBox(mainWindow, {
@@ -435,19 +515,31 @@ function checkForUpdatesManually() {
     });
 }
 
+// ── Lifecycle ────────────────────────────────────────────────────────────────
+
 app.whenReady().then(() => {
     log(LOG.INFO, "=== App ready ===");
-    ffmpeg.setFfmpegPath(getFfmpegPath());
+    probe.setFfprobePath(getFfprobePath());
     createWindow();
     setupMenu();
+    queueIncomingFiles(filePathsFromArgv(process.argv));
     if (app.isPackaged) setupAutoUpdater();
 });
 
-app.on("second-instance", () => {
+// macOS delivers associated files through this event rather than argv.
+app.on("open-file", (event, filePath) => {
+    event.preventDefault();
+    queueIncomingFiles([filePath]);
+});
+
+app.on("second-instance", (_event, argv) => {
     if (mainWindow) {
         if (mainWindow.isMinimized()) mainWindow.restore();
         mainWindow.focus();
     }
+    // v1 focused the window but threw the paths away, so "Open with" on an
+    // already-running app did nothing.
+    queueIncomingFiles(filePathsFromArgv(argv));
 });
 
 app.on("window-all-closed", () => {
@@ -459,5 +551,5 @@ app.on("activate", () => {
 });
 
 app.on("will-quit", () => {
-    globalShortcut.unregisterAll();
+    if (runner) runner.cancelAll();
 });

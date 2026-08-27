@@ -6,17 +6,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Diamond File Converter | Credits</title>
     <link rel="stylesheet" href="../node_modules/bootstrap/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="styles/tokens.css">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="../node_modules/material-icons/iconfont/round.css">
     <script>
-        const theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        document.documentElement.setAttribute('data-bs-theme', theme);
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
-            document.documentElement.setAttribute('data-bs-theme', e.matches ? 'dark' : 'light');
-        });
-    </script>
-    <script>
-        const { shell } = require("electron");
+        (() => {
+            const mql = window.matchMedia("(prefers-color-scheme: dark)");
+            const root = document.documentElement;
+            const apply = () => root.setAttribute("data-bs-theme", mql.matches ? "dark" : "light");
+            apply();
+            mql.addEventListener?.("change", apply);
+        })();
     </script>
 </head>
 
@@ -27,8 +27,8 @@
                 <img id="credits-logo" src="./assets/diamondfileconverter.png" alt="Diamond File Converter Logo">
             <h2>Diamond File Converter</h2>
             </div>
-            <p>• Created and maintained by <span onclick="shell.openExternal('https://diamonddigital.dev')">Diamond Digital Development</span>.</p>
-            <p>• Logo designed by <span onclick="shell.openExternal('https://github.com/TheFuturisticIdiot')">TheFuturisticIdiot</span>.</p>
+            <p>• Created and maintained by <span data-href="https://diamonddigital.dev">Diamond Digital Development</span>.</p>
+            <p>• Logo designed by <span data-href="https://github.com/TheFuturisticIdiot">TheFuturisticIdiot</span>.</p>
             <p>• This software is licensed under the Apache 2.0 license.</p>
             <hr>
             <p>• If you enjoy this software, consider donating to support development!</p>
@@ -40,18 +40,29 @@
     </div>
 
     <script>
-        document.querySelector("h2").innerText += ` v${require("../package.json").version}`;
+        // This page runs with contextIsolation on, so there is no `shell` and
+        // no require() here. Links go out through the preload bridge, and the
+        // inline onclick handlers v1 used are replaced by data-href.
+        const api = window.electronAPI;
+
+        api.getVersion().then((version) => {
+            document.querySelector("h2").innerText += ` v${version}`;
+        });
+
+        for (const el of document.querySelectorAll("span[data-href]")) {
+            el.addEventListener("click", () => api.openExternal(el.dataset.href));
+        }
 
         document.getElementById("donate").addEventListener("click", () => {
-            shell.openExternal("https://buymeacoff.ee/willtda");
+            api.openExternal("https://buymeacoff.ee/willtda");
         });
 
         document.getElementById("github").addEventListener("click", () => {
-            shell.openExternal("https://github.com/diamonddigitaldev/Diamond-File-Converter");
+            api.openExternal("https://github.com/diamonddigitaldev/Diamond-File-Converter");
         });
 
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape') window.close();
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") window.close();
         });
     </script>
 </body>
