@@ -489,6 +489,22 @@ body.popup-window span:hover {
     gap: 0.75rem 1rem;
 }
 
+/* A row whose controls need more than one grid cell to show their labels.
+   Fixed pixel widths on a <select> clip the selected option with no ellipsis
+   and no scrollbar — the text simply disappears — so crowded rows are given
+   room instead of being constrained. */
+.jm-row-wide {
+    grid-column: 1 / -1;
+}
+
+/* Selects that sit inside an input-group beside other controls still need a
+   floor, or flex will shrink them below their own text. */
+.jm-fixed-sm {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 8.5rem;
+}
+
 .jm-row .form-label {
     font-size: 0.8rem;
     margin-bottom: 0.25rem;

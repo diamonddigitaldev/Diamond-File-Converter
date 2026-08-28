@@ -105,18 +105,6 @@
             <p id="jm-scope" class="text-body-secondary small mb-3"></p>
 
             <div class="jm-row">
-              <label class="form-label" for="jm-preset">Preset</label>
-              <div class="input-group input-group-sm">
-                <select id="jm-preset" class="form-select"></select>
-                <button id="jm-preset-save" class="btn btn-outline-secondary" type="button">Save as&hellip;</button>
-                <button id="jm-preset-delete" class="btn btn-outline-danger" type="button">Delete</button>
-              </div>
-              <div class="form-text">Presets store everything below except the files.</div>
-            </div>
-
-            <hr class="my-3">
-
-            <div class="jm-row">
               <label class="form-label" for="jm-target">Convert to</label>
               <select id="jm-target" class="form-select form-select-sm"></select>
               <div id="jm-target-note" class="form-text"></div>
@@ -166,10 +154,10 @@
                   <label class="form-label" for="jm-vcodec">Codec</label>
                   <select id="jm-vcodec" class="form-select form-select-sm"></select>
                 </div>
-                <div class="jm-row jm-vencode">
+                <div class="jm-row jm-vencode jm-row-wide">
                   <label class="form-label" for="jm-quality-mode">Quality</label>
                   <div class="input-group input-group-sm">
-                    <select id="jm-quality-mode" class="form-select" style="max-width:9rem">
+                    <select id="jm-quality-mode" class="form-select jm-fixed-sm">
                       <option value="crf">Constant quality</option>
                       <option value="bitrate">Target bitrate</option>
                     </select>
@@ -183,13 +171,13 @@
                   <label class="form-label" for="jm-encpreset">Encoder preset</label>
                   <select id="jm-encpreset" class="form-select form-select-sm"></select>
                 </div>
-                <div class="jm-row jm-vencode">
+                <div class="jm-row jm-vencode jm-row-wide">
                   <label class="form-label" for="jm-width">Resize</label>
                   <div class="input-group input-group-sm">
                     <input id="jm-width" class="form-control" type="number" min="1" placeholder="auto">
                     <span class="input-group-text">&times;</span>
                     <input id="jm-height" class="form-control" type="number" min="1" placeholder="auto">
-                    <select id="jm-fit" class="form-select" style="max-width:8rem">
+                    <select id="jm-fit" class="form-select jm-fixed-sm">
                       <option value="contain">Contain</option>
                       <option value="cover">Cover</option>
                       <option value="stretch">Stretch</option>

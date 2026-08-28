@@ -556,8 +556,7 @@ function renderActionBar() {
 // path stays two clicks.
 
 let jobModal = null;
-let modalScope = [];        // job ids the dialog is editing
-let presets = [];
+let modalScope = [];        // ids the dialog is editing
 let previewTimer = null;
 
 const ENCODER_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast",
@@ -742,7 +741,6 @@ function openJobModal(ids) {
     loadSettingsIntoForm(uniform ? (scoped[0].settings ?? {}) : {});
     $("jm-scope").textContent += uniform ? "" : " · these files are currently configured differently";
 
-    refreshPresets();
     syncModalControls();
 
     if (!jobModal) jobModal = new bootstrap.Modal($("job-modal"));
@@ -969,29 +967,6 @@ function applyJobModal() {
     toast(`Settings applied to ${display.countOf(n, "file")}.`, "success");
 }
 
-// -- Presets -----------------------------------------------------------------
-
-async function refreshPresets() {
-    presets = await api.listPresets();
-    fillSelect($("jm-preset"), presets.map(x => ({ value: x.id, label: x.name })), "", "No preset");
-    $("jm-preset-delete").disabled = true;
-}
-
-async function savePresetFromForm() {
-    const name = String(window.prompt("Preset name") ?? "").trim();
-    if (!name) return;
-    const preset = {
-        id: `p${Date.now().toString(36)}`,
-        name,
-        targetExt: $("jm-target").value || null,
-        settings: readSettingsFromForm(),
-    };
-    presets = await api.savePreset(preset);
-    fillSelect($("jm-preset"), presets.map(x => ({ value: x.id, label: x.name })), preset.id, "No preset");
-    $("jm-preset-delete").disabled = false;
-    toast(`Preset "${name}" saved.`, "success");
-}
-
 // -- Toasts ------------------------------------------------------------------
 
 const TOAST_ICONS = { info: "info", success: "check_circle", warning: "warning", danger: "error" };
@@ -1193,22 +1168,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (dir) { $("jm-outdir").value = dir; schedulePreview(); }
     });
     $("jm-apply").addEventListener("click", applyJobModal);
-    $("jm-preset-save").addEventListener("click", savePresetFromForm);
-    $("jm-preset-delete").addEventListener("click", async () => {
-        const id = $("jm-preset").value;
-        if (!id) return;
-        presets = await api.deletePreset(id);
-        await refreshPresets();
-        toast("Preset deleted.", "info");
-    });
-    $("jm-preset").addEventListener("change", (e) => {
-        const preset = presets.find(x => x.id === e.target.value);
-        $("jm-preset-delete").disabled = !preset;
-        if (!preset) return;
-        if (preset.targetExt) $("jm-target").value = preset.targetExt;
-        loadSettingsIntoForm(preset.settings);
-        syncModalControls();
-    });
 
     $("bulk-select-all").addEventListener("change", (e) => {
         if (e.target.checked) selectAll();

@@ -358,14 +358,20 @@ exposes it. **The plain path must stay two clicks** — check that first.
       resolution, duration and audio channels of the result, not just that a
       file appeared.
 
-### Presets
+### Nothing is clipped
 
-- [ ] Configure something, **Save as…**, give it a name. It appears in the
-      Preset dropdown.
-- [ ] Change the fields, then re-select the preset — your saved values come
-      back, including the target format.
-- [ ] **Delete** removes it, and it is gone after reopening the dialog.
-- [ ] Presets survive restarting the app.
+Fixed widths on a `<select>` cut the selected option off with no ellipsis and
+no scrollbar — the text just disappears. Check at a few window sizes.
+
+- [ ] In Video, the Quality dropdown reads **"Constant quality"** in full, not
+      "Constant qual…".
+- [ ] The Resize fit dropdown reads **"Contain"** in full, not "Contai".
+- [ ] Type `1920` and `1080` into Resize — both are fully readable.
+- [ ] Widen and narrow the window: no label, dropdown or field ever cuts text
+      off mid-word. Filenames on cards are the one exception — those ellipsis
+      deliberately.
+- [ ] Repeat with an audio target and an image target, where different controls
+      are on screen.
 
 ### Output routing
 
