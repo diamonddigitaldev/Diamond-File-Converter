@@ -11,6 +11,7 @@ const probe = require("./core/probe");
 const paths = require("./core/paths");
 const scan = require("./core/scan");
 const pipeline = require("./core/pipeline");
+const version = require("./core/version");
 
 const LOG_LEVELS = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3 };
 
@@ -147,6 +148,18 @@ function createCreditsWindow() {
         creditsWindow.show();
         creditsWindow.focus();
     });
+
+    // Escape closes the window. Handled in the main process rather than with a
+    // keydown listener in the page: before-input-event fires no matter where
+    // focus sits inside the document, and does not depend on the page script
+    // having run. The page-level handler worked when run unpackaged but not in
+    // the packaged build, which is exactly the fragility this avoids.
+    creditsWindow.webContents.on("before-input-event", (event, input) => {
+        if (input.type === "keyDown" && input.key === "Escape") {
+            event.preventDefault();
+            if (!creditsWindow.isDestroyed()) creditsWindow.close();
+        }
+    });
     creditsWindow.setMenu(null);
     creditsWindow.loadFile(path.join(__dirname, "credits.html"));
 }
@@ -269,15 +282,41 @@ function getRunner() {
         }
     });
 
+    // "Apply to all remaining" is scoped to one batch, not to the session.
+    runner.on("idle", () => { conflictChoiceForBatch = null; });
+
     return runner;
 }
 
+// A choice the user asked to apply to the rest of the batch. Cleared whenever
+// the runner goes idle, so it never leaks into the next run.
+let conflictChoiceForBatch = null;
+
+/** Turn a chosen action into the result the runner expects. */
+function applyConflictChoice(choice, candidatePath, isDirectory) {
+    if (choice === "cancel") return { action: "cancel" };
+    if (choice === "overwrite") return { action: "write", outputPath: candidatePath };
+    return {
+        action: "write",
+        outputPath: isDirectory ? paths.getUniqueDirPath(candidatePath) : paths.getUniquePath(candidatePath),
+    };
+}
+
 /**
- * The output-exists prompt. Kept as a native dialog with v1's exact button
- * set, so the behaviour users already know is unchanged.
+ * The output-exists prompt, with v1's exact button set so the behaviour users
+ * already know is unchanged.
+ *
+ * The checkbox matters: jobs run through a concurrency pool, so without a way
+ * to answer once for the whole batch, converting fifty files into a folder
+ * that already has them would mean fifty dialogs.
  */
 async function resolveConflict(job, candidatePath) {
     const isDirectory = formats.producesDirectory(job.mode);
+
+    if (conflictChoiceForBatch) {
+        return applyConflictChoice(conflictChoiceForBatch, candidatePath, isDirectory);
+    }
+
     const result = await dialog.showMessageBox(mainWindow, {
         type: "question",
         title: "File Already Exists",
@@ -288,14 +327,14 @@ async function resolveConflict(job, candidatePath) {
         buttons: ["Cancel", "Overwrite", "Save as New"],
         defaultId: 2,
         cancelId: 0,
+        checkboxLabel: "Apply to all remaining files",
+        checkboxChecked: false,
     });
 
-    if (result.response === 0) return { action: "cancel" };
-    if (result.response === 1) return { action: "write", outputPath: candidatePath };
-    return {
-        action: "write",
-        outputPath: isDirectory ? paths.getUniqueDirPath(candidatePath) : paths.getUniquePath(candidatePath),
-    };
+    const choice = ["cancel", "overwrite", "unique"][result.response] ?? "cancel";
+    if (result.checkboxChecked) conflictChoiceForBatch = choice;
+
+    return applyConflictChoice(choice, candidatePath, isDirectory);
 }
 
 /**
@@ -323,7 +362,18 @@ function runJobToCompletion(job) {
 // ── IPC ──────────────────────────────────────────────────────────────────────
 
 ipcMain.handle(IPC.JOB_RUN, async (_event, spec) => {
-    const job = createJob(spec);
+    const settings = store.get("settings") ?? SETTINGS_DEFAULTS;
+
+    const job = createJob({
+        ...spec,
+        output: {
+            routing:      settings.outputRouting,
+            dir:          settings.outputDir,
+            nameTemplate: settings.nameTemplate,
+            onConflict:   settings.onConflict,
+            ...spec.output,
+        },
+    });
 
     // Metadata is what gives progress a denominator, so probe before running.
     // A failed probe is not fatal; the job simply reports indeterminate progress.
@@ -446,9 +496,31 @@ function setupAutoUpdater() {
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = true;
 
+    // Pre-releases are never an update target. The updater only ever looks at
+    // the latest stable, whatever the user is currently running.
+    //
+    // This has to be explicit: electron-updater turns allowPrerelease ON BY
+    // ITSELF when the running version carries a pre-release tag, so shipping
+    // 2.0.0-alpha.1 would silently opt every alpha tester into being updated to
+    // the next alpha. allowDowngrade stays off so an alpha user is not dragged
+    // back to an older stable either — they simply get nothing until a stable
+    // release supersedes what they are running.
+    autoUpdater.allowPrerelease = false;
+    autoUpdater.allowDowngrade = false;
+    autoUpdater.channel = "latest";
+
     autoUpdater.on("update-available", (info) => {
         const currentVersion = app.getVersion();
         const newVersion = info.version;
+
+        // Belt and braces. allowPrerelease above should mean this never fires
+        // for a pre-release, but a mis-tagged GitHub release would otherwise
+        // push an alpha at every user, so the offer is checked again here.
+        if (!version.isOfferableUpdate(newVersion, currentVersion)) {
+            log(LOG.WARN, `Ignoring update ${newVersion}: not an offerable stable release`);
+            return;
+        }
+
         dialog.showMessageBox(mainWindow, {
             type: "info",
             title: "Update Available",
@@ -493,8 +565,16 @@ function setupAutoUpdater() {
 
 function checkForUpdatesManually() {
     const { autoUpdater } = require("electron-updater");
+    autoUpdater.allowPrerelease = false;
+    autoUpdater.allowDowngrade = false;
+    autoUpdater.channel = "latest";
+
     autoUpdater.checkForUpdates().then(result => {
-        if (!result || !result.updateInfo || result.updateInfo.version === app.getVersion()) {
+        const found = result?.updateInfo?.version ?? null;
+        // Equality was the wrong test: running 2.0.0-alpha.1 against a latest
+        // stable of 1.0.0 is neither equal nor an update, and the check used to
+        // fall through and do nothing at all.
+        if (!version.isOfferableUpdate(found, app.getVersion())) {
             dialog.showMessageBox(mainWindow, {
                 type: "info",
                 title: "No Updates",

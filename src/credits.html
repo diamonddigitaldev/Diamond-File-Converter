@@ -61,9 +61,10 @@
             api.openExternal("https://github.com/diamonddigitaldev/Diamond-File-Converter");
         });
 
-        document.addEventListener("keydown", (event) => {
-            if (event.key === "Escape") window.close();
-        });
+        // Escape-to-close lives in the main process (before-input-event in
+        // createCreditsWindow), not here. A page-level keydown listener depends
+        // on this script having run and on focus being inside the document, and
+        // it did not work in the packaged build.
     </script>
 </body>
 

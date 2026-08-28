@@ -11,7 +11,7 @@ sections — the history is useful.
 
 ```
 npm install
-npm test          # expect 97 passing, 0 failing
+npm test          # expect 114 passing, 0 failing
 npm start
 ```
 
@@ -221,3 +221,49 @@ npm run build
   - [ ] `window.require` is `undefined`
   - [ ] `window.process` is `undefined`
 - [ ] No errors in the console during a normal session.
+
+---
+
+## 2.0.0-alpha.1 — QA fixes
+
+Two defects found running the checklist above against the packaged build, plus
+the updater behaviour for pre-releases. **Test these against a packaged build,
+not `npm start`** — the Escape defect only appeared once packaged.
+
+### Credits window closes on Escape
+
+- [ ] Open Credits from the menu (or press `C`).
+- [ ] Press **Escape** — the window closes.
+- [ ] Open it again, click a link or a button first so focus has moved inside
+      the page, then press Escape — it still closes.
+- [ ] The × button still closes it too.
+- [ ] The window still cannot be minimised.
+
+### Existing output prompts instead of silently renaming
+
+- [ ] Convert a file to a format whose output already exists in the
+      destination. A **File Already Exists** prompt appears offering
+      **Cancel / Overwrite / Save as New**.
+      *(It previously wrote "name (1).ext" with no prompt at all.)*
+- [ ] **Cancel** — the job is abandoned and the existing file is untouched.
+- [ ] **Overwrite** — the existing file is replaced.
+- [ ] **Save as New** — a numbered file appears alongside the original, and
+      the original is untouched.
+- [ ] Queue several files that all collide. Tick **"Apply to all remaining
+      files"** and choose one option — the prompt appears **once**, and the
+      rest follow that choice without asking again.
+- [ ] Start a second batch afterwards: the prompt appears again. The
+      apply-to-all choice must not carry over between runs.
+
+### Updates never offer a pre-release
+
+The app currently ships as `2.0.0-alpha.1` while the latest stable is `1.0.0`.
+
+- [ ] `Menu → Check for Updates` while running the alpha reports **"You're up
+      to date!"**, not an offer to install `1.0.0`. Going backwards to an older
+      stable is a downgrade and must be refused.
+- [ ] It does **not** offer any other alpha or beta, even a newer one.
+- [ ] No update prompt appears on its own a few seconds after launch.
+- [ ] On a stable build, a newer stable release *is* still offered normally —
+      this must not have broken ordinary updates.
+- [ ] "View Changelog" from an update dialog opens the correct release page.

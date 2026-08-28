@@ -70,7 +70,7 @@ function createJob(spec = {}) {
             mirrorRoot:   spec.output?.mirrorRoot   ?? null,
             nameTemplate: spec.output?.nameTemplate ?? "{name}",
             ext:          targetExt,
-            onConflict:   spec.output?.onConflict   ?? CONFLICT.UNIQUE,
+            onConflict:   spec.output?.onConflict   ?? CONFLICT.ASK,
         },
 
         video: {

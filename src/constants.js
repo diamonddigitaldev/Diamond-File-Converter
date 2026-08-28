@@ -73,7 +73,7 @@ const ARGV_BATCH_DEBOUNCE_MS = 500;
 const SETTINGS_DEFAULTS = {
     outputRouting:   "alongside",
     outputDir:       null,
-    onConflict:      "unique",
+    onConflict:      "ask",
     concurrency:     null,   // null = derive from the CPU count
     nameTemplate:    "{name}",
     lastTargetByKind: {},
