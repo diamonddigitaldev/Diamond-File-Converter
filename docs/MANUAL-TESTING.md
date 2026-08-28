@@ -270,7 +270,7 @@ The app currently ships as `2.0.0-alpha.1` while the latest stable is `1.0.0`.
 
 ---
 
-## 2.0.0-alpha.2 — New Job dialog
+## 2.0.0-alpha.2 — Advanced options / Bulk edit
 
 Per-file encoding settings. The engine already supported all of this; this pass
 exposes it. **The plain path must stay two clicks** — check that first.
@@ -283,13 +283,18 @@ exposes it. **The plain path must stay two clicks** — check that first.
 
 ### Opening the dialog
 
-- [ ] **New Job** in the top-right is disabled with an empty grid, enabled once
-      files are queued, and disabled again while a conversion runs.
-- [ ] With nothing selected it opens for every file and the subtitle reads
-      "Configuring N files".
-- [ ] With cards selected it opens for just those.
-- [ ] The tune icon on a card opens it for that one file only, and does not
-      change the selection.
+- [ ] There is **no button in the top-right corner** for this — it lives in the
+      green selection bar.
+- [ ] With nothing selected the bar reads **"Select all"** and the button reads
+      **"Edit all"**; it opens for every file.
+- [ ] With cards selected the button reads **"Bulk edit"** and opens for just
+      those, titled **"Bulk edit"**.
+- [ ] The tune icon on a card opens it for that one file only, titled
+      **"Advanced options"**, and does not change the selection.
+- [ ] Bulk editing files that already have *different* settings starts blank and
+      says they are configured differently, rather than showing one file's
+      values as if they applied to all.
+- [ ] The word "job" appears nowhere in the interface.
 - [ ] Escape and the × both close it without applying anything.
 
 ### Controls follow the target format
@@ -318,6 +323,28 @@ exposes it. **The plain path must stay two clicks** — check that first.
 - [ ] The preview text can be selected and copied. *(It is the one deliberate
       exception to nothing-is-selectable.)*
 - [ ] An invalid combination shows a red message and disables **Apply**.
+
+### Trim slider
+
+- [ ] Trim is a **two-point slider**, not a pair of text boxes.
+- [ ] Drag the left handle right and the right handle left; the green range
+      between them shrinks and the readout shows the kept duration.
+- [ ] The handles **cannot cross**.
+- [ ] **Hold Shift while dragging** — the handle moves much more slowly for the
+      same pointer movement, so a precise point is reachable.
+- [ ] Click a handle and use the arrow keys; Shift+arrow gives a smaller step.
+      Home and End jump to the extremes.
+- [ ] Leave the handles alone and Apply: **no trim is recorded**, and the card
+      shows no trim in its summary.
+- [ ] Open advanced options on a file with no readable duration: the slider is
+      replaced by a note saying it cannot be trimmed.
+- [ ] Bulk edit a selection of clips of different lengths: the slider spans the
+      **longest**, and a trim past a shorter clip's end simply runs to its end.
+
+### Button styling
+
+- [ ] The dialog's **Cancel is outlined, not filled** — only Apply is filled.
+      Two filled buttons side by side is a design violation.
 
 ### Applying
 

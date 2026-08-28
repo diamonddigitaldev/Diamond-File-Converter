@@ -265,7 +265,7 @@ function buildCard(job) {
 
     const configure = document.createElement("button");
     configure.className = "card-configure";
-    configure.title = "Configure this file";
+    configure.title = "Advanced options";
     const configureIcon = document.createElement("span");
     configureIcon.className = "material-icons-round";
     configureIcon.textContent = "tune";
@@ -477,9 +477,7 @@ function renderSelection() {
     const scope = bulkScope();
     const everything = count === 0;
 
-    $("bulk-count").textContent = everything
-        ? `All ${display.countOf(jobs.length, "file")}`
-        : `${count} selected`;
+    $("bulk-count").textContent = everything ? "Select all" : `${count} selected`;
     $("bulk-target-label").textContent = everything ? "Convert all to" : "Convert selected to";
 
     const selectAllBox = $("bulk-select-all");
@@ -488,6 +486,7 @@ function renderSelection() {
 
     $("bulk-remove").classList.toggle("d-none", everything);
     $("bulk-deselect").classList.toggle("d-none", everything);
+    $("bulk-edit-label").textContent = everything ? "Edit all" : "Bulk edit";
 
     // Offer only formats every source in scope can actually produce, so a bulk
     // change can never create an invalid job.
@@ -540,7 +539,7 @@ function renderActionBar() {
     // than sitting side by side, so only one is ever visible.
     $("btn-convert").classList.toggle("d-none", converting);
     $("btn-convert").disabled = ready === 0;
-    $("btn-new-job").disabled = total === 0 || converting;
+    $("bulk-edit").disabled = converting;
     $("btn-cancel-all").classList.toggle("d-none", !converting);
     $("btn-clear-all").disabled = converting;
 }
@@ -564,15 +563,131 @@ let previewTimer = null;
 const ENCODER_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast",
     "medium", "slow", "slower", "veryslow"];
 
-/** Parse "90", "1:30" or "1:02:03" into seconds. Null when empty/invalid. */
-function parseTime(text) {
-    const raw = String(text ?? "").trim();
-    if (!raw) return null;
-    if (/^\d+(\.\d+)?$/.test(raw)) return Number(raw);
-    const parts = raw.split(":");
-    if (parts.length < 2 || parts.length > 3) return null;
-    if (!parts.every(p => /^\d+(\.\d+)?$/.test(p.trim()))) return null;
-    return parts.reduce((acc, part) => acc * 60 + Number(part), 0);
+// -- Trim slider -------------------------------------------------------------
+//
+// A two-point slider rather than a pair of text boxes: the useful thing about a
+// trim is where the kept span sits relative to the whole clip, which a pair of
+// numbers does not show. Holding Shift scales pointer movement down for fine
+// adjustment, and the arrow keys do the same with a smaller step.
+
+const trimState = { duration: 0, start: 0, end: 0, pendingEnd: null, available: false };
+
+const TRIM_MIN_SPAN = 0.05;   // never let the two handles cross
+const TRIM_KEY_STEP = 1;      // seconds per arrow press
+const TRIM_FINE = 0.15;       // Shift multiplier while dragging
+
+/** Longest duration in scope — a selection may hold clips of different lengths. */
+function trimScopeDuration() {
+    const scoped = jobs.filter(j => modalScope.includes(j.id));
+    const durations = scoped
+        .map(j => (j.meta && j.meta.ok ? j.meta.duration : null))
+        .filter(d => typeof d === "number" && d > 0);
+    return durations.length > 0 ? Math.max(...durations) : 0;
+}
+
+function setupTrim() {
+    const duration = trimScopeDuration();
+    trimState.duration = duration;
+    trimState.available = duration > 0;
+
+    $("jm-trim-wrap").classList.toggle("d-none", !trimState.available);
+    $("jm-trim-unavailable").classList.toggle("d-none", trimState.available);
+    if (!trimState.available) return;
+
+    trimState.start = Math.min(trimState.start ?? 0, duration);
+    trimState.end = trimState.pendingEnd != null
+        ? Math.min(trimState.pendingEnd, duration)
+        : duration;
+    trimState.pendingEnd = null;
+    renderTrim();
+}
+
+function renderTrim() {
+    const { duration, start, end } = trimState;
+    if (!duration) return;
+    const pct = (v) => `${(v / duration) * 100}%`;
+
+    $("jm-trim-thumb-start").style.left = pct(start);
+    $("jm-trim-thumb-end").style.left = pct(end);
+    $("jm-trim-range").style.left = pct(start);
+    $("jm-trim-range").style.width = pct(end - start);
+
+    $("jm-trim-start-label").textContent = display.formatDuration(start) ?? "0:00";
+    $("jm-trim-end-label").textContent = display.formatDuration(end) ?? "";
+    $("jm-trim-kept").textContent = `keeping ${display.formatDuration(end - start) ?? "0:00"}`;
+
+    for (const [id, value] of [["jm-trim-thumb-start", start], ["jm-trim-thumb-end", end]]) {
+        const thumb = $(id);
+        thumb.setAttribute("aria-valuemin", "0");
+        thumb.setAttribute("aria-valuemax", String(Math.round(duration)));
+        thumb.setAttribute("aria-valuenow", String(Math.round(value)));
+        thumb.setAttribute("aria-valuetext", display.formatDuration(value) ?? "");
+    }
+}
+
+/** Read the slider back as a spec, omitting bounds that were never moved. */
+function readTrim() {
+    if (!trimState.available) return null;
+    const { duration, start, end } = trimState;
+    return {
+        start: start > 0 ? Math.round(start * 100) / 100 : null,
+        end: end < duration ? Math.round(end * 100) / 100 : null,
+    };
+}
+
+function moveTrimHandle(handle, seconds) {
+    const { duration } = trimState;
+    if (handle === "start") {
+        trimState.start = Math.max(0, Math.min(seconds, trimState.end - TRIM_MIN_SPAN));
+    } else {
+        trimState.end = Math.min(duration, Math.max(seconds, trimState.start + TRIM_MIN_SPAN));
+    }
+    renderTrim();
+    schedulePreview();
+}
+
+function initTrimSlider() {
+    const slider = $("jm-trim-slider");
+
+    for (const handle of ["start", "end"]) {
+        const thumb = $(`jm-trim-thumb-${handle}`);
+
+        thumb.addEventListener("pointerdown", (e) => {
+            if (!trimState.available) return;
+            e.preventDefault();
+            thumb.setPointerCapture(e.pointerId);
+            const originX = e.clientX;
+            const origin = handle === "start" ? trimState.start : trimState.end;
+
+            const onMove = (ev) => {
+                const width = slider.getBoundingClientRect().width || 1;
+                // Shift shrinks how far the value travels per pixel, which is
+                // what "finer control" means for a drag.
+                const scale = ev.shiftKey ? TRIM_FINE : 1;
+                slider.classList.toggle("fine", ev.shiftKey);
+                const delta = ((ev.clientX - originX) / width) * trimState.duration * scale;
+                moveTrimHandle(handle, origin + delta);
+            };
+            const onUp = (ev) => {
+                thumb.releasePointerCapture(ev.pointerId);
+                thumb.removeEventListener("pointermove", onMove);
+                thumb.removeEventListener("pointerup", onUp);
+                slider.classList.remove("fine");
+            };
+            thumb.addEventListener("pointermove", onMove);
+            thumb.addEventListener("pointerup", onUp);
+        });
+
+        thumb.addEventListener("keydown", (e) => {
+            if (!trimState.available) return;
+            const step = e.shiftKey ? TRIM_KEY_STEP * TRIM_FINE : TRIM_KEY_STEP;
+            const current = handle === "start" ? trimState.start : trimState.end;
+            if (e.key === "ArrowLeft") { e.preventDefault(); moveTrimHandle(handle, current - step); }
+            else if (e.key === "ArrowRight") { e.preventDefault(); moveTrimHandle(handle, current + step); }
+            else if (e.key === "Home") { e.preventDefault(); moveTrimHandle(handle, 0); }
+            else if (e.key === "End") { e.preventDefault(); moveTrimHandle(handle, trimState.duration); }
+        });
+    }
 }
 
 function fillSelect(select, options, current, placeholder) {
@@ -604,9 +719,12 @@ function openJobModal(ids) {
     if (modalScope.length === 0) return;
 
     const scoped = jobs.filter(j => modalScope.includes(j.id));
-    $("jm-scope").textContent = scoped.length === 1
-        ? `Configuring ${p.basename(scoped[0].filePath)}`
-        : `Configuring ${display.countOf(scoped.length, "file")}`;
+    const single = scoped.length === 1;
+
+    $("jm-title").textContent = single ? "Advanced options" : "Bulk edit";
+    $("jm-scope").textContent = single
+        ? p.basename(scoped[0].filePath)
+        : `Applies to ${display.countOf(scoped.length, "file")}`;
 
     // Target options are the intersection, exactly as the bulk bar computes it.
     const targets = display.commonTargets(scoped.map(j => j.ext), TARGETS);
@@ -616,9 +734,13 @@ function openJobModal(ids) {
         ? "These files have no format in common."
         : "";
 
-    // Seed from the first job's existing settings so reopening shows what is set.
-    const seed = scoped.find(j => j.settings && Object.keys(j.settings).length > 0);
-    loadSettingsIntoForm(seed ? seed.settings : {});
+    // Seed from existing settings so reopening shows what is set. Across a
+    // selection this only happens when every file already agrees — otherwise
+    // one file's values would be presented as if they applied to all.
+    const encoded = scoped.map(j => JSON.stringify(j.settings ?? {}));
+    const uniform = encoded.every(x => x === encoded[0]);
+    loadSettingsIntoForm(uniform ? (scoped[0].settings ?? {}) : {});
+    $("jm-scope").textContent += uniform ? "" : " · these files are currently configured differently";
 
     refreshPresets();
     syncModalControls();
@@ -650,8 +772,8 @@ function loadSettingsIntoForm(settings) {
     $("jm-arate").value = a.sampleRate ?? "";
     $("jm-achannels").value = a.channels ?? "";
 
-    $("jm-trim-start").value = t.start != null ? display.formatDuration(t.start) ?? t.start : "";
-    $("jm-trim-end").value = t.end != null ? display.formatDuration(t.end) ?? t.end : "";
+    trimState.start = t.start ?? 0;
+    trimState.pendingEnd = t.end ?? null;
 
     // Codec and quality selects depend on the target, so they are populated by
     // syncModalControls; stash the wanted values for it to apply.
@@ -737,6 +859,8 @@ function syncModalControls() {
             : `${q.max} is best quality, ${q.min} is smallest file.`;
     }
 
+    if (sections.trim) setupTrim();
+
     // The output folder only matters when a folder was chosen.
     const needsDir = $("jm-routing").value !== "alongside";
     $("jm-outdir").parentElement.parentElement.classList.toggle("d-none", !needsDir);
@@ -792,10 +916,7 @@ function readSettingsFromForm() {
             channels: num("jm-achannels"),
         } : null,
         image: sections.image ? { quality: num("jm-iquality") } : null,
-        trim: sections.trim ? {
-            start: parseTime($("jm-trim-start").value),
-            end: parseTime($("jm-trim-end").value),
-        } : null,
+        trim: sections.trim ? readTrim() : null,
     };
 
     // Defaults that were never touched are dropped, so the format keeps
@@ -1045,9 +1166,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
     $("bulk-remove").addEventListener("click", () => removeJobs([...selection]));
     $("bulk-deselect").addEventListener("click", clearSelection);
-    // The corner button configures the selection, or everything when nothing
-    // is selected — the same scope rule the bulk bar uses.
-    $("btn-new-job").addEventListener("click", () => {
+    // Bulk edit lives in the selection bar and follows the same scope rule as
+    // the format dropdown beside it: the selection, or everything when nothing
+    // is selected.
+    $("bulk-edit").addEventListener("click", () => {
         openJobModal(bulkScope().map(j => j.id));
     });
 
@@ -1055,9 +1177,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     for (const id of ["jm-vmode", "jm-amode", "jm-vcodec", "jm-acodec", "jm-quality-mode", "jm-routing"]) {
         $(id).addEventListener("change", syncModalControls);
     }
+    initTrimSlider();
     for (const id of ["jm-crf", "jm-vbitrate", "jm-width", "jm-height", "jm-fit", "jm-fps",
                       "jm-abitrate", "jm-arate", "jm-achannels", "jm-encpreset",
-                      "jm-trim-start", "jm-trim-end", "jm-name", "jm-conflict"]) {
+                      "jm-name", "jm-conflict"]) {
         $(id).addEventListener("input", schedulePreview);
         $(id).addEventListener("change", schedulePreview);
     }

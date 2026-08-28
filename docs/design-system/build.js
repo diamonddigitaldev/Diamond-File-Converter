@@ -302,6 +302,21 @@ card("components/buttons.html", "Buttons",
 <tr><td>disabled</td><td><button class="btn btn-primary" disabled>Convert</button></td><td><code>opacity .5</code> + <code>pointer-events:none</code></td></tr>
 </table>
 
+<h2>Fill is reserved for the action being committed</h2>
+<div class="panel">
+  <div class="row"><button class="btn btn-outline">Cancel</button><button class="btn btn-primary">Apply</button>
+    <span class="tag" style="color:#75b798;border-color:#75b798">correct</span></div>
+  <div class="row" style="margin-top:12px"><button class="btn btn-secondary">Cancel</button><button class="btn btn-primary">Apply</button>
+    <span class="tag" style="color:#ea868f;border-color:#ea868f">wrong</span></div>
+  <p class="note"><b>A neutral action sitting beside a filled primary is outlined, not filled.</b>
+  Two filled buttons side by side read as two equal choices, which is exactly what a
+  cancel is not. This applies anywhere the pair appears — dialog footers, the action bar,
+  card actions. Bootstrap's own modal example uses a filled <code>btn-secondary</code> for
+  Cancel; the house does not.</p>
+  <p class="note">A filled neutral button is still fine when it stands alone with no primary
+  beside it, as with Add Files in the toolbar.</p>
+</div>
+
 <h2>Swap, do not crowd</h2>
 <div class="panel">
   <div class="row"><button class="btn btn-primary">Convert</button><span style="color:var(--text-faint)">→ becomes →</span><button class="btn btn-danger">Cancel</button></div>
@@ -544,6 +559,7 @@ card("components/modal.html", "Modal Dialog",
 .mfoot{display:flex;justify-content:flex-end;gap:8px;padding:8px 16px 16px}
 .btn{padding:7px 14px;font-size:14px;border-radius:5px;border:1px solid transparent;cursor:pointer;font-family:inherit}
 .b-sec{background:#6c757d;color:#fff}
+.b-out{background:transparent;border-color:#6c757d;color:var(--text-dim)}
 .b-warn{background:var(--warning);color:#000}
 </style>
 <div class="backdrop">
@@ -554,7 +570,7 @@ card("components/modal.html", "Modal Dialog",
       <p class="caveat">The server administrator may be able to access your file contents.</p>
     </div>
     <div class="mfoot">
-      <button class="btn b-sec">Cancel</button>
+      <button class="btn b-out">Cancel</button>
       <button class="btn b-warn">Upload Anyway</button>
     </div>
   </div>
@@ -567,7 +583,7 @@ card("components/modal.html", "Modal Dialog",
 <tr><td>Dialog</td><td><code>modal-dialog-centered</code></td></tr>
 <tr><td>Title</td><td>Semantic icon + text in <code>d-flex align-items-center gap-2</code></td></tr>
 <tr><td>Body</td><td>One plain statement, then one <code>text-body-secondary small mb-0</code> caveat</td></tr>
-<tr><td>Footer</td><td>Neutral cancel on the left, semantic confirm on the right</td></tr>
+<tr><td>Footer</td><td><b>Outlined</b> neutral cancel on the left, filled semantic confirm on the right — never two filled buttons</td></tr>
 <tr><td>Backdrop</td><td>Bootstrap default — <code>#000</code> at <code>.5</code></td></tr>
 <tr><td>Motion</td><td>Bootstrap default — backdrop <code>.15s linear</code>, dialog <code>translate(0,-50px) → 0</code> over <code>.3s ease-out</code></td></tr>
 </table>

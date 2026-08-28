@@ -71,6 +71,21 @@ tr:last-child td{border-bottom:none}
 <tr><td>disabled</td><td><button class="btn btn-primary" disabled>Convert</button></td><td><code>opacity .5</code> + <code>pointer-events:none</code></td></tr>
 </table>
 
+<h2>Fill is reserved for the action being committed</h2>
+<div class="panel">
+  <div class="row"><button class="btn btn-outline">Cancel</button><button class="btn btn-primary">Apply</button>
+    <span class="tag" style="color:#75b798;border-color:#75b798">correct</span></div>
+  <div class="row" style="margin-top:12px"><button class="btn btn-secondary">Cancel</button><button class="btn btn-primary">Apply</button>
+    <span class="tag" style="color:#ea868f;border-color:#ea868f">wrong</span></div>
+  <p class="note"><b>A neutral action sitting beside a filled primary is outlined, not filled.</b>
+  Two filled buttons side by side read as two equal choices, which is exactly what a
+  cancel is not. This applies anywhere the pair appears — dialog footers, the action bar,
+  card actions. Bootstrap's own modal example uses a filled <code>btn-secondary</code> for
+  Cancel; the house does not.</p>
+  <p class="note">A filled neutral button is still fine when it stands alone with no primary
+  beside it, as with Add Files in the toolbar.</p>
+</div>
+
 <h2>Swap, do not crowd</h2>
 <div class="panel">
   <div class="row"><button class="btn btn-primary">Convert</button><span style="color:var(--text-faint)">→ becomes →</span><button class="btn btn-danger">Cancel</button></div>

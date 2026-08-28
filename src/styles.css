@@ -549,6 +549,68 @@ body.popup-window span:hover {
     white-space: nowrap;
 }
 
+/* ── Trim slider ─────────────────────────────────────────────────────────── */
+
+.trim-slider {
+    position: relative;
+    height: 34px;
+    margin: 0.25rem 0 0.1rem;
+    touch-action: none;
+}
+
+.trim-track {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 5px;
+    margin-top: -2.5px;
+    border-radius: 3px;
+    background-color: var(--bs-secondary-bg);
+}
+
+/* The kept portion of the clip. */
+.trim-range {
+    position: absolute;
+    top: 50%;
+    height: 5px;
+    margin-top: -2.5px;
+    border-radius: 3px;
+    background-color: var(--accent);
+}
+
+.trim-thumb {
+    position: absolute;
+    top: 50%;
+    width: 15px;
+    height: 15px;
+    margin: -7.5px 0 0 -7.5px;
+    border-radius: 50%;
+    background-color: var(--accent);
+    border: 2px solid var(--bs-body-bg);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    cursor: grab;
+    transition: transform var(--dur-micro) var(--ease-micro);
+}
+
+.trim-thumb:hover { transform: scale(1.15); }
+.trim-thumb:active { cursor: grabbing; transform: scale(1.15); }
+
+.trim-thumb:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(var(--accent-rgb), 0.35);
+}
+
+/* Held Shift means a finer drag; the cursor says so. */
+.trim-slider.fine .trim-thumb:active { cursor: crosshair; }
+
+.trim-readout {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+}
+
 /* ── Toast ───────────────────────────────────────────────────────────────── */
 
 /* The house spec puts this at top:16px, which suits a web page whose content
