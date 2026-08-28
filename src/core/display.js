@@ -87,7 +87,14 @@
      * Null until the probe lands, so the card can show a placeholder.
      */
     function describeMeta(meta, sourceExt) {
-        if (!meta || !meta.ok) return null;
+        // null means "still reading", and the card renders it as such. A probe
+        // that came back and failed is a *terminal* state, so it must not
+        // return null too — an unreadable file used to sit on "Reading…"
+        // forever, even after a conversion had already failed against it.
+        if (!meta || meta.pending) return null;
+        if (!meta.ok) {
+            return sourceExt ? `${sourceExt.toUpperCase()} · unreadable` : "Unreadable file";
+        }
 
         const parts = [];
         if (meta.hasVideo && meta.video && meta.video.width && meta.video.height) {

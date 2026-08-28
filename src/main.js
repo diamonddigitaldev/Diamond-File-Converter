@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell, nativeTheme } = require("electron");
 const Store = require("electron-store").default;
 const fs = require("fs");
 const path = require("path");
@@ -127,8 +127,33 @@ function createWindow() {
     mainWindow.webContents.on("did-finish-load", flushPendingFiles);
 }
 
+// Both pages follow the OS theme through a prefers-color-scheme listener of
+// their own, which is the mechanism that is supposed to carry a live change.
+// A tester on real Windows saw the app stay dark after switching Windows to
+// Light, so this pushes the change explicitly as well: nativeTheme is the
+// main process's own view of the OS setting, and does not depend on the media
+// query notification reaching the renderer. Belt and braces — the page applies
+// whichever arrives first, and applying twice is a no-op.
+function broadcastTheme() {
+    const theme = nativeTheme.shouldUseDarkColors ? "dark" : "light";
+    for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) win.webContents.send(IPC.THEME_CHANGED, theme);
+    }
+}
+
+// Only ever one Credits window. Without this guard the menu opened another
+// modal on every click, stacking identical windows: Escape closed the top one
+// and revealed the one behind it, which looks exactly like Escape doing
+// nothing. The handler below was never the problem.
+let creditsWindow = null;
+
 function createCreditsWindow() {
-    const creditsWindow = new BrowserWindow({
+    if (creditsWindow && !creditsWindow.isDestroyed()) {
+        creditsWindow.focus();
+        return;
+    }
+
+    creditsWindow = new BrowserWindow({
         width: 750,
         height: 450,
         parent: mainWindow,
@@ -161,6 +186,7 @@ function createCreditsWindow() {
             if (!creditsWindow.isDestroyed()) creditsWindow.close();
         }
     });
+    creditsWindow.on("closed", () => { creditsWindow = null; });
     creditsWindow.setMenu(null);
     creditsWindow.loadFile(path.join(__dirname, "credits.html"));
 }
@@ -199,6 +225,18 @@ function setupMenu() {
                 {
                     label: "Check for Updates",
                     click: checkForUpdatesManually
+                },
+                { type: "separator" },
+                // Electron's F12 / Ctrl+Shift+I shortcut comes from the default
+                // application menu, so replacing that menu with this one took
+                // DevTools away with it — which left testers unable to check
+                // the console at all. Re-declared explicitly; webPreferences
+                // never disabled devTools, so this was an accident, not a
+                // lock-down.
+                {
+                    label: "Toggle Developer Tools",
+                    accelerator: "F12",
+                    role: "toggleDevTools"
                 },
                 { type: "separator" },
                 {
@@ -293,6 +331,9 @@ function getRunner() {
 // the runner goes idle, so it never leaks into the next run.
 let conflictChoiceForBatch = null;
 
+// Serialises the output-exists prompts so only one dialog is ever open.
+let conflictPromptChain = Promise.resolve();
+
 /** Turn a chosen action into the result the runner expects. */
 function applyConflictChoice(choice, candidatePath, isDirectory) {
     if (choice === "cancel") return { action: "cancel" };
@@ -314,6 +355,22 @@ function applyConflictChoice(choice, candidatePath, isDirectory) {
 async function resolveConflict(job, candidatePath) {
     const isDirectory = formats.producesDirectory(job.mode);
 
+    // Prompts are serialised, one at a time. The concurrency pool brings
+    // several jobs here at once, and each used to read conflictChoiceForBatch
+    // (still null) and open its own dialog *before* the first answer came
+    // back — so ticking "apply to all remaining" had no effect on the dialogs
+    // already queued behind it, and the user was asked again for every file.
+    // Chaining means each prompt re-reads the batch choice after the previous
+    // one has settled.
+    const mine = conflictPromptChain.then(
+        () => promptForConflict(candidatePath, isDirectory)
+    );
+    conflictPromptChain = mine.then(() => {}, () => {});
+    return mine;
+}
+
+/** The prompt itself. Only ever called one at a time, via resolveConflict. */
+async function promptForConflict(candidatePath, isDirectory) {
     if (conflictChoiceForBatch) {
         return applyConflictChoice(conflictChoiceForBatch, candidatePath, isDirectory);
     }
@@ -663,6 +720,7 @@ app.whenReady().then(() => {
     probe.setFfprobePath(getFfprobePath());
     createWindow();
     setupMenu();
+    nativeTheme.on("updated", broadcastTheme);
     queueIncomingFiles(filePathsFromArgv(process.argv));
     if (app.isPackaged) setupAutoUpdater();
 });

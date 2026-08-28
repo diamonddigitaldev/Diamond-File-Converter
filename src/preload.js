@@ -43,6 +43,7 @@ const CH = {
     SETTINGS_GET:          "settings:get",
     SETTINGS_SET:          "settings:set",
     FILES_OPENED:          "files:opened",
+    THEME_CHANGED:         "theme:changed",
 };
 
 /** Subscribe helper that hands back an unsubscribe function. */
@@ -108,7 +109,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     getSettings:  ()       => ipcRenderer.invoke(CH.SETTINGS_GET),
     setSettings:  (s)      => ipcRenderer.invoke(CH.SETTINGS_SET, s),
 
-    onFilesOpened: (cb) => on(CH.FILES_OPENED, cb),
+    onFilesOpened:  (cb) => on(CH.FILES_OPENED, cb),
+    onThemeChanged: (cb) => on(CH.THEME_CHANGED, cb),
 });
 
 // Path helpers. The renderer needs basename, extname and stem for display and

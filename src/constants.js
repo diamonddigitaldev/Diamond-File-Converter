@@ -52,7 +52,8 @@ const IPC = {
     SETTINGS_SET:         "settings:set",
 
     // Pushed from main.
-    FILES_OPENED: "files:opened", // push: string[] of paths from menu/argv/shell
+    FILES_OPENED:  "files:opened",  // push: string[] of paths from menu/argv/shell
+    THEME_CHANGED: "theme:changed", // push: "dark" | "light" when the OS theme changes
 };
 
 // Window size constraints. Widened for the card grid — the v1 single column

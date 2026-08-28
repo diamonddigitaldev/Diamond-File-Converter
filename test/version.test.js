@@ -151,3 +151,58 @@ test("credits: Escape is handled in the main process, not the page", () => {
     assert.ok(!/addEventListener\(\s*["']keydown["']/.test(credits),
         "credits.html should no longer rely on its own keydown listener");
 });
+
+// ---------------------------------------------------------------------------
+// alpha.2 test-pass regressions (main process)
+// ---------------------------------------------------------------------------
+
+test("credits: only one Credits window can ever be open", () => {
+    // Every menu click used to build another modal. Escape closed the top one
+    // and uncovered an identical window behind it, which reads as Escape doing
+    // nothing at all — the before-input-event handler was never at fault.
+    const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
+    const fn = main.slice(main.indexOf("function createCreditsWindow"));
+    assert.match(fn.slice(0, 400), /if \(creditsWindow && !creditsWindow\.isDestroyed\(\)\)/,
+        "an existing Credits window must be focused rather than duplicated");
+    assert.match(fn.slice(0, 2000), /creditsWindow\.on\("closed"/,
+        "the reference must be cleared, or Credits can never be reopened");
+});
+
+test("conflict: the output-exists prompts are serialised", () => {
+    // The concurrency pool brings several jobs to the resolver at once. Each
+    // used to read the batch choice (still null) and open its own dialog
+    // before the first answer came back, so "apply to all remaining files"
+    // had no effect on the prompts already queued behind it.
+    const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
+    assert.match(main, /conflictPromptChain/,
+        "prompts must be chained so only one dialog is open at a time");
+
+    const resolver = main.slice(main.indexOf("async function resolveConflict"),
+                                main.indexOf("async function promptForConflict"));
+    assert.ok(!/showMessageBox/.test(resolver),
+        "resolveConflict must not open the dialog itself; the serialised prompt does");
+    assert.match(main, /async function promptForConflict[\s\S]{0,400}?if \(conflictChoiceForBatch\)/,
+        "the batch choice must be re-read after the previous prompt settles");
+});
+
+test("theme: an OS theme change is pushed to the windows, not only observed", () => {
+    const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
+    assert.match(main, /nativeTheme\.on\("updated"/,
+        "a live OS theme change must reach the renderer without a restart");
+    assert.match(main, /IPC\.THEME_CHANGED/);
+
+    // The media query listener in the page stays as the first route.
+    const html = fs.readFileSync(path.join(__dirname, "..", "src", "index.html"), "utf8");
+    assert.match(html, /addEventListener\("change", apply\)/,
+        "the prefers-color-scheme listener must remain");
+});
+
+test("menu: replacing the default menu must not take DevTools with it", () => {
+    // Electron's F12 accelerator comes from the default application menu, so a
+    // fully custom template silently removed it — leaving no way to open the
+    // console. devTools was never disabled in webPreferences.
+    const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
+    assert.match(main, /role:\s*"toggleDevTools"/, "DevTools must be reachable");
+    assert.ok(!/devTools:\s*false/.test(main),
+        "devTools is not meant to be disabled; the loss was an accident of the custom menu");
+});

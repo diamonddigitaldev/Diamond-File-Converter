@@ -541,7 +541,13 @@ function renderActionBar() {
     // House pattern: the primary action and its abort share one slot rather
     // than sitting side by side, so only one is ever visible.
     $("btn-convert").classList.toggle("d-none", converting);
-    $("btn-convert").disabled = ready === 0;
+    // Enabled only while there is something left to run. `ready` counts cards
+    // that *could* run, including ones already converted, and is what the
+    // "still need a format" copy is derived from — so the button needs its own
+    // count, or it sits enabled doing nothing once a batch has finished.
+    $("btn-convert").disabled = jobs.filter(
+        j => j.targetExt && j.status !== "done" && display.hasUsableProcessing(j, pipelines)
+    ).length === 0;
     $("bulk-edit").disabled = converting;
     $("btn-cancel-all").classList.toggle("d-none", !converting);
     $("btn-clear-all").disabled = converting;
@@ -1106,7 +1112,12 @@ function toast(message, type = "info", timeoutMs = 4500) {
 // -- Conversion --------------------------------------------------------------
 
 async function startConversion() {
-    const runnable = jobs.filter(j => j.targetExt);
+    // Already-converted cards are left alone. This used to take every card
+    // with a format, so fixing one failed file and pressing Convert again
+    // resubmitted the whole finished batch — and every one of those outputs
+    // then collided with the file the previous run had just written.
+    // Re-running a finished card is what its own Retry button is for.
+    const runnable = jobs.filter(j => j.targetExt && j.status !== "done");
     if (runnable.length === 0) return;
 
     converting = true;
@@ -1244,6 +1255,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     $("jm-target").addEventListener("change", syncModalControls);
+
+    // syncModalControls rebuilds these selects from dataset.wanted, which was
+    // only ever written when the dialog opened. Picking a codec therefore
+    // survived only until the next rebuild — which the pick itself triggers —
+    // so the control snapped back to "Format default" and the codec was
+    // dropped on Apply. Worse, the effective codec then fell back to the
+    // container's own default (mpeg4 for AVI), which has no constant-quality
+    // mode, so Quality looked permanently stuck on "Target bitrate".
+    // Registered before the sync listener so the pick is recorded first.
+    for (const id of ["jm-vcodec", "jm-acodec", "jm-encpreset"]) {
+        $(id).addEventListener("change", (e) => { e.target.dataset.wanted = e.target.value; });
+    }
+
     for (const id of ["jm-vmode", "jm-amode", "jm-vcodec", "jm-acodec", "jm-quality-mode", "jm-routing"]) {
         $(id).addEventListener("change", syncModalControls);
     }
@@ -1276,8 +1300,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     document.addEventListener("keydown", (e) => {
-        const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName ?? "");
+        // Only a control the user can actually type into should swallow these.
+        // This used to include SELECT, and a <select> keeps focus after you
+        // pick an option — so choosing a format on any card silently ate the
+        // next Escape, Delete or Ctrl+A anywhere in the app until you happened
+        // to click something non-focusable. A checkbox is an INPUT too, which
+        // is why the type is tested rather than just the tag.
+        const el = document.activeElement;
+        const tag = el?.tagName ?? "";
+        const typing = tag === "TEXTAREA"
+            || (tag === "INPUT" && !/^(checkbox|radio|button|submit|reset|range|file)$/.test(el.type));
         if (typing) return;
+
+        // The settings dialog owns the keyboard while it is open, or Delete
+        // would remove the very cards being edited behind it.
+        if (document.querySelector(".modal.show")) return;
 
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
             e.preventDefault();
@@ -1313,4 +1350,12 @@ api.onJobStatus(({ jobId, status }) => {
 
 api.onFilesOpened((filePaths) => {
     ingestPaths(Array.isArray(filePaths) ? filePaths : [filePaths]);
+});
+
+// The page already follows the OS theme through its own prefers-color-scheme
+// listener in index.html. This is the second route: main pushes the change
+// from nativeTheme, so a live switch does not depend on the media query
+// notification arriving. Whichever lands first wins; the other is a no-op.
+api.onThemeChanged((theme) => {
+    document.documentElement.setAttribute("data-bs-theme", theme);
 });

@@ -476,3 +476,131 @@ With no pipelines saved (a clean profile):
 - [ ] Check the preview's `-map` arguments: a **filtered** stream appears as
       `[v0]` with brackets, an **untouched** stream as `0:a` **without** them.
       Brackets on an unfiltered stream make ffmpeg fail to open the output.
+
+---
+
+## 2.0.0-alpha.2 — fixes from the first manual test pass
+
+> **Status: not started.** Written 2026-08-28. These fix defects found by the
+> first hands-on pass on real Windows; nothing below has been re-tested yet.
+
+The first pass reported nine issues. Seven were reproduced in the code and are
+fixed here. **Two were not reproducible and are still open** — see "Still
+unconfirmed" at the end, which is the most valuable part of this section to
+work through, because it needs the reporter's exact sequence rather than ours.
+
+### Escape, Delete and Ctrl+A after choosing a format
+
+The global key handler treated any focused `<select>` as "the user is typing"
+and bailed out. A `<select>` keeps focus after you pick an option, so choosing
+a format on a card silently ate the next key until you clicked something
+non-focusable.
+
+- [ ] Pick a format from **any card's dropdown**. Without clicking anything
+      else, press **Ctrl+A** — every card is selected.
+- [ ] Repeat, and press **Escape** — the selection clears.
+- [ ] Repeat with one card selected, and press **Delete** — the card is
+      removed.
+- [ ] Click a card's **checkbox** (a checkbox is an `<input>` too), then press
+      Escape, Delete and Ctrl+A — all three still work.
+- [ ] Click into a **text field** (the resize width, or the name template) and
+      press Delete — it edits the text and does **not** remove any cards.
+- [ ] Open **Advanced options**, select some text in a field, press Escape —
+      the dialog closes and the cards behind it are untouched.
+- [ ] With the dialog open and cards selected behind it, press **Delete** —
+      nothing is removed.
+
+### Convert no longer re-runs a finished batch
+
+- [ ] Queue several files including one that will fail. Convert.
+- [ ] Fix the failed card's format and press **Convert** again. Only that card
+      runs. Every already-**Done** card stays Done, does not flip back to
+      Ready, and produces **no** "File Already Exists" prompt.
+- [ ] The **Retry** button on a single card still re-runs just that card.
+- [ ] Once every card is Done, the **Convert button is disabled** rather than
+      enabled and doing nothing.
+- [ ] Add a new file to a finished queue: Convert enables again and runs only
+      the new file.
+
+### "Apply to all remaining files" actually applies
+
+Jobs run through a concurrency pool, and several used to reach the prompt at
+once — each opening its own dialog before the first answer was recorded, so
+the tick had no effect on the dialogs already queued behind it.
+
+- [ ] Queue **at least six** files that all collide with existing output.
+      Convert.
+- [ ] Only **one** prompt is on screen at a time.
+- [ ] Tick **"Apply to all remaining files"** and choose **Overwrite** — no
+      further prompts appear, and every file is overwritten.
+- [ ] Repeat with **Save as New**, and again with **Cancel**. Each choice
+      carries to the rest of the batch.
+- [ ] Start a second batch afterwards — the prompt appears again. The choice
+      must not carry between runs.
+
+### Advanced options: the codec you pick is the codec you get
+
+One defect caused both of the dialog bugs reported. The codec selects were
+rebuilt from the value the dialog opened with, so a pick was overwritten
+immediately — dropping it on Apply, and leaving Quality apparently stuck
+because the effective codec fell back to the container default.
+
+- [ ] Target **AVI**, set Codec to **MPEG-4**. Quality switches to **Target
+      bitrate** with its explanatory note. Reopen the Codec dropdown — it
+      reads **MPEG-4**, not "Format default".
+- [ ] Now set Codec to **H.264**. Quality returns to **Constant quality** and
+      the CRF field comes back.
+- [ ] Switch between MPEG-4 and H.264 several times — it tracks every time.
+- [ ] Set a CRF, Apply, and reopen — the codec and the CRF are both still
+      there, and the card's summary names the codec you chose.
+- [ ] Convert, then ffprobe the output: it really is the codec you picked.
+- [ ] Same check on the **audio** codec select, and on the **encoder preset**
+      (it is rebuilt the same way).
+
+### An unreadable file says so
+
+- [ ] Queue a deliberately corrupt file (rename a `.txt` to `.mp4`).
+- [ ] Its metadata line settles on **"MP4 · unreadable"** within a second or
+      two. It must not sit on "Reading…" indefinitely.
+- [ ] A healthy file still shows its real resolution, duration, codec and size.
+
+### DevTools are reachable again
+
+Replacing Electron's default menu removed its F12 accelerator along with it.
+
+- [ ] **Menu → Toggle Developer Tools** opens DevTools.
+- [ ] **F12** does the same.
+- [ ] With DevTools open, use the app normally — drop files, choose formats,
+      open the dialog, convert. **The console shows no errors.** *(This was
+      unverifiable in the first pass and is still unverified.)*
+
+### Credits window
+
+The Escape handler was verified working in isolation; what was missing was a
+guard against opening the window more than once.
+
+- [ ] Open Credits, press **Escape** — it closes.
+- [ ] Open Credits **five times in a row** from the menu. Only one window ever
+      exists; the others just focus it.
+- [ ] After those five opens, press **Escape once** — the window closes and
+      there is **no second window behind it**.
+- [ ] Open Credits, click **View Source Code on GitHub** (the browser takes
+      focus), click back on the Credits window, then press Escape — it closes.
+- [ ] The × button still closes it, and it still cannot be minimised.
+
+### Still unconfirmed — needs the reporter's exact sequence
+
+Two reported defects could not be reproduced. Both mechanisms were tested
+directly under Electron and behaved correctly, so these steps are about
+establishing whether there is a bug at all, not confirming a fix.
+
+- [ ] **Live theme change.** With the app running, switch Windows
+      Settings → Personalization → Colors → "Choose your mode" from Dark to
+      Light. The app follows **without a restart**. Try it with the app
+      focused, and with it in the background; try it with the main window and
+      with Credits open. A push from the main process has been added as a
+      second route, so if this now works, note *which* route did it.
+- [ ] **Escape on Credits.** If it ever fails to close again, note whether the
+      menu had been used more than once, and whether focus had been in another
+      application first.
+

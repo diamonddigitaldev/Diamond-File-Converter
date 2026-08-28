@@ -45,6 +45,12 @@
         // inline onclick handlers v1 used are replaced by data-href.
         const api = window.electronAPI;
 
+        // Second route for a live OS theme change, pushed from main. The
+        // prefers-color-scheme listener in <head> is the first.
+        api.onThemeChanged((theme) => {
+            document.documentElement.setAttribute("data-bs-theme", theme);
+        });
+
         api.getVersion().then((version) => {
             document.querySelector("h2").innerText += ` v${version}`;
         });

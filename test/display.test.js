@@ -54,7 +54,15 @@ test("display: eta is terse", () => {
 test("display: metadata line is null until the probe lands", () => {
     // The card must render before this returns anything.
     assert.equal(d.describeMeta(null, "mp4"), null);
-    assert.equal(d.describeMeta({ ok: false }, "mp4"), null);
+    assert.equal(d.describeMeta({ pending: true }, "mp4"), null);
+});
+
+test("display: a failed probe reads as unreadable, not as still loading", () => {
+    // probe() resolves { ok: false } rather than rejecting, so a corrupt file
+    // used to be indistinguishable from a slow one and sat on "Reading…"
+    // forever — even after a conversion had already failed against it.
+    assert.equal(d.describeMeta({ ok: false, error: "Invalid data" }, "mp4"), "MP4 · unreadable");
+    assert.equal(d.describeMeta({ ok: false }, null), "Unreadable file");
 });
 
 test("display: metadata line covers video and audio differently", () => {
@@ -546,4 +554,56 @@ test("processing: the tiles are keyboard operable, unlike the pattern they copy"
     const renderer = fs.readFileSync(path.join(__dirname, "..", "src", "renderer.js"), "utf8");
     assert.match(renderer, /e\.key === "Enter"/, "Enter must activate a tile");
     assert.match(renderer, /e\.key === " "/, "Space must activate a tile");
+});
+
+// ---------------------------------------------------------------------------
+// alpha.2 test-pass regressions
+// ---------------------------------------------------------------------------
+
+test("keys: a focused <select> must not be treated as typing", () => {
+    // A <select> keeps focus after an option is picked, so counting it as
+    // "typing" made choosing a format on any card silently swallow the next
+    // Escape, Delete or Ctrl+A anywhere in the app.
+    const renderer = stripSource(fs.readFileSync(path.join(__dirname, "..", "src", "renderer.js"), "utf8"));
+    const guard = renderer.match(/const typing = [\s\S]{0,220}?;/);
+    assert.ok(guard, "expected a typing guard in the global keydown handler");
+    assert.ok(!/SELECT/.test(guard[0]),
+        "SELECT must not count as typing — it swallows Escape/Delete/Ctrl+A after a format is chosen");
+    assert.match(guard[0], /TEXTAREA/);
+
+    // A checkbox is an INPUT too, so the tag alone is not enough.
+    assert.match(guard[0], /el\.type/,
+        "INPUT must be narrowed by type, or a focused checkbox swallows the same keys");
+});
+
+test("keys: the settings dialog owns the keyboard while it is open", () => {
+    const renderer = stripSource(fs.readFileSync(path.join(__dirname, "..", "src", "renderer.js"), "utf8"));
+    assert.match(renderer, /\.modal\.show/,
+        "Delete must not remove the very cards being edited behind the dialog");
+});
+
+test("convert: an already-converted card is not resubmitted", () => {
+    // Fixing one failed file and pressing Convert used to resubmit the whole
+    // finished batch, colliding with every output the previous run wrote.
+    const renderer = stripSource(fs.readFileSync(path.join(__dirname, "..", "src", "renderer.js"), "utf8"));
+    const filter = renderer.match(/const runnable = jobs\.filter\([^)]*\)/);
+    assert.ok(filter, "expected startConversion to filter the job list");
+    assert.match(filter[0], /status !== "done"/,
+        "Convert must skip cards that already converted; Retry is what re-runs one");
+});
+
+test("dialog: a codec pick is recorded before the controls are rebuilt", () => {
+    // syncModalControls repopulates these selects from dataset.wanted, so
+    // without this the user's pick was overwritten by the value the dialog
+    // opened with — dropping the codec on Apply and leaving Quality stuck on
+    // "Target bitrate", because the effective codec fell back to the
+    // container default (mpeg4 for AVI), which has no constant-quality mode.
+    const renderer = stripSource(fs.readFileSync(path.join(__dirname, "..", "src", "renderer.js"), "utf8"));
+    assert.match(renderer, /dataset\.wanted = e\.target\.value/,
+        "a change on the codec selects must write dataset.wanted");
+
+    const recordAt = renderer.indexOf("dataset.wanted = e.target.value");
+    const syncAt = renderer.indexOf('addEventListener("change", syncModalControls)', recordAt);
+    assert.ok(recordAt !== -1 && syncAt !== -1 && recordAt < syncAt,
+        "the pick must be recorded before syncModalControls rebuilds the select");
 });
