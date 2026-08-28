@@ -338,3 +338,121 @@ test("every counted string in the renderer goes through the helper", () => {
     assert.deepEqual(raw.map(m => m[0]), [],
         "found a raw count followed by a plural noun — route it through display.countOf");
 });
+
+// ---------------------------------------------------------------------------
+// New Job dialog
+//
+// The dialog is driven entirely from the format capability graph, so an
+// invalid combination is unreachable rather than merely rejected on submit.
+// ---------------------------------------------------------------------------
+
+const DESCRIPTORS = formats.FORMATS;
+
+test("dialog: an audio target offers no video controls", () => {
+    const s = d.applicableSections("mp3", DESCRIPTORS);
+    assert.equal(s.video, false);
+    assert.equal(s.audio, true);
+    assert.equal(s.resize, false);
+    assert.equal(s.image, false);
+});
+
+test("dialog: an image target offers no audio controls", () => {
+    const s = d.applicableSections("png", DESCRIPTORS);
+    assert.equal(s.audio, false);
+    assert.equal(s.image, true, "a still image exposes its own quality knob");
+    assert.equal(s.trim, false, "trimming a single still is meaningless");
+});
+
+test("dialog: an animated image target can still be trimmed", () => {
+    assert.equal(d.applicableSections("gif", DESCRIPTORS).trim, true);
+    assert.equal(d.applicableSections("webp", DESCRIPTORS).trim, true);
+});
+
+test("dialog: a video target offers everything", () => {
+    const s = d.applicableSections("mp4", DESCRIPTORS);
+    assert.equal(s.video, true);
+    assert.equal(s.audio, true);
+    assert.equal(s.trim, true);
+    assert.equal(s.resize, true);
+});
+
+test("dialog: an unknown target offers nothing rather than throwing", () => {
+    const s = d.applicableSections("nope", DESCRIPTORS);
+    assert.deepEqual(s, { video: false, audio: false, image: false, trim: false, resize: false });
+});
+
+test("dialog: codec choices come from the container's own capabilities", () => {
+    const mp4 = d.codecOptions("mp4", DESCRIPTORS, "video").map(o => o.value);
+    assert.ok(mp4.includes("libx264"));
+    assert.ok(!mp4.includes("libvpx-vp9"), "MP4 must not offer VP9");
+
+    const webm = d.codecOptions("webm", DESCRIPTORS, "video").map(o => o.value);
+    assert.ok(webm.includes("libvpx-vp9"));
+    assert.ok(!webm.includes("libx264"), "WebM must not offer H.264");
+
+    // Every offered codec must be one validateJob would accept.
+    for (const ext of formats.SUPPORTED_EXTENSIONS) {
+        for (const stream of ["video", "audio"]) {
+            for (const opt of d.codecOptions(ext, DESCRIPTORS, stream)) {
+                const list = stream === "audio" ? DESCRIPTORS[ext].audioCodecs : DESCRIPTORS[ext].videoCodecs;
+                assert.ok(list.includes(opt.value), `${ext} offered ${opt.value} for ${stream}`);
+            }
+        }
+    }
+});
+
+test("dialog: codecs get readable labels, unknown ones pass through", () => {
+    assert.equal(d.CODEC_LABELS.libx264, "H.264");
+    assert.equal(d.codecOptions("mp4", DESCRIPTORS, "audio")[0].label, "AAC");
+});
+
+test("dialog: stream copy is offered only where the container supports it", () => {
+    assert.equal(d.canStreamCopy("mp4", DESCRIPTORS), true);
+    assert.equal(d.canStreamCopy("png", DESCRIPTORS), false);
+    assert.equal(d.canStreamCopy("nope", DESCRIPTORS), false);
+});
+
+test("dialog: image quality descriptors carry their real range", () => {
+    const jpg = d.qualityDescriptor("jpg", DESCRIPTORS);
+    assert.equal(jpg.flag, "-q:v");
+    assert.equal(jpg.inverted, true, "JPEG quality runs backwards");
+
+    const webp = d.qualityDescriptor("webp", DESCRIPTORS);
+    assert.equal(webp.max, 100);
+    assert.equal(d.qualityDescriptor("mp4", DESCRIPTORS), null);
+});
+
+test("dialog: settings summary describes only what was changed", () => {
+    assert.equal(d.summariseSettings(null), null);
+    assert.equal(d.summariseSettings({}), null, "an untouched job has no summary");
+
+    assert.equal(
+        d.summariseSettings({ video: { codec: "libx264", crf: 20, width: 1280, height: 720 } }),
+        "H.264 · CRF 20 · 1280×720"
+    );
+    assert.equal(d.summariseSettings({ video: { mode: "copy" } }), "copy video");
+    assert.equal(d.summariseSettings({ audio: { mode: "drop" } }), "no audio");
+    assert.equal(d.summariseSettings({ audio: { codec: "aac", bitrate: 192, channels: 1 } }), "AAC · 192k · mono");
+    assert.equal(d.summariseSettings({ image: { quality: 3 } }), "q3");
+    assert.equal(d.summariseSettings({ trim: { start: 5, end: 65 } }), "trim 0:05–1:05");
+    assert.equal(d.summariseSettings({ trim: { start: 5 } }), "trim 0:05–end");
+    assert.equal(d.summariseSettings({ output: { nameTemplate: "{name}-web" } }), "renamed");
+    assert.equal(d.summariseSettings({ output: { nameTemplate: "{name}" } }), null, "the default is not a change");
+});
+
+test("dialog: compacting drops blanks so format defaults still apply", () => {
+    const compacted = d.compactSettings({
+        video: { codec: "libx264", crf: null, bitrate: "", preset: "slow" },
+        audio: { codec: null, bitrate: null },
+        trim: { start: null, end: null },
+    });
+    assert.deepEqual(compacted, { video: { codec: "libx264", preset: "slow" } });
+    assert.deepEqual(d.compactSettings({}), {});
+    assert.deepEqual(d.compactSettings(null), {});
+});
+
+test("dialog: a compacted spec keeps zero, which is a real value", () => {
+    // CRF 0 is lossless — dropping it as falsy would silently change the job.
+    assert.deepEqual(d.compactSettings({ video: { crf: 0 } }), { video: { crf: 0 } });
+    assert.deepEqual(d.compactSettings({ trim: { start: 0 } }), { trim: { start: 0 } });
+});

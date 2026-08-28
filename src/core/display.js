@@ -162,6 +162,135 @@
         return KIND_ICONS[kind] || "insert_drive_file";
     }
 
+    // -- New Job dialog ------------------------------------------------------
+    //
+    // Which controls a target format actually supports. The dialog is driven
+    // entirely from these, so a container is never offered a codec it cannot
+    // carry — invalid combinations are unreachable rather than merely rejected.
+
+    /** Which sections of the dialog apply to this target format. */
+    function applicableSections(targetExt, descriptors) {
+        const target = descriptors ? descriptors[targetExt] : null;
+        if (!target) return { video: false, audio: false, image: false, trim: false, resize: false };
+
+        const isImage = target.kind === "image";
+        const isAudio = target.kind === "audio";
+
+        return {
+            // An audio container has no video stream to configure.
+            video: !isAudio,
+            // An image has no audio stream.
+            audio: !isImage,
+            // Only image targets expose a quality knob of their own.
+            image: isImage && !!target.quality,
+            // Trimming a single still makes no sense.
+            trim: !(isImage && !target.animated),
+            resize: !isAudio,
+        };
+    }
+
+    /** Codec choices for a target, as {value,label} options. Empty if none. */
+    function codecOptions(targetExt, descriptors, stream) {
+        const target = descriptors ? descriptors[targetExt] : null;
+        if (!target) return [];
+        const list = stream === "audio" ? target.audioCodecs : target.videoCodecs;
+        if (!Array.isArray(list)) return [];
+        return list.map(c => ({ value: c, label: CODEC_LABELS[c] || c }));
+    }
+
+    const CODEC_LABELS = {
+        libx264: "H.264", libx265: "H.265 / HEVC", libsvtav1: "AV1",
+        "libvpx-vp9": "VP9", libvpx: "VP8", mpeg4: "MPEG-4", mjpeg: "MJPEG",
+        prores_ks: "ProRes", wmv2: "WMV", msmpeg4v3: "MS MPEG-4", flv: "Sorenson",
+        gif: "GIF", png: "PNG", bmp: "BMP", tiff: "TIFF", libwebp: "WebP",
+        aac: "AAC", libmp3lame: "MP3", libopus: "Opus", libvorbis: "Vorbis",
+        flac: "FLAC", alac: "ALAC", ac3: "AC-3", wmav2: "WMA",
+        pcm_s16le: "PCM 16-bit", pcm_s24le: "PCM 24-bit", pcm_f32le: "PCM 32-bit float",
+    };
+
+    /** Whether a target can stream-copy, i.e. remux without re-encoding. */
+    function canStreamCopy(targetExt, descriptors) {
+        const target = descriptors ? descriptors[targetExt] : null;
+        return !!(target && target.supportsStreamCopy);
+    }
+
+    /** The image quality knob for a target, or null. */
+    function qualityDescriptor(targetExt, descriptors) {
+        const target = descriptors ? descriptors[targetExt] : null;
+        return target && target.quality ? target.quality : null;
+    }
+
+    /**
+     * A one-line summary of whatever has been changed from the defaults, shown
+     * on the card so a configured job is visibly different from a bare one.
+     * Returns null when nothing has been customised.
+     */
+    function summariseSettings(settings) {
+        if (!settings) return null;
+        const parts = [];
+
+        if (settings.video) {
+            const v = settings.video;
+            if (v.mode === "copy") parts.push("copy video");
+            else if (v.mode === "drop") parts.push("no video");
+            else {
+                if (v.codec) parts.push(CODEC_LABELS[v.codec] || v.codec);
+                if (v.crf != null) parts.push(`CRF ${v.crf}`);
+                else if (v.bitrate) parts.push(`${v.bitrate}k`);
+                if (v.preset) parts.push(v.preset);
+            }
+            if (v.width || v.height) parts.push(`${v.width || "auto"}×${v.height || "auto"}`);
+            if (v.fps) parts.push(`${v.fps} fps`);
+        }
+
+        if (settings.audio) {
+            const a = settings.audio;
+            if (a.mode === "copy") parts.push("copy audio");
+            else if (a.mode === "drop") parts.push("no audio");
+            else {
+                if (a.codec) parts.push(CODEC_LABELS[a.codec] || a.codec);
+                if (a.bitrate) parts.push(`${a.bitrate}k`);
+                if (a.channels) parts.push(a.channels === 1 ? "mono" : `${a.channels}ch`);
+            }
+        }
+
+        if (settings.image && settings.image.quality != null) {
+            parts.push(`q${settings.image.quality}`);
+        }
+
+        const trim = settings.trim;
+        if (trim && (trim.start != null || trim.end != null)) {
+            parts.push(`trim ${formatDuration(trim.start || 0) || "0:00"}–${formatDuration(trim.end) || "end"}`);
+        }
+
+        if (settings.output) {
+            const o = settings.output;
+            if (o.routing && o.routing !== "alongside") parts.push(o.routing === "mirror" ? "mirrored" : "custom folder");
+            if (o.nameTemplate && o.nameTemplate !== "{name}") parts.push("renamed");
+        }
+
+        return parts.length > 0 ? parts.join(" · ") : null;
+    }
+
+    /**
+     * Strip empty sections and null fields so a spec carries only what was
+     * actually set. Anything left out falls back to the format's own defaults
+     * in createJob, which keeps the dialog from freezing today's defaults in.
+     */
+    function compactSettings(settings) {
+        const out = {};
+        for (const [section, values] of Object.entries(settings || {})) {
+            if (!values || typeof values !== "object") continue;
+            const kept = {};
+            for (const [key, value] of Object.entries(values)) {
+                if (value === null || value === undefined || value === "") continue;
+                kept[key] = value;
+            }
+            if (Object.keys(kept).length > 0) out[section] = kept;
+        }
+        return out;
+    }
+
     // -- Selection -----------------------------------------------------------
 
     /**
@@ -269,6 +398,13 @@
         STATUS,
         plural,
         countOf,
+        applicableSections,
+        codecOptions,
+        canStreamCopy,
+        qualityDescriptor,
+        summariseSettings,
+        compactSettings,
+        CODEC_LABELS,
         formatDuration,
         formatBytes,
         formatEta,

@@ -471,6 +471,84 @@ body.popup-window span:hover {
     animation: spin 1.4s linear infinite;
 }
 
+/* ── New Job dialog ──────────────────────────────────────────────────────── */
+
+.jm-section {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--bs-secondary-color);
+    margin: 1.25rem 0 0.6rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--bs-border-color);
+}
+
+.jm-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 0.75rem 1rem;
+}
+
+.jm-row .form-label {
+    font-size: 0.8rem;
+    margin-bottom: 0.25rem;
+}
+
+/* Reserve the help line so the dialog does not jump as notes appear. */
+.jm-row .form-text {
+    min-height: 1.2em;
+    margin-top: 0.2rem;
+}
+
+.jm-preview {
+    background-color: var(--bs-secondary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--radius-control);
+    padding: 0.6rem 0.75rem;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 0;
+    max-height: 8rem;
+    overflow-y: auto;
+    /* The one place selection is wanted: a command you may want to copy. */
+    user-select: text;
+}
+
+.jm-preview::-webkit-scrollbar { width: var(--scrollbar-width); }
+.jm-preview::-webkit-scrollbar-track { background: transparent; }
+.jm-preview::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+
+.modal-body::-webkit-scrollbar { width: var(--scrollbar-width); }
+.modal-body::-webkit-scrollbar-track { background: transparent; }
+.modal-body::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+
+/* Card gains a configure button and a settings summary line. */
+.card-configure {
+    border: none;
+    background: none;
+    color: var(--bs-secondary-color);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color var(--dur-micro) var(--ease-micro);
+}
+
+.card-configure:hover { color: var(--accent); }
+.card-configure .material-icons-round { font-size: 16px; line-height: 1; display: block; }
+
+.card-settings {
+    font-size: 0.72rem;
+    color: var(--accent);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* ── Toast ───────────────────────────────────────────────────────────────── */
 
 /* The house spec puts this at top:16px, which suits a web page whose content

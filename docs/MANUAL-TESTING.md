@@ -11,7 +11,7 @@ sections — the history is useful.
 
 ```
 npm install
-npm test          # expect 114 passing, 0 failing
+npm test          # expect 126 passing, 0 failing
 npm start
 ```
 
@@ -267,3 +267,84 @@ The app currently ships as `2.0.0-alpha.1` while the latest stable is `1.0.0`.
 - [ ] On a stable build, a newer stable release *is* still offered normally —
       this must not have broken ordinary updates.
 - [ ] "View Changelog" from an update dialog opens the correct release page.
+
+---
+
+## 2.0.0-alpha.2 — New Job dialog
+
+Per-file encoding settings. The engine already supported all of this; this pass
+exposes it. **The plain path must stay two clicks** — check that first.
+
+### The simple path is not disturbed
+
+- [ ] Drop a folder of images, pick one format in the bulk bar, press Convert.
+      Still two clicks. The dialog must not be required for this.
+- [ ] The per-card format dropdown still works on its own.
+
+### Opening the dialog
+
+- [ ] **New Job** in the top-right is disabled with an empty grid, enabled once
+      files are queued, and disabled again while a conversion runs.
+- [ ] With nothing selected it opens for every file and the subtitle reads
+      "Configuring N files".
+- [ ] With cards selected it opens for just those.
+- [ ] The tune icon on a card opens it for that one file only, and does not
+      change the selection.
+- [ ] Escape and the × both close it without applying anything.
+
+### Controls follow the target format
+
+- [ ] Choose an **audio** target (MP3): the Video section disappears entirely.
+- [ ] Choose an **image** target (PNG): the Audio section disappears and an
+      Image quality slider appears. Trim disappears for a still image.
+- [ ] Choose **GIF**: Trim stays available, because a GIF can be animated.
+- [ ] Choose **WebM**: the codec list offers VP9/VP8/AV1 and **not** H.264.
+- [ ] Choose **MP4**: it offers H.264/H.265/AV1 and **not** VP9.
+- [ ] Choose **MP3**: the audio codec list offers only MP3.
+- [ ] Set Stream to **Copy without re-encoding**: codec, quality, resize and
+      frame rate all disappear, since none of them apply to a remux.
+- [ ] Set Stream to **Remove video**: same, and the preview gains `-vn`.
+- [ ] Pick a codec with no constant-quality mode (MPEG-4 in AVI): Quality
+      switches to bitrate and locks. Switch back to H.264 — it must return to
+      **Constant quality**, not stay stuck on bitrate.
+- [ ] Select a video and an image together: no shared format exists, the target
+      list is empty and the dialog says so.
+
+### Command preview
+
+- [ ] The preview updates as you change controls, and starts with `ffmpeg`.
+- [ ] It reflects what you set — a CRF of 20 appears as `-crf 20`, a resize as
+      `scale=...`, a trim as `-ss`.
+- [ ] The preview text can be selected and copied. *(It is the one deliberate
+      exception to nothing-is-selectable.)*
+- [ ] An invalid combination shows a red message and disables **Apply**.
+
+### Applying
+
+- [ ] Apply, then check the card: a green summary line appears under the
+      metadata describing what was set, e.g. "H.264 · CRF 20 · 1280×720".
+- [ ] Open the dialog again on that card — your settings are still there.
+- [ ] Apply with nothing changed: the card gains **no** summary line. Untouched
+      settings must not be baked in.
+- [ ] Apply to a multi-file selection: every selected card gets the summary.
+- [ ] Convert, and confirm the output honours the settings — check the
+      resolution, duration and audio channels of the result, not just that a
+      file appeared.
+
+### Presets
+
+- [ ] Configure something, **Save as…**, give it a name. It appears in the
+      Preset dropdown.
+- [ ] Change the fields, then re-select the preset — your saved values come
+      back, including the target format.
+- [ ] **Delete** removes it, and it is gone after reopening the dialog.
+- [ ] Presets survive restarting the app.
+
+### Output routing
+
+- [ ] Destination **A folder I choose** reveals a Browse button; picking a
+      folder puts the path in the field.
+- [ ] Convert and confirm the output lands in that folder, not next to the
+      source.
+- [ ] A name template of `{name}-web` produces `something-web.mp4`.
+- [ ] **If it already exists** set to Overwrite converts without prompting.

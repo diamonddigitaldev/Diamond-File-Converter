@@ -7,6 +7,7 @@ const { APP_NAME, IPC, WINDOW, LOG, ARGV_BATCH_DEBOUNCE_MS, SETTINGS_DEFAULTS } 
 const formats = require("./core/formats");
 const { createJob, validateJob, STATUS } = require("./core/job");
 const { JobRunner, defaultConcurrency } = require("./core/runner");
+const { buildArgs } = require("./core/ffmpeg-args");
 const probe = require("./core/probe");
 const paths = require("./core/paths");
 const scan = require("./core/scan");
@@ -454,7 +455,26 @@ ipcMain.handle(IPC.APP_GET_FORMATS, () => ({
     targetsByExt: Object.fromEntries(
         formats.SUPPORTED_EXTENSIONS.map(ext => [ext, formats.targetsFor(ext)])
     ),
+    // Capability descriptors, so the New Job dialog can offer exactly the
+    // codecs and quality ranges each container supports rather than hardcoding
+    // lists that would drift from the format graph.
+    descriptors: formats.FORMATS,
+    modes: formats.MODE,
+    kinds: formats.KIND,
 }));
+
+// Live ffmpeg preview for the New Job dialog. Runs the spec through the real
+// argument builder, so what the dialog shows is what will actually be executed.
+ipcMain.handle(IPC.JOB_PREVIEW, (_event, spec) => {
+    try {
+        const job = createJob(spec);
+        const validation = validateJob(job);
+        const args = buildArgs(job, { outputPath: "<output>", progress: false });
+        return { ok: validation.valid, errors: validation.errors, args };
+    } catch (err) {
+        return { ok: false, errors: [err.message], args: [] };
+    }
+});
 
 ipcMain.handle(IPC.SETTINGS_GET, () => store.get("settings"));
 ipcMain.handle(IPC.SETTINGS_SET, (_event, settings) => {

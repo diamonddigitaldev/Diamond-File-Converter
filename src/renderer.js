@@ -25,6 +25,7 @@ const display = window.display;
 // Populated from main at startup so the format graph has one source of truth.
 let FORMATS = null;
 let TARGETS = null;
+let DESCRIPTORS = null;
 
 const el = {};
 
@@ -57,6 +58,7 @@ function addFiles(filePaths) {
             ext,
             kind: entry.type,
             targetExt: null,
+            settings: {},
             meta: null,
             status: "pending",
             progress: 0,
@@ -261,6 +263,18 @@ function buildCard(job) {
     name.textContent = p.basename(job.filePath);
     name.title = job.filePath;
 
+    const configure = document.createElement("button");
+    configure.className = "card-configure";
+    configure.title = "Configure this file";
+    const configureIcon = document.createElement("span");
+    configureIcon.className = "material-icons-round";
+    configureIcon.textContent = "tune";
+    configure.appendChild(configureIcon);
+    configure.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openJobModal([job.id]);
+    });
+
     const remove = document.createElement("button");
     remove.className = "card-remove";
     remove.title = "Remove";
@@ -273,11 +287,14 @@ function buildCard(job) {
         removeJobs([job.id]);
     });
 
-    head.append(tick, icon, name, remove);
+    head.append(tick, icon, name, configure, remove);
 
     // -- meta
     const meta = document.createElement("div");
     meta.className = "card-meta";
+
+    const settingsLine = document.createElement("div");
+    settingsLine.className = "card-settings d-none";
 
     // -- convert row
     const convert = document.createElement("div");
@@ -320,7 +337,7 @@ function buildCard(job) {
     const actions = document.createElement("div");
     actions.className = "card-actions d-none";
 
-    card.append(head, meta, convert, status, progress, actions);
+    card.append(head, meta, settingsLine, convert, status, progress, actions);
     card.addEventListener("click", (e) => handleCardClick(job.id, e));
 
     paintCard(card, job);
@@ -363,6 +380,15 @@ function paintCard(card, job) {
     meta.textContent = described ?? "Reading…";
     meta.classList.toggle("pending", described === null);
     if (described) meta.title = described;
+
+    // Show what has been configured, so a customised job is visibly different.
+    const settingsLine = card.querySelector(".card-settings");
+    const summary = display.summariseSettings(job.settings);
+    settingsLine.classList.toggle("d-none", !summary);
+    if (summary) {
+        settingsLine.textContent = summary;
+        settingsLine.title = summary;
+    }
 
     const { text, tone } = display.describeStatus(job);
     const status = card.querySelector(".card-status");
@@ -514,8 +540,335 @@ function renderActionBar() {
     // than sitting side by side, so only one is ever visible.
     $("btn-convert").classList.toggle("d-none", converting);
     $("btn-convert").disabled = ready === 0;
+    $("btn-new-job").disabled = total === 0 || converting;
     $("btn-cancel-all").classList.toggle("d-none", !converting);
     $("btn-clear-all").disabled = converting;
+}
+
+// -- New Job dialog ----------------------------------------------------------
+//
+// Every control is built from the target format's own capabilities, so a
+// container is never offered a codec it cannot carry. The dialog edits a
+// partial spec: anything left blank is omitted, and createJob fills it from the
+// format's defaults rather than the dialog freezing today's defaults in.
+//
+// It is deliberately not the only way to set a format — the per-card dropdown
+// and the bulk bar still work, so the plain "drop a folder, pick a format, go"
+// path stays two clicks.
+
+let jobModal = null;
+let modalScope = [];        // job ids the dialog is editing
+let presets = [];
+let previewTimer = null;
+
+const ENCODER_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast",
+    "medium", "slow", "slower", "veryslow"];
+
+/** Parse "90", "1:30" or "1:02:03" into seconds. Null when empty/invalid. */
+function parseTime(text) {
+    const raw = String(text ?? "").trim();
+    if (!raw) return null;
+    if (/^\d+(\.\d+)?$/.test(raw)) return Number(raw);
+    const parts = raw.split(":");
+    if (parts.length < 2 || parts.length > 3) return null;
+    if (!parts.every(p => /^\d+(\.\d+)?$/.test(p.trim()))) return null;
+    return parts.reduce((acc, part) => acc * 60 + Number(part), 0);
+}
+
+function fillSelect(select, options, current, placeholder) {
+    select.innerHTML = "";
+    if (placeholder !== undefined) {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = placeholder;
+        select.appendChild(opt);
+    }
+    for (const o of options) {
+        const opt = document.createElement("option");
+        opt.value = o.value;
+        opt.textContent = o.label;
+        select.appendChild(opt);
+    }
+    select.value = current ?? "";
+    // Assigning a value no option carries leaves selectedIndex at -1, which
+    // renders as a blank control and reads back as "". Fall back to the first
+    // entry so a select without a placeholder always shows a real choice.
+    if (select.selectedIndex === -1 && select.options.length > 0) {
+        select.selectedIndex = 0;
+    }
+}
+
+/** Open the dialog for a set of job ids. */
+function openJobModal(ids) {
+    modalScope = ids.filter(id => jobs.some(j => j.id === id));
+    if (modalScope.length === 0) return;
+
+    const scoped = jobs.filter(j => modalScope.includes(j.id));
+    $("jm-scope").textContent = scoped.length === 1
+        ? `Configuring ${p.basename(scoped[0].filePath)}`
+        : `Configuring ${display.countOf(scoped.length, "file")}`;
+
+    // Target options are the intersection, exactly as the bulk bar computes it.
+    const targets = display.commonTargets(scoped.map(j => j.ext), TARGETS);
+    const sharedTarget = [...new Set(scoped.map(j => j.targetExt))];
+    fillTargetSelect($("jm-target"), targets, sharedTarget.length === 1 ? sharedTarget[0] : null);
+    $("jm-target-note").textContent = targets.length === 0
+        ? "These files have no format in common."
+        : "";
+
+    // Seed from the first job's existing settings so reopening shows what is set.
+    const seed = scoped.find(j => j.settings && Object.keys(j.settings).length > 0);
+    loadSettingsIntoForm(seed ? seed.settings : {});
+
+    refreshPresets();
+    syncModalControls();
+
+    if (!jobModal) jobModal = new bootstrap.Modal($("job-modal"));
+    jobModal.show();
+}
+
+function loadSettingsIntoForm(settings) {
+    const s = settings ?? {};
+    const v = s.video ?? {}, a = s.audio ?? {}, o = s.output ?? {}, t = s.trim ?? {}, i = s.image ?? {};
+
+    $("jm-routing").value = o.routing ?? "alongside";
+    $("jm-outdir").value = o.dir ?? "";
+    $("jm-name").value = o.nameTemplate ?? "";
+    $("jm-conflict").value = o.onConflict ?? "ask";
+
+    $("jm-vmode").value = v.mode ?? "encode";
+    $("jm-crf").value = v.crf ?? "";
+    $("jm-vbitrate").value = v.bitrate ?? "";
+    $("jm-quality-mode").value = v.bitrate != null && v.crf == null ? "bitrate" : "crf";
+    $("jm-width").value = v.width ?? "";
+    $("jm-height").value = v.height ?? "";
+    $("jm-fit").value = v.fitMode ?? "contain";
+    $("jm-fps").value = v.fps ?? "";
+
+    $("jm-amode").value = a.mode ?? "encode";
+    $("jm-abitrate").value = a.bitrate ?? "";
+    $("jm-arate").value = a.sampleRate ?? "";
+    $("jm-achannels").value = a.channels ?? "";
+
+    $("jm-trim-start").value = t.start != null ? display.formatDuration(t.start) ?? t.start : "";
+    $("jm-trim-end").value = t.end != null ? display.formatDuration(t.end) ?? t.end : "";
+
+    // Codec and quality selects depend on the target, so they are populated by
+    // syncModalControls; stash the wanted values for it to apply.
+    $("jm-vcodec").dataset.wanted = v.codec ?? "";
+    $("jm-acodec").dataset.wanted = a.codec ?? "";
+    $("jm-encpreset").dataset.wanted = v.preset ?? "";
+    $("jm-iquality").dataset.wanted = i.quality ?? "";
+}
+
+/** Rebuild every capability-dependent control for the chosen target. */
+function syncModalControls() {
+    const target = $("jm-target").value || null;
+    const sections = display.applicableSections(target, DESCRIPTORS);
+
+    $("jm-video-section").classList.toggle("d-none", !sections.video);
+    $("jm-audio-section").classList.toggle("d-none", !sections.audio);
+    $("jm-image-section").classList.toggle("d-none", !sections.image);
+    $("jm-trim-section").classList.toggle("d-none", !sections.trim);
+
+    // Stream modes: copy is only offered where the container supports remuxing.
+    const canCopy = display.canStreamCopy(target, DESCRIPTORS);
+    const modeOptions = (other) => [
+        { value: "encode", label: "Re-encode" },
+        ...(canCopy ? [{ value: "copy", label: "Copy without re-encoding" }] : []),
+        { value: "drop", label: other },
+    ];
+    fillSelect($("jm-vmode"), modeOptions("Remove video"), $("jm-vmode").value);
+    fillSelect($("jm-amode"), modeOptions("Remove audio"), $("jm-amode").value);
+
+    fillSelect($("jm-vcodec"), display.codecOptions(target, DESCRIPTORS, "video"),
+        $("jm-vcodec").dataset.wanted || undefined, "Format default");
+    fillSelect($("jm-acodec"), display.codecOptions(target, DESCRIPTORS, "audio"),
+        $("jm-acodec").dataset.wanted || undefined, "Format default");
+
+    // "Format default" in the codec select means the container's own default,
+    // not "no codec" — resolve it, or CRF gets disabled and silently dropped
+    // for every job left on the default.
+    const codec = effectiveVideoCodec();
+    const supportsPreset = ["libx264", "libx265", "libsvtav1"].includes(codec);
+    fillSelect($("jm-encpreset"), ENCODER_PRESETS.map(x => ({ value: x, label: x })),
+        $("jm-encpreset").dataset.wanted || undefined, "Encoder default");
+    $("jm-encpreset").disabled = !supportsPreset;
+    $("jm-encpreset").parentElement.classList.toggle("d-none", !supportsPreset);
+
+    const usesCrf = ["libx264", "libx265", "libsvtav1", "libvpx-vp9", "libvpx"].includes(codec);
+    $("jm-crf-note").textContent = usesCrf
+        ? "Lower is better quality and a bigger file. 18–28 is the usual range."
+        : (codec ? "This codec uses a target bitrate rather than constant quality." : "");
+    // Switching to a codec with no constant-quality mode forces bitrate. Coming
+    // back to one that has it must restore constant quality — otherwise the
+    // control stays stuck on bitrate and the CRF the user typed is discarded
+    // on apply. Test the disabled flag before overwriting it.
+    if (!usesCrf) {
+        $("jm-quality-mode").value = "bitrate";
+    } else if ($("jm-quality-mode").disabled) {
+        $("jm-quality-mode").value = "crf";
+    }
+    $("jm-quality-mode").disabled = !usesCrf;
+
+    const byBitrate = $("jm-quality-mode").value === "bitrate";
+    $("jm-crf").classList.toggle("d-none", byBitrate);
+    $("jm-vbitrate").classList.toggle("d-none", !byBitrate);
+    $("jm-vbitrate-unit").classList.toggle("d-none", !byBitrate);
+
+    // Encode-only controls hide when the stream is copied or dropped.
+    const vEncoding = $("jm-vmode").value === "encode";
+    for (const el of document.querySelectorAll(".jm-vencode")) el.classList.toggle("d-none", !vEncoding);
+    const aEncoding = $("jm-amode").value === "encode";
+    for (const el of document.querySelectorAll(".jm-aencode")) el.classList.toggle("d-none", !aEncoding);
+
+    // Image quality range comes from the format's own descriptor.
+    const q = display.qualityDescriptor(target, DESCRIPTORS);
+    if (q) {
+        const slider = $("jm-iquality");
+        slider.min = q.min;
+        slider.max = q.max;
+        slider.step = 1;
+        const wanted = slider.dataset.wanted;
+        slider.value = wanted !== "" && wanted !== undefined ? wanted : q.default;
+        $("jm-iquality-value").textContent = slider.value;
+        $("jm-iquality-note").textContent = q.inverted
+            ? `${q.min} is best quality, ${q.max} is smallest file.`
+            : `${q.max} is best quality, ${q.min} is smallest file.`;
+    }
+
+    // The output folder only matters when a folder was chosen.
+    const needsDir = $("jm-routing").value !== "alongside";
+    $("jm-outdir").parentElement.parentElement.classList.toggle("d-none", !needsDir);
+
+    schedulePreview();
+}
+
+/**
+ * The codec that will actually be used: whatever is chosen, or the target
+ * format's own default when the select is left on "Format default".
+ */
+function effectiveVideoCodec() {
+    const chosen = $("jm-vcodec").value;
+    if (chosen) return chosen;
+    const target = $("jm-target").value;
+    return (DESCRIPTORS && DESCRIPTORS[target] && DESCRIPTORS[target].defaultVideoCodec) || null;
+}
+
+/** Read the form back into a partial job spec. */
+function readSettingsFromForm() {
+    const target = $("jm-target").value || null;
+    const sections = display.applicableSections(target, DESCRIPTORS);
+    const num = (id) => { const v = $(id).value; return v === "" ? null : Number(v); };
+    // Match syncModalControls: quality mode is only meaningful once the
+    // effective codec is known.
+    const usesCrf = ["libx264", "libx265", "libsvtav1", "libvpx-vp9", "libvpx"]
+        .includes(effectiveVideoCodec());
+    const byBitrate = !usesCrf || $("jm-quality-mode").value === "bitrate";
+
+    const settings = {
+        output: {
+            routing: $("jm-routing").value,
+            dir: $("jm-outdir").value || null,
+            nameTemplate: $("jm-name").value || null,
+            onConflict: $("jm-conflict").value,
+        },
+        video: sections.video ? {
+            mode: $("jm-vmode").value,
+            codec: $("jm-vcodec").value || null,
+            crf: byBitrate ? null : num("jm-crf"),
+            bitrate: byBitrate ? num("jm-vbitrate") : null,
+            preset: $("jm-encpreset").disabled ? null : ($("jm-encpreset").value || null),
+            width: num("jm-width"),
+            height: num("jm-height"),
+            fitMode: $("jm-fit").value,
+            fps: num("jm-fps"),
+        } : null,
+        audio: sections.audio ? {
+            mode: $("jm-amode").value,
+            codec: $("jm-acodec").value || null,
+            bitrate: num("jm-abitrate"),
+            sampleRate: num("jm-arate"),
+            channels: num("jm-achannels"),
+        } : null,
+        image: sections.image ? { quality: num("jm-iquality") } : null,
+        trim: sections.trim ? {
+            start: parseTime($("jm-trim-start").value),
+            end: parseTime($("jm-trim-end").value),
+        } : null,
+    };
+
+    // Defaults that were never touched are dropped, so the format keeps
+    // control of anything the user did not explicitly choose.
+    if (settings.output.routing === "alongside") settings.output.routing = null;
+    if (settings.output.onConflict === "ask") settings.output.onConflict = null;
+    if (settings.video && settings.video.mode === "encode") settings.video.mode = null;
+    if (settings.video && settings.video.fitMode === "contain") settings.video.fitMode = null;
+    if (settings.audio && settings.audio.mode === "encode") settings.audio.mode = null;
+
+    return display.compactSettings(settings);
+}
+
+/** Debounced live preview, built by the real argument builder in main. */
+function schedulePreview() {
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(async () => {
+        const target = $("jm-target").value;
+        const sample = jobs.find(j => modalScope.includes(j.id));
+        if (!target || !sample) {
+            $("jm-preview").textContent = "Choose a format to see the command.";
+            $("jm-errors").textContent = "";
+            return;
+        }
+        const result = await api.previewJob({
+            inputPath: sample.filePath,
+            targetExt: target,
+            ...readSettingsFromForm(),
+        });
+        $("jm-preview").textContent = `ffmpeg ${result.args.join(" ")}`;
+        $("jm-errors").textContent = result.ok ? "" : result.errors.join(" ");
+        $("jm-apply").disabled = !result.ok;
+    }, 180);
+}
+
+function applyJobModal() {
+    const target = $("jm-target").value || null;
+    const settings = readSettingsFromForm();
+
+    for (const job of jobs) {
+        if (!modalScope.includes(job.id)) continue;
+        if (job.status === "running") continue;
+        job.settings = settings;
+        updateCard(job);
+    }
+    if (target) setTarget(modalScope, target);
+
+    jobModal.hide();
+    const n = modalScope.length;
+    toast(`Settings applied to ${display.countOf(n, "file")}.`, "success");
+}
+
+// -- Presets -----------------------------------------------------------------
+
+async function refreshPresets() {
+    presets = await api.listPresets();
+    fillSelect($("jm-preset"), presets.map(x => ({ value: x.id, label: x.name })), "", "No preset");
+    $("jm-preset-delete").disabled = true;
+}
+
+async function savePresetFromForm() {
+    const name = String(window.prompt("Preset name") ?? "").trim();
+    if (!name) return;
+    const preset = {
+        id: `p${Date.now().toString(36)}`,
+        name,
+        targetExt: $("jm-target").value || null,
+        settings: readSettingsFromForm(),
+    };
+    presets = await api.savePreset(preset);
+    fillSelect($("jm-preset"), presets.map(x => ({ value: x.id, label: x.name })), preset.id, "No preset");
+    $("jm-preset-delete").disabled = false;
+    toast(`Preset "${name}" saved.`, "success");
 }
 
 // -- Toasts ------------------------------------------------------------------
@@ -579,6 +932,7 @@ async function startConversion() {
             id: job.id,
             inputPath: job.filePath,
             targetExt: job.targetExt,
+            ...(job.settings ?? {}),
         });
         applyResult(job, result);
         return result;
@@ -626,6 +980,7 @@ function announce(results) {
 document.addEventListener("DOMContentLoaded", async () => {
     FORMATS = await api.getFormats();
     TARGETS = FORMATS.targetsByExt;
+    DESCRIPTORS = FORMATS.descriptors;
 
     // Drag and drop. The document-level guard stops a stray drop navigating the
     // window to the file and replacing the app with it.
@@ -690,6 +1045,48 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
     $("bulk-remove").addEventListener("click", () => removeJobs([...selection]));
     $("bulk-deselect").addEventListener("click", clearSelection);
+    // The corner button configures the selection, or everything when nothing
+    // is selected — the same scope rule the bulk bar uses.
+    $("btn-new-job").addEventListener("click", () => {
+        openJobModal(bulkScope().map(j => j.id));
+    });
+
+    $("jm-target").addEventListener("change", syncModalControls);
+    for (const id of ["jm-vmode", "jm-amode", "jm-vcodec", "jm-acodec", "jm-quality-mode", "jm-routing"]) {
+        $(id).addEventListener("change", syncModalControls);
+    }
+    for (const id of ["jm-crf", "jm-vbitrate", "jm-width", "jm-height", "jm-fit", "jm-fps",
+                      "jm-abitrate", "jm-arate", "jm-achannels", "jm-encpreset",
+                      "jm-trim-start", "jm-trim-end", "jm-name", "jm-conflict"]) {
+        $(id).addEventListener("input", schedulePreview);
+        $(id).addEventListener("change", schedulePreview);
+    }
+    $("jm-iquality").addEventListener("input", (e) => {
+        $("jm-iquality-value").textContent = e.target.value;
+        schedulePreview();
+    });
+    $("jm-outdir-browse").addEventListener("click", async () => {
+        const dir = await api.chooseOutput();
+        if (dir) { $("jm-outdir").value = dir; schedulePreview(); }
+    });
+    $("jm-apply").addEventListener("click", applyJobModal);
+    $("jm-preset-save").addEventListener("click", savePresetFromForm);
+    $("jm-preset-delete").addEventListener("click", async () => {
+        const id = $("jm-preset").value;
+        if (!id) return;
+        presets = await api.deletePreset(id);
+        await refreshPresets();
+        toast("Preset deleted.", "info");
+    });
+    $("jm-preset").addEventListener("change", (e) => {
+        const preset = presets.find(x => x.id === e.target.value);
+        $("jm-preset-delete").disabled = !preset;
+        if (!preset) return;
+        if (preset.targetExt) $("jm-target").value = preset.targetExt;
+        loadSettingsIntoForm(preset.settings);
+        syncModalControls();
+    });
+
     $("bulk-select-all").addEventListener("change", (e) => {
         if (e.target.checked) selectAll();
         else clearSelection();

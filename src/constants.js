@@ -18,6 +18,7 @@ const IPC = {
     // no way to tell which file it belonged to.
     JOB_RUN:          "job:run",          // invoke(job)   -> result
     JOB_CANCEL:       "job:cancel",       // invoke(jobId) -> boolean
+    JOB_PREVIEW:      "job:preview",      // invoke(spec)  -> ffmpeg argv preview
     JOB_PROGRESS:     "job:progress",     // push { jobId, percent, speed, fps, eta }
     JOB_STATUS:       "job:status",       // push { jobId, status, outputPath?, error? }
     QUEUE_CANCEL_ALL: "queue:cancel-all",
