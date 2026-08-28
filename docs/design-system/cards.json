@@ -65,6 +65,11 @@
     "group": "Components"
   },
   {
+    "file": "components/mode-tiles.html",
+    "title": "Mode Tiles",
+    "group": "Components"
+  },
+  {
     "file": "components/inputs.html",
     "title": "Inputs & Form Rows",
     "group": "Components"

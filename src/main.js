@@ -362,6 +362,27 @@ function runJobToCompletion(job) {
 
 // ── IPC ──────────────────────────────────────────────────────────────────────
 
+/**
+ * Fold a saved pipeline into a job. Returns { job, error }.
+ *
+ * A missing or invalid graph is an error rather than a silent fallback: the
+ * file would otherwise convert with whatever settings happened to be left on
+ * it, which is not what was asked for.
+ */
+function resolvePipeline(job, pipelineId) {
+    const graph = (store.get("pipelines") ?? []).find(p => p.id === pipelineId);
+    if (!graph) return { job: null, error: "That pipeline no longer exists." };
+
+    const check = pipeline.validate(graph);
+    if (!check.valid) return { job: null, error: `Pipeline is not valid: ${check.errors[0]}` };
+
+    try {
+        return { job: pipeline.applyToJob(job, graph), error: null };
+    } catch (err) {
+        return { job: null, error: err.message };
+    }
+}
+
 ipcMain.handle(IPC.JOB_RUN, async (_event, spec) => {
     const settings = store.get("settings") ?? SETTINGS_DEFAULTS;
 
@@ -390,7 +411,17 @@ ipcMain.handle(IPC.JOB_RUN, async (_event, spec) => {
         return { jobId: job.id, status: STATUS.ERROR, error: validation.errors[0] };
     }
 
-    const result = await runJobToCompletion(job);
+    let runnable = job;
+    if (spec.pipelineId) {
+        const resolved = resolvePipeline(job, spec.pipelineId);
+        if (resolved.error) {
+            log(LOG.ERROR, `Pipeline failed for ${job.inputPath}: ${resolved.error}`);
+            return { jobId: job.id, status: STATUS.ERROR, error: resolved.error };
+        }
+        runnable = resolved.job;
+    }
+
+    const result = await runJobToCompletion(runnable);
 
     // Failures are reported on the card and in a toast, not as a blocking
     // dialog. v1 opened one modal per failed file mid-queue, which with a
@@ -467,10 +498,19 @@ ipcMain.handle(IPC.APP_GET_FORMATS, () => ({
 // argument builder, so what the dialog shows is what will actually be executed.
 ipcMain.handle(IPC.JOB_PREVIEW, (_event, spec) => {
     try {
-        const job = createJob(spec);
+        let job = createJob(spec);
         const validation = validateJob(job);
-        const args = buildArgs(job, { outputPath: "<output>", progress: false });
-        return { ok: validation.valid, errors: validation.errors, args };
+        if (!validation.valid) return { ok: false, errors: validation.errors, args: [] };
+
+        if (spec.pipelineId) {
+            const resolved = resolvePipeline(job, spec.pipelineId);
+            if (resolved.error) return { ok: false, errors: [resolved.error], args: [] };
+            job = resolved.job;
+        } else if (spec.pipelineId === null && spec.processing === "pipeline") {
+            return { ok: false, errors: ["Choose a pipeline."], args: [] };
+        }
+
+        return { ok: true, errors: [], args: buildArgs(job, { outputPath: "<output>", progress: false }) };
     } catch (err) {
         return { ok: false, errors: [err.message], args: [] };
     }

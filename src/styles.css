@@ -565,6 +565,85 @@ body.popup-window span:hover {
     white-space: nowrap;
 }
 
+/* ── Mode tiles ──────────────────────────────────────────────────────────── */
+/*
+   A mutually exclusive chooser built from tiles rather than radio inputs, which
+   is the house pattern. Idle border uses the theme's own border colour rather
+   than a fixed white alpha, so it survives light mode. The selected state pairs
+   an accent border with a 1px shadow of the same colour, which reads as a
+   thicker border without changing the box size and shifting the layout.
+*/
+
+.mode-tiles {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.mode-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    height: 100%;
+    padding: 0.75rem 0.5rem;
+    border: 2px solid var(--bs-border-color);
+    border-radius: var(--radius-control);
+    background-color: var(--bs-body-bg);
+    cursor: pointer;
+    transition: border-color var(--dur-state) var(--ease-state),
+                box-shadow var(--dur-state) var(--ease-state),
+                background-color var(--dur-state) var(--ease-state);
+}
+
+.mode-tile:hover {
+    border-color: rgba(var(--accent-rgb), var(--wash-hover-border));
+    background-color: rgba(var(--accent-rgb), var(--wash-hover-fill));
+}
+
+.mode-tile.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+    background-color: rgba(var(--accent-rgb), var(--wash-hover-fill));
+}
+
+.mode-tile:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(var(--accent-rgb), 0.35);
+}
+
+.mode-tile.selected:focus-visible {
+    box-shadow: 0 0 0 1px var(--accent), 0 0 0 0.2rem rgba(var(--accent-rgb), 0.35);
+}
+
+/* Locked until there is something to choose — fail closed, then unlock. */
+.mode-tile.mode-tile-locked {
+    pointer-events: none;
+    opacity: var(--opacity-disabled);
+}
+
+.mode-tile-icon {
+    font-size: 2rem;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+    color: var(--bs-secondary-color);
+    transition: color var(--dur-state) var(--ease-state);
+}
+
+.mode-tile.selected .mode-tile-icon { color: var(--accent); }
+
+.mode-tile-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.mode-tile-desc {
+    font-size: 0.7rem;
+    color: var(--bs-secondary-color);
+}
+
 /* ── Trim slider ─────────────────────────────────────────────────────────── */
 
 .trim-slider {

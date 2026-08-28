@@ -370,7 +370,8 @@ test("pipeline: a linear graph compiles to filter_complex and maps", () => {
     const compiled = pipeline.compile(linearPipeline());
     assert.match(compiled.filterComplex, /^\[0:v\]scale=640:360:force_original_aspect_ratio=decrease\[v\d\]$/);
     assert.equal(compiled.maps.length, 2);
-    assert.ok(compiled.maps.some(m => m === "[0:a]"), "audio passes straight through");
+    // Unbracketed: a passthrough input stream is not a filter label.
+    assert.ok(compiled.maps.some(m => m === "0:a"), "audio passes straight through");
 });
 
 test("pipeline: cycles are rejected", () => {
@@ -472,7 +473,34 @@ test("pipeline: a no-op node forwards its input instead of emitting an empty lin
     });
     const compiled = pipeline.compile(graph);
     assert.equal(compiled.filterComplex, null);
-    assert.deepEqual(compiled.maps, ["[0:v]"]);
+    assert.deepEqual(compiled.maps, ["0:v"]);
+});
+
+test("pipeline: an unfiltered stream is mapped WITHOUT brackets", () => {
+    // Brackets denote a filter_complex output label. Writing an input stream as
+    // "[0:a]" makes ffmpeg hunt for a label that does not exist and refuse the
+    // output with "Error opening output files: Invalid argument". Only labels
+    // produced by the graph get brackets.
+    const compiled = pipeline.compile(linearPipeline());
+
+    const audio = compiled.maps.find(m => m.includes("0:a"));
+    assert.equal(audio, "0:a", "a passthrough input stream takes no brackets");
+
+    const video = compiled.maps.find(m => m.startsWith("["));
+    assert.match(video, /^\[v\d+\]$/, "a filtered stream keeps its label brackets");
+});
+
+test("pipeline: a fully passthrough graph maps both streams raw", () => {
+    const graph = pipeline.createPipeline({
+        nodes: [{ id: "in", type: "input" }, { id: "out", type: "output" }],
+        edges: [
+            { from: "in", fromPort: "video", to: "out", toPort: "video" },
+            { from: "in", fromPort: "audio", to: "out", toPort: "audio" },
+        ],
+    });
+    const compiled = pipeline.compile(graph);
+    assert.equal(compiled.filterComplex, null);
+    assert.deepEqual(compiled.maps, ["0:v", "0:a"]);
 });
 
 test("pipeline: applying to a job produces runnable ffmpeg args", () => {

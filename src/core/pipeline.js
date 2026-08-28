@@ -293,9 +293,13 @@ function compile(pipeline) {
 
         if (node.type === "input") {
             // The single source file is always ffmpeg input 0.
+            // `raw` marks a real input stream rather than a filter output.
+            // Inside filter_complex both are written [label]; as a -map target
+            // only a filter output takes brackets, so the two must be told
+            // apart or ffmpeg looks for a label that does not exist.
             outputLabels.set(nodeId, {
-                video: { label: "0:v", type: PORT.VIDEO },
-                audio: { label: "0:a", type: PORT.AUDIO },
+                video: { label: "0:v", type: PORT.VIDEO, raw: true },
+                audio: { label: "0:a", type: PORT.AUDIO, raw: true },
             });
             continue;
         }
@@ -360,7 +364,7 @@ function compile(pipeline) {
         const edge = incomingFor(outputNode.id, port.name)[0];
         if (!edge) continue;
         const upstream = outputLabels.get(edge.from)?.[edge.fromPort];
-        if (upstream) maps.push(`[${upstream.label}]`);
+        if (upstream) maps.push(upstream.raw ? upstream.label : `[${upstream.label}]`);
     }
 
     const encodeNode = pipeline.nodes.find(n => n.type === "encode");

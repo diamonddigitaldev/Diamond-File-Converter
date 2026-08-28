@@ -7,11 +7,21 @@ the real filesystem, real dialogs and real Windows integration.
 A new section is appended for each version or fix. Do not rewrite earlier
 sections — the history is useful.
 
+> ### Nothing here has been run yet
+>
+> **No manual testing has been carried out on any section of this document.** It
+> is deliberately on hold until the team has approved the UX direction — there is
+> no value in working through a long checklist against an interface that may
+> still change shape.
+>
+> Every section carries its own status line. A written checklist is not a passed
+> one; do not describe any build as tested on the strength of this file existing.
+
 **Before starting:**
 
 ```
 npm install
-npm test          # expect 126 passing, 0 failing
+npm test          # expect 138 passing, 0 failing
 npm start
 ```
 
@@ -28,6 +38,10 @@ file (rename a text file to `.mp4`).
 ---
 
 ## 2.0.0-alpha.1 — card grid, secure bridge, core architecture
+
+> **Status: not started.** Written 2026-08-28, awaiting UX sign-off before the
+> pass begins. Nothing below has been executed.
+
 
 First release of the rebuilt interface. The whole UI changed, so this pass is
 broad rather than targeted.
@@ -226,6 +240,10 @@ npm run build
 
 ## 2.0.0-alpha.1 — QA fixes
 
+> **Status: not started.** Written 2026-08-28, awaiting UX sign-off before the
+> pass begins. Nothing below has been executed.
+
+
 Two defects found running the checklist above against the packaged build, plus
 the updater behaviour for pre-releases. **Test these against a packaged build,
 not `npm start`** — the Escape defect only appeared once packaged.
@@ -271,6 +289,10 @@ The app currently ships as `2.0.0-alpha.1` while the latest stable is `1.0.0`.
 ---
 
 ## 2.0.0-alpha.2 — Advanced options / Bulk edit
+
+> **Status: not started.** Written 2026-08-28, awaiting UX sign-off before the
+> pass begins. Nothing below has been executed.
+
 
 Per-file encoding settings. The engine already supported all of this; this pass
 exposes it. **The plain path must stay two clicks** — check that first.
@@ -381,3 +403,76 @@ no scrollbar — the text just disappears. Check at a few window sizes.
       source.
 - [ ] A name template of `{name}-web` produces `something-web.mp4`.
 - [ ] **If it already exists** set to Overwrite converts without prompting.
+
+---
+
+## 2.0.0-alpha.2 — Processing mode (Manual settings / Pipeline)
+
+> **Status: not started.** Written 2026-08-28, awaiting UX sign-off before the
+> pass begins. Nothing below has been executed.
+
+A card is configured **either** by hand **or** by a saved pipeline, never both.
+The chooser is two tiles at the top of the advanced options dialog.
+
+### The tiles
+
+- [ ] Open advanced options on a card. **Manual settings** is selected by
+      default and its icon is accent-coloured.
+- [ ] The tiles sit side by side, equal width, and do not wrap.
+- [ ] Hover an unselected tile: the border tints and the background washes,
+      matching the card grid.
+- [ ] The selected tile has an accent border that looks slightly thicker than
+      the unselected one, and **selecting a tile must not shift the layout** —
+      nothing beside it should move by a pixel.
+
+### Keyboard
+
+- [ ] Tab into the dialog: an unlocked tile can take focus and shows a focus
+      ring.
+- [ ] With a tile focused, press **Enter** — it becomes the active mode.
+- [ ] Press **Space** on the other tile — same.
+- [ ] A locked tile is **skipped** when tabbing.
+
+### One or the other
+
+- [ ] Choosing **Pipeline** hides Video, Audio, Image and Trim entirely and
+      shows the pipeline picker.
+- [ ] Choosing **Manual settings** reverses it.
+- [ ] Click the **already active** tile — nothing happens. There is no state
+      where neither is selected.
+
+### Locked until there is something to pick
+
+With no pipelines saved (a clean profile):
+
+- [ ] The **Pipeline** tile is greyed out and cannot be clicked.
+- [ ] Hovering it explains why: *"No pipelines saved yet"*.
+- [ ] The pipeline section says you have not built any pipelines yet.
+
+### Lossless switching
+
+- [ ] Set a CRF and a resize in Manual settings, Apply.
+- [ ] Reopen, switch to **Pipeline**, pick one, Apply. The card now names the
+      pipeline **instead of** the manual settings.
+- [ ] Reopen and switch back to **Manual settings** — your CRF and resize are
+      **still there**. Switching modes must never lose work.
+
+### A pipeline that goes missing
+
+- [ ] Assign a pipeline to a card, then delete that pipeline.
+- [ ] The card reads **"Pipeline missing"** in amber, the same treatment as a
+      card with no format chosen.
+- [ ] **Convert is disabled** while any card is in that state.
+- [ ] The card does **not** quietly fall back to the manual settings it still
+      holds — converting with settings the user did not ask for would be worse
+      than refusing.
+
+### Converting through a pipeline
+
+- [ ] A card in pipeline mode converts, and the output reflects what the
+      pipeline does rather than the dialog's manual fields.
+- [ ] The command preview in the dialog shows the compiled pipeline, including
+      a `-filter_complex`.
+- [ ] Check the preview's `-map` arguments: a **filtered** stream appears as
+      `[v0]` with brackets, an **untouched** stream as `0:a` **without** them.
+      Brackets on an unfiltered stream make ffmpeg fail to open the output.

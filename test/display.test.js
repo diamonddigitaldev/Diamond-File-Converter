@@ -456,3 +456,94 @@ test("dialog: a compacted spec keeps zero, which is a real value", () => {
     assert.deepEqual(d.compactSettings({ video: { crf: 0 } }), { video: { crf: 0 } });
     assert.deepEqual(d.compactSettings({ trim: { start: 0 } }), { trim: { start: 0 } });
 });
+
+// ---------------------------------------------------------------------------
+// Processing mode — manual settings or a pipeline, never both
+// ---------------------------------------------------------------------------
+
+const PIPES = [{ id: "p1", name: "Web 1080p" }, { id: "p2", name: "Audio only" }];
+
+test("processing: a manual card summarises its settings", () => {
+    assert.equal(
+        d.describeProcessing({ processing: "manual", settings: { video: { crf: 20 } } }, PIPES),
+        "CRF 20");
+    assert.equal(d.describeProcessing({ processing: "manual", settings: {} }, PIPES), null);
+});
+
+test("processing: a pipeline card names its pipeline", () => {
+    assert.equal(
+        d.describeProcessing({ processing: "pipeline", pipelineId: "p2" }, PIPES),
+        "Pipeline: Audio only");
+});
+
+test("processing: a pipeline card does NOT fall back to its dormant settings", () => {
+    // The settings are retained so switching back is lossless, but they must
+    // never be presented as if they were what will run.
+    const job = { processing: "pipeline", pipelineId: "p1", settings: { video: { crf: 20 } } };
+    assert.equal(d.describeProcessing(job, PIPES), "Pipeline: Web 1080p");
+});
+
+test("processing: a deleted pipeline is not silently replaced by settings", () => {
+    const job = { processing: "pipeline", pipelineId: "gone", settings: { video: { crf: 20 } } };
+    assert.equal(d.describeProcessing(job, PIPES), null, "must not show the dormant CRF");
+    assert.equal(d.hasUsableProcessing(job, PIPES), false);
+});
+
+test("processing: manual cards are always runnable", () => {
+    assert.equal(d.hasUsableProcessing({ processing: "manual" }, PIPES), true);
+    assert.equal(d.hasUsableProcessing({ processing: "manual" }, []), true);
+    assert.equal(d.hasUsableProcessing({}, []), true, "an unset mode counts as manual");
+});
+
+test("processing: a missing pipeline blocks the card the same way an unset format does", () => {
+    const base = { status: STATUS.PENDING, targetExt: "mp4" };
+
+    const missing = d.describeStatus({ ...base, processing: "pipeline", pipelineId: "gone" }, PIPES);
+    assert.equal(missing.text, "Pipeline missing");
+    assert.equal(missing.tone, "warning", "same amber as 'Choose a format'");
+
+    const unchosen = d.describeStatus({ ...base, processing: "pipeline", pipelineId: null }, PIPES);
+    assert.equal(unchosen.text, "Choose a pipeline");
+    assert.equal(unchosen.tone, "warning");
+
+    const ok = d.describeStatus({ ...base, processing: "pipeline", pipelineId: "p1" }, PIPES);
+    assert.equal(ok.text, "Ready");
+});
+
+test("processing: no format still outranks any pipeline complaint", () => {
+    const s = d.describeStatus({ status: STATUS.PENDING, targetExt: null, processing: "pipeline", pipelineId: "gone" }, PIPES);
+    assert.equal(s.text, "Choose a format");
+});
+
+test("processing: describeStatus works without a pipeline list", () => {
+    // Callers that have no list should not crash; a pipeline card simply
+    // reads as missing, which is the safe direction.
+    assert.equal(d.describeStatus({ status: STATUS.PENDING, targetExt: "mp4", processing: "manual" }).text, "Ready");
+    assert.equal(
+        d.describeStatus({ status: STATUS.PENDING, targetExt: "mp4", processing: "pipeline", pipelineId: "p1" }).text,
+        "Pipeline missing");
+});
+
+test("processing: the card field is not named 'mode'", () => {
+    // core/job.js already uses job.mode for the conversion mode, and the card's
+    // fields are spread into the run spec — a clash would overwrite it silently.
+    const renderer = fs.readFileSync(path.join(__dirname, "..", "src", "renderer.js"), "utf8");
+    assert.match(renderer, /processing:\s*"manual"/, "the card must carry `processing`");
+    assert.ok(!/^\s*mode:\s*"(manual|pipeline)"/m.test(renderer),
+        "the card must not carry a `mode` field holding manual/pipeline");
+});
+
+test("processing: the tiles are keyboard operable, unlike the pattern they copy", () => {
+    const html = fs.readFileSync(path.join(__dirname, "..", "src", "index.html"), "utf8");
+    const tiles = html.match(/<div[^>]*data-mode="[^"]+"[^>]*>/g) ?? [];
+    assert.equal(tiles.length, 2, "expected exactly two mode tiles");
+    for (const tile of tiles) {
+        assert.match(tile, /role="button"/);
+        assert.match(tile, /tabindex="/);
+        assert.match(tile, /aria-pressed="/);
+    }
+
+    const renderer = fs.readFileSync(path.join(__dirname, "..", "src", "renderer.js"), "utf8");
+    assert.match(renderer, /e\.key === "Enter"/, "Enter must activate a tile");
+    assert.match(renderer, /e\.key === " "/, "Space must activate a tile");
+});

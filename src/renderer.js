@@ -58,7 +58,9 @@ function addFiles(filePaths) {
             ext,
             kind: entry.type,
             targetExt: null,
-            settings: {},
+            processing: "manual",   // "manual" | "pipeline"
+            pipelineId: null,
+            settings: {},           // kept while in pipeline mode, so switching back is lossless
             meta: null,
             status: "pending",
             progress: 0,
@@ -383,14 +385,14 @@ function paintCard(card, job) {
 
     // Show what has been configured, so a customised job is visibly different.
     const settingsLine = card.querySelector(".card-settings");
-    const summary = display.summariseSettings(job.settings);
+    const summary = display.describeProcessing(job, pipelines);
     settingsLine.classList.toggle("d-none", !summary);
     if (summary) {
         settingsLine.textContent = summary;
         settingsLine.title = summary;
     }
 
-    const { text, tone } = display.describeStatus(job);
+    const { text, tone } = display.describeStatus(job, pipelines);
     const status = card.querySelector(".card-status");
     status.className = `card-status tone-${tone}`;
     const statusText = status.querySelector(".status-text");
@@ -503,7 +505,8 @@ function renderSelection() {
 
 function renderActionBar() {
     const total = jobs.length;
-    const ready = jobs.filter(j => j.targetExt).length;
+    // A pipeline-mode card whose pipeline no longer exists cannot run.
+    const ready = jobs.filter(j => j.targetExt && display.hasUsableProcessing(j, pipelines)).length;
     const withoutTarget = total - ready;
     const running = jobs.filter(j => j.status === "running").length;
     const settled = jobs.filter(j => j.status !== "pending" && j.status !== "running").length;
@@ -558,9 +561,84 @@ function renderActionBar() {
 let jobModal = null;
 let modalScope = [];        // ids the dialog is editing
 let previewTimer = null;
+let modalProcessing = "manual";
+let pipelines = [];
 
 const ENCODER_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast",
     "medium", "slow", "slower", "veryslow"];
+
+// -- Processing mode ---------------------------------------------------------
+
+/** Paint the tiles from modalProcessing. One source of truth, like Craftbox. */
+function renderModeTiles() {
+    for (const tile of document.querySelectorAll("#jm-mode .mode-tile")) {
+        const active = tile.dataset.mode === modalProcessing;
+        tile.classList.toggle("selected", active);
+        tile.setAttribute("aria-pressed", String(active));
+        // A locked tile stays out of the tab order entirely.
+        const locked = tile.classList.contains("mode-tile-locked");
+        tile.setAttribute("tabindex", locked ? "-1" : "0");
+    }
+}
+
+function setProcessingMode(next) {
+    // Strictly one or the other: re-clicking the active tile does nothing.
+    // (Craftbox's source tiles deselect back to a third state; there is no
+    // third state here.)
+    if (next === modalProcessing) return;
+
+    // A locked tile is not selectable. pointer-events:none stops a mouse but
+    // not a keyboard or a programmatic activation, so the rule lives here as
+    // well as in the CSS rather than being purely presentational.
+    const tile = document.querySelector(`#jm-mode .mode-tile[data-mode="${next}"]`);
+    if (tile && tile.classList.contains("mode-tile-locked")) return;
+
+    modalProcessing = next;
+    syncModalControls();
+}
+
+/**
+ * Load saved pipelines. The Pipeline tile ships locked and is unlocked only
+ * once there is something to pick — fail closed, then open.
+ */
+async function refreshPipelines() {
+    pipelines = await api.listPipelines();
+    const select = $("jm-pipeline");
+    fillSelect(select, pipelines.map(x => ({ value: x.id, label: x.name })),
+        select.dataset.wanted || undefined, "Choose a pipeline\u2026");
+
+    const none = pipelines.length === 0;
+    $("jm-pipeline-empty").classList.toggle("d-none", !none);
+    select.classList.toggle("d-none", none);
+
+    const tile = $("jm-mode-pipeline");
+    tile.classList.toggle("mode-tile-locked", none);
+    if (none) {
+        tile.setAttribute("title", "No pipelines saved yet");
+        // Nothing to select, so a card cannot sit in pipeline mode.
+        if (modalProcessing === "pipeline") modalProcessing = "manual";
+    } else {
+        tile.removeAttribute("title");
+    }
+    renderModeTiles();
+}
+
+function initModeTiles() {
+    for (const tile of document.querySelectorAll("#jm-mode .mode-tile")) {
+        tile.addEventListener("click", () => setProcessingMode(tile.dataset.mode));
+        tile.addEventListener("keydown", (e) => {
+            // Craftbox's tiles are mouse-only; these are not.
+            if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+                e.preventDefault();
+                setProcessingMode(tile.dataset.mode);
+            }
+        });
+    }
+    $("jm-pipeline").addEventListener("change", () => {
+        $("jm-pipeline").dataset.wanted = $("jm-pipeline").value;
+        schedulePreview();
+    });
+}
 
 // -- Trim slider -------------------------------------------------------------
 //
@@ -739,6 +817,12 @@ function openJobModal(ids) {
     const encoded = scoped.map(j => JSON.stringify(j.settings ?? {}));
     const uniform = encoded.every(x => x === encoded[0]);
     loadSettingsIntoForm(uniform ? (scoped[0].settings ?? {}) : {});
+
+    const modes = [...new Set(scoped.map(j => j.processing ?? "manual"))];
+    modalProcessing = modes.length === 1 ? modes[0] : "manual";
+    const pipeIds = [...new Set(scoped.map(j => j.pipelineId ?? ""))];
+    $("jm-pipeline").dataset.wanted = pipeIds.length === 1 ? pipeIds[0] : "";
+    refreshPipelines();
     $("jm-scope").textContent += uniform ? "" : " · these files are currently configured differently";
 
     syncModalControls();
@@ -786,10 +870,17 @@ function syncModalControls() {
     const target = $("jm-target").value || null;
     const sections = display.applicableSections(target, DESCRIPTORS);
 
-    $("jm-video-section").classList.toggle("d-none", !sections.video);
-    $("jm-audio-section").classList.toggle("d-none", !sections.audio);
-    $("jm-image-section").classList.toggle("d-none", !sections.image);
-    $("jm-trim-section").classList.toggle("d-none", !sections.trim);
+    // A file is configured by hand or handed to a pipeline, never both, so the
+    // encoding sections and the pipeline picker are mutually exclusive. Within
+    // manual mode the per-target rules still decide which sections apply.
+    const manual = modalProcessing === "manual";
+    renderModeTiles();
+
+    $("jm-pipeline-section").classList.toggle("d-none", manual);
+    $("jm-video-section").classList.toggle("d-none", manual ? !sections.video : true);
+    $("jm-audio-section").classList.toggle("d-none", manual ? !sections.audio : true);
+    $("jm-image-section").classList.toggle("d-none", manual ? !sections.image : true);
+    $("jm-trim-section").classList.toggle("d-none", manual ? !sections.trim : true);
 
     // Stream modes: copy is only offered where the container supports remuxing.
     const canCopy = display.canStreamCopy(target, DESCRIPTORS);
@@ -857,7 +948,7 @@ function syncModalControls() {
             : `${q.max} is best quality, ${q.min} is smallest file.`;
     }
 
-    if (sections.trim) setupTrim();
+    if (manual && sections.trim) setupTrim();
 
     // The output folder only matters when a folder was chosen.
     const needsDir = $("jm-routing").value !== "alongside";
@@ -939,11 +1030,9 @@ function schedulePreview() {
             $("jm-errors").textContent = "";
             return;
         }
-        const result = await api.previewJob({
-            inputPath: sample.filePath,
-            targetExt: target,
-            ...readSettingsFromForm(),
-        });
+        const result = await api.previewJob(modalProcessing === "pipeline"
+            ? { inputPath: sample.filePath, targetExt: target, pipelineId: $("jm-pipeline").value || null }
+            : { inputPath: sample.filePath, targetExt: target, ...readSettingsFromForm() });
         $("jm-preview").textContent = `ffmpeg ${result.args.join(" ")}`;
         $("jm-errors").textContent = result.ok ? "" : result.errors.join(" ");
         $("jm-apply").disabled = !result.ok;
@@ -957,7 +1046,15 @@ function applyJobModal() {
     for (const job of jobs) {
         if (!modalScope.includes(job.id)) continue;
         if (job.status === "running") continue;
-        job.settings = settings;
+
+        job.processing = modalProcessing;
+        if (modalProcessing === "pipeline") {
+            job.pipelineId = $("jm-pipeline").value || null;
+            // Manual settings are deliberately NOT cleared — switching back
+            // restores them rather than losing the work.
+        } else {
+            job.settings = settings;
+        }
         updateCard(job);
     }
     if (target) setTarget(modalScope, target);
@@ -1024,12 +1121,9 @@ async function startConversion() {
     // Every job is submitted at once; the runner's pool decides how many
     // actually run in parallel. v1 awaited them one at a time.
     const results = await Promise.all(runnable.map(async (job) => {
-        const result = await api.runJob({
-            id: job.id,
-            inputPath: job.filePath,
-            targetExt: job.targetExt,
-            ...(job.settings ?? {}),
-        });
+        const result = await api.runJob(job.processing === "pipeline"
+            ? { id: job.id, inputPath: job.filePath, targetExt: job.targetExt, pipelineId: job.pipelineId }
+            : { id: job.id, inputPath: job.filePath, targetExt: job.targetExt, ...(job.settings ?? {}) });
         applyResult(job, result);
         return result;
     }));
@@ -1077,6 +1171,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     FORMATS = await api.getFormats();
     TARGETS = FORMATS.targetsByExt;
     DESCRIPTORS = FORMATS.descriptors;
+    pipelines = await api.listPipelines();
 
     // Drag and drop. The document-level guard stops a stray drop navigating the
     // window to the file and replacing the app with it.
@@ -1152,6 +1247,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     for (const id of ["jm-vmode", "jm-amode", "jm-vcodec", "jm-acodec", "jm-quality-mode", "jm-routing"]) {
         $(id).addEventListener("change", syncModalControls);
     }
+    initModeTiles();
     initTrimSlider();
     for (const id of ["jm-crf", "jm-vbitrate", "jm-width", "jm-height", "jm-fit", "jm-fps",
                       "jm-abitrate", "jm-arate", "jm-achannels", "jm-encpreset",

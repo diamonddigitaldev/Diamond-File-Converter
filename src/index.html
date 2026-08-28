@@ -104,6 +104,26 @@
           <div class="modal-body pt-0">
             <p id="jm-scope" class="text-body-secondary small mb-3"></p>
 
+            <!-- Processing mode. A file is configured by hand OR run through a
+                 saved pipeline, never both. Tiles rather than radios, matching
+                 the house pattern, but keyboard-operable: role, tabindex,
+                 aria-pressed and Enter/Space, which the original lacks. -->
+            <div class="mode-tiles" id="jm-mode" role="group" aria-label="Processing mode">
+              <div class="mode-tile" id="jm-mode-manual" data-mode="manual"
+                   role="button" tabindex="0" aria-pressed="true">
+                <span class="material-icons-round mode-tile-icon">tune</span>
+                <div class="mode-tile-title">Manual settings</div>
+                <div class="mode-tile-desc">Set the format, quality and trim yourself</div>
+              </div>
+              <div class="mode-tile mode-tile-locked" id="jm-mode-pipeline" data-mode="pipeline"
+                   role="button" tabindex="-1" aria-pressed="false"
+                   title="No pipelines saved yet">
+                <span class="material-icons-round mode-tile-icon">account_tree</span>
+                <div class="mode-tile-title">Pipeline</div>
+                <div class="mode-tile-desc">Apply a saved processing pipeline</div>
+              </div>
+            </div>
+
             <div class="jm-row">
               <label class="form-label" for="jm-target">Convert to</label>
               <select id="jm-target" class="form-select form-select-sm"></select>
@@ -140,6 +160,18 @@
                   <option value="overwrite">Overwrite</option>
                   <option value="skip">Skip the file</option>
                 </select>
+              </div>
+            </div>
+
+            <div id="jm-pipeline-section" class="d-none">
+              <h6 class="jm-section">Pipeline</h6>
+              <div class="jm-row">
+                <label class="form-label" for="jm-pipeline">Use pipeline</label>
+                <select id="jm-pipeline" class="form-select form-select-sm"></select>
+                <div id="jm-pipeline-note" class="form-text"></div>
+              </div>
+              <div id="jm-pipeline-empty" class="form-text d-none">
+                You have not built any pipelines yet.
               </div>
             </div>
 

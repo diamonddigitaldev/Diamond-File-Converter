@@ -590,6 +590,62 @@ card("components/modal.html", "Modal Dialog",
 <p class="note"><b>Wrap it in a promise.</b> Dropgate's helper resolves <code>true</code> on confirm and <code>false</code> on <code>hidden.bs.modal</code>, removing both listeners in a shared cleanup, so the dialog reads as a plain <code>await</code> at the call site. This is the pattern the 2.0 "New Job" modal should use.</p>
 `);
 
+card("components/mode-tiles.html", "Mode Tiles",
+    "A mutually exclusive chooser built from tiles rather than radio inputs. The house has no radio groups \u2014 this is the pattern used wherever one of several modes must be picked.",
+    "Components", `
+<style>
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;max-width:460px}
+.tile{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+  height:100%;padding:.75rem .5rem;border:2px solid var(--border);border-radius:var(--radius-control);
+  background:var(--bg);cursor:pointer;
+  transition:border-color var(--dur-state) var(--ease-state),box-shadow var(--dur-state) var(--ease-state),background-color var(--dur-state) var(--ease-state)}
+.tile:hover{border-color:rgba(var(--accent-rgb),.5);background:rgba(var(--accent-rgb),.04)}
+.tile.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);background:rgba(var(--accent-rgb),.04)}
+.tile.locked{pointer-events:none;opacity:.5}
+.tile .ic{font-size:2rem;line-height:1;margin-bottom:.25rem;color:var(--text-faint)}
+.tile.selected .ic{color:var(--accent)}
+.tile .t{font-size:.875rem;font-weight:600}
+.tile .d{font-size:.7rem;color:var(--text-dim)}
+.ring{box-shadow:0 0 0 1px var(--accent),0 0 0 .2rem rgba(var(--accent-rgb),.35)}
+</style>
+
+<h2>States</h2>
+<div class="tiles">
+  <div class="tile selected"><div class="ic">\u25C9</div><div class="t">Manual settings</div><div class="d">Set the format, quality and trim yourself</div></div>
+  <div class="tile locked" title="No pipelines saved yet"><div class="ic">\u25CB</div><div class="t">Pipeline</div><div class="d">Apply a saved processing pipeline</div></div>
+</div>
+<p class="caption">Selected \u00b7 locked. Hover the left tile to see the idle-to-hover wash.</p>
+
+<div class="tiles" style="margin-top:18px">
+  <div class="tile"><div class="ic">\u25CB</div><div class="t">Idle</div><div class="d">Neither chosen</div></div>
+  <div class="tile selected ring"><div class="ic">\u25C9</div><div class="t">Focused</div><div class="d">Keyboard focus ring</div></div>
+</div>
+
+<h2>The recipe</h2>
+<table>
+<tr><th>Part</th><th>Value</th></tr>
+<tr><td>Container</td><td>Two equal columns, <code>0.5rem</code> gap. Fixed 50/50 \u2014 tiles do not wrap.</td></tr>
+<tr><td>Tile</td><td><code>2px</code> border, <code>--radius-control</code>, <code>.75rem .5rem</code> padding, column flex centred, <code>height:100%</code> so a taller description does not leave a short neighbour</td></tr>
+<tr><td>Idle border</td><td><code>var(--bs-border-color)</code> \u2014 <b>a theme token, never a fixed white alpha</b>, or it breaks in light mode</td></tr>
+<tr><td>Hover</td><td>border <code>rgba(accent, .5)</code>, fill <code>rgba(accent, .04)</code> \u2014 the same wash ladder as the card grid</td></tr>
+<tr><td>Selected</td><td>border <code>accent</code> <b>plus</b> <code>box-shadow: 0 0 0 1px accent</code></td></tr>
+<tr><td>Locked</td><td><code>pointer-events:none; opacity:.5</code> and a <code>title</code> saying why</td></tr>
+<tr><td>Icon</td><td><code>2rem</code>, <code>--bs-secondary-color</code> \u2192 <code>--accent</code> when selected</td></tr>
+<tr><td>Title / description</td><td><code>0.875rem</code>/600 and <code>0.7rem</code> muted</td></tr>
+<tr><td>Transition</td><td><code>--dur-state --ease-state</code> on border, shadow and background</td></tr>
+</table>
+<p class="note"><b>Why a shadow as well as a border.</b> Growing the border to 3px on selection would change the box size and shift everything beside it. A 1px shadow in the same colour sits outside the border and reads as a thicker edge with no reflow.</p>
+
+<h2>Behaviour</h2>
+<p class="note"><b>One source of truth.</b> A click sets a single state variable, then every tile recomputes its own <code>selected</code> class from it. Do not toggle tiles against each other.</p>
+<p class="note"><b>Strictly one or the other.</b> Re-clicking the active tile does nothing. Craftbox's create-server source tiles are tri-state \u2014 clicking the selected one deselects back to "from scratch" \u2014 but that only works because it has a meaningful third state. Where there are exactly two modes, deselection would leave the form in no mode at all.</p>
+<p class="note"><b>Fail closed, then unlock.</b> A tile with nothing behind it ships locked and is enabled at runtime once its data exists \u2014 Craftbox locks Template until a template is saved; File Converter locks Pipeline until a pipeline is saved. Enforce it in the handler as well as the CSS: <code>pointer-events:none</code> stops a mouse but not a keyboard or a programmatic activation.</p>
+<p class="note"><b>Keyboard operable.</b> <code>role="button"</code>, <code>tabindex="0"</code> (<code>-1</code> when locked), <code>aria-pressed</code>, and Enter/Space activation, with a <code>:focus-visible</code> ring. The original pattern has only <code>role="button"</code> and cannot be reached from the keyboard at all \u2014 do not copy that part.</p>
+
+<h2>Dependent sections</h2>
+<p class="note">The chooser swaps which controls appear below it, by toggling <code>d-none</code>. Both branches stay in the DOM. <b>Values in the hidden branch are kept, not cleared</b>, so switching back and forth is lossless \u2014 but only the active branch is read when the work runs, and the card shows only the active branch.</p>
+`);
+
 card("components/inputs.html", "Inputs & Form Rows",
     "Stock Bootstrap form controls, arranged in a fixed three-part row that all the apps repeat.",
     "Components", `
