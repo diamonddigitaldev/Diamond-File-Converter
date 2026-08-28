@@ -479,7 +479,7 @@ With no pipelines saved (a clean profile):
 
 ---
 
-## 2.0.0-alpha.2 — fixes from the first manual test pass
+## 2.0.0-alpha.3 — fixes from the first manual test pass
 
 > **Status: not started.** Written 2026-08-28. These fix defects found by the
 > first hands-on pass on real Windows; nothing below has been re-tested yet.
