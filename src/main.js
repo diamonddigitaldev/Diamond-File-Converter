@@ -56,7 +56,6 @@ const store = new Store({
             height: WINDOW.DEFAULT_HEIGHT,
         },
         settings: SETTINGS_DEFAULTS,
-        presets: [],
     }
 });
 
@@ -538,18 +537,6 @@ ipcMain.handle(IPC.SETTINGS_SET, (_event, settings) => {
     return store.get("settings");
 });
 
-ipcMain.handle(IPC.PRESET_LIST, () => store.get("presets"));
-ipcMain.handle(IPC.PRESET_SAVE, (_event, preset) => {
-    const presets = store.get("presets").filter(p => p.id !== preset.id);
-    presets.push(preset);
-    store.set("presets", presets);
-    return presets;
-});
-ipcMain.handle(IPC.PRESET_DELETE, (_event, id) => {
-    const presets = store.get("presets").filter(p => p.id !== id);
-    store.set("presets", presets);
-    return presets;
-});
 
 // ── Auto-update ──────────────────────────────────────────────────────────────
 

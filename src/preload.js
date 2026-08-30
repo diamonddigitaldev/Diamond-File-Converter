@@ -28,9 +28,6 @@ const CH = {
     DIALOG_BROWSE_FILES:   "dialog:browse-files",
     DIALOG_BROWSE_FOLDER:  "dialog:browse-folder",
     DIALOG_CHOOSE_OUTPUT:  "dialog:choose-output",
-    PRESET_LIST:           "preset:list",
-    PRESET_SAVE:           "preset:save",
-    PRESET_DELETE:         "preset:delete",
     SHELL_OPEN_PATH:       "shell:open-path",
     SHELL_SHOW_IN_FOLDER:  "shell:show-in-folder",
     SHELL_OPEN_EXTERNAL:   "shell:open-external",
@@ -86,11 +83,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     browseFiles:  () => ipcRenderer.invoke(CH.DIALOG_BROWSE_FILES),
     browseFolder: () => ipcRenderer.invoke(CH.DIALOG_BROWSE_FOLDER),
     chooseOutput: () => ipcRenderer.invoke(CH.DIALOG_CHOOSE_OUTPUT),
-
-    // -- Presets --------------------------------------------------------------
-    listPresets:      ()       => ipcRenderer.invoke(CH.PRESET_LIST),
-    savePreset:       (preset) => ipcRenderer.invoke(CH.PRESET_SAVE, preset),
-    deletePreset:     (id)     => ipcRenderer.invoke(CH.PRESET_DELETE, id),
 
     // -- Shell and app --------------------------------------------------------
     openPath:     (target) => ipcRenderer.invoke(CH.SHELL_OPEN_PATH, target),

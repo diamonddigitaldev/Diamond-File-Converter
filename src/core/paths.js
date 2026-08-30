@@ -50,7 +50,6 @@ function getUniqueDirPath(dirPath) {
  *   {index}  1-based position in the batch
  *   {date}   YYYY-MM-DD
  *   {time}   HHMMSS
- *   {preset} preset name, or "" when the job has none
  * Unknown tokens are left alone rather than silently blanked, so a typo is
  * visible in the output filename instead of vanishing.
  */
@@ -65,7 +64,6 @@ function applyNameTemplate(template, context) {
         index:  context.index != null ? String(context.index) : "",
         date:   `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
         time:   `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`,
-        preset: context.preset ?? "",
     };
 
     return String(template ?? "{name}").replace(/\{(\w+)\}/g, (match, key) =>
@@ -125,7 +123,6 @@ function resolveOutputPath(job, context = {}) {
         ext: targetExt,
         src: job.sourceExt ?? inputExt.replace(/^\./, ""),
         index: context.index,
-        preset: context.preset,
         now: context.now,
     }));
 

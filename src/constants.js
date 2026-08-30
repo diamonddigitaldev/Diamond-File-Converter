@@ -33,11 +33,6 @@ const IPC = {
     DIALOG_BROWSE_FOLDER: "dialog:browse-folder",
     DIALOG_CHOOSE_OUTPUT: "dialog:choose-output",
 
-    // Presets. The store is wired; the editor is TODO.
-    PRESET_LIST:      "preset:list",
-    PRESET_SAVE:      "preset:save",
-    PRESET_DELETE:    "preset:delete",
-
     // Shell and app.
     SHELL_OPEN_PATH:      "shell:open-path",
     SHELL_SHOW_IN_FOLDER: "shell:show-in-folder",
