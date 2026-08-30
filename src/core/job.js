@@ -55,7 +55,7 @@ function createJob(spec = {}) {
     const targetExt = formats.canonicalExt(spec.targetExt ?? spec.output?.ext ?? "") ?? null;
 
     const targetFormat = targetExt ? formats.getFormat(targetExt) : null;
-    const mode = spec.mode ?? (sourceExt && targetExt ? formats.defaultMode(sourceExt, targetExt) : null);
+    const mode = spec.mode ?? defaultModeFor(sourceExt, targetExt, spec.inputMeta);
 
     return {
         id: spec.id ?? generateId(),
@@ -86,7 +86,7 @@ function createJob(spec = {}) {
         },
 
         audio: {
-            mode:       spec.audio?.mode       ?? defaultAudioMode(targetFormat, mode),
+            mode:       spec.audio?.mode       ?? defaultAudioMode(targetFormat, sourceExt),
             codec:      spec.audio?.codec      ?? targetFormat?.defaultAudioCodec ?? null,
             bitrate:    spec.audio?.bitrate    ?? null,
             sampleRate: spec.audio?.sampleRate ?? null,
@@ -114,6 +114,43 @@ function createJob(spec = {}) {
     };
 }
 
+/**
+ * The mode a conversion should take when nobody has asked for a specific one.
+ *
+ * allowedModes() answers what is *possible* from two extensions, which is all it
+ * can see. Whether a file actually moves is a property of the file, not its
+ * container: gif and webp may hold an animation and usually do not. Without
+ * this, a perfectly ordinary still WebP asked for PNG takes the animated path
+ * and lands as a *directory* containing one frame.
+ *
+ * `inputMeta` is optional — a card is configured long before its probe returns,
+ * and the answer is re-resolved once one has.
+ */
+function defaultModeFor(sourceExt, targetExt, inputMeta) {
+    if (!sourceExt || !targetExt) return null;
+
+    const modes = formats.allowedModes(sourceExt, targetExt);
+    if (modes.length === 0) return null;
+
+    const source = formats.getFormat(sourceExt);
+    const isStill = source?.kind === formats.KIND.IMAGE
+        && inputMeta?.ok === true
+        && !(inputMeta.duration > 0);
+    if (!isStill) return modes[0];
+
+    // One frame in means one file out: loop it into a clip for a video target,
+    // otherwise write the single image the caller plainly meant.
+    const target = formats.getFormat(targetExt);
+    const preferred = target?.kind === formats.KIND.VIDEO
+        ? [formats.MODE.ASSEMBLE, formats.MODE.TRANSCODE]
+        : [formats.MODE.TRANSCODE, formats.MODE.THUMBNAIL];
+
+    for (const candidate of preferred) {
+        if (modes.includes(candidate)) return candidate;
+    }
+    return modes[0];
+}
+
 function defaultVideoMode(targetFormat, mode) {
     if (!targetFormat) return STREAM_MODE.ENCODE;
     if (mode === formats.MODE.EXTRACT) return STREAM_MODE.DROP;
@@ -121,10 +158,13 @@ function defaultVideoMode(targetFormat, mode) {
     return STREAM_MODE.ENCODE;
 }
 
-function defaultAudioMode(targetFormat, mode) {
+function defaultAudioMode(targetFormat, sourceExt) {
     if (!targetFormat) return STREAM_MODE.ENCODE;
     if (targetFormat.kind === formats.KIND.IMAGE) return STREAM_MODE.DROP;
-    if (mode === formats.MODE.ASSEMBLE) return STREAM_MODE.DROP;
+    // An image source has no audio to carry, whichever mode it takes. This used
+    // to test for ASSEMBLE, which missed an animated GIF now that one transcodes
+    // into a video rather than being looped as a still.
+    if (formats.kindOf(sourceExt) === formats.KIND.IMAGE) return STREAM_MODE.DROP;
     return STREAM_MODE.ENCODE;
 }
 
@@ -209,6 +249,7 @@ function producesDirectory(job) {
 }
 
 module.exports = {
+    defaultModeFor,
     STATUS,
     STREAM_MODE,
     CONFLICT,

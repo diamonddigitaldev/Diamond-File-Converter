@@ -357,7 +357,7 @@ test("every counted string in the renderer goes through the helper", () => {
 const DESCRIPTORS = formats.FORMATS;
 
 test("dialog: an audio target offers no video controls", () => {
-    const s = d.applicableSections("mp3", DESCRIPTORS);
+    const s = d.applicableSections("mp4", "mp3", DESCRIPTORS, "extract");
     assert.equal(s.video, false);
     assert.equal(s.audio, true);
     assert.equal(s.resize, false);
@@ -365,19 +365,43 @@ test("dialog: an audio target offers no video controls", () => {
 });
 
 test("dialog: an image target offers no audio controls", () => {
-    const s = d.applicableSections("png", DESCRIPTORS);
+    const s = d.applicableSections("jpg", "png", DESCRIPTORS, "transcode");
     assert.equal(s.audio, false);
     assert.equal(s.image, true, "a still image exposes its own quality knob");
     assert.equal(s.trim, false, "trimming a single still is meaningless");
+    assert.equal(s.frames, false, "one picture in, one picture out");
 });
 
 test("dialog: an animated image target can still be trimmed", () => {
-    assert.equal(d.applicableSections("gif", DESCRIPTORS).trim, true);
-    assert.equal(d.applicableSections("webp", DESCRIPTORS).trim, true);
+    assert.equal(d.applicableSections("mp4", "gif", DESCRIPTORS, "transcode").trim, true);
+    assert.equal(d.applicableSections("mp4", "webp", DESCRIPTORS, "transcode").trim, true);
+});
+
+test("dialog: pulling frames out of a video is a span, not a trim", () => {
+    // The same still target means different things depending on where it came
+    // from: one picture from another picture has nothing to choose, but frames
+    // from a video are entirely a question of which ones.
+    const frames = d.applicableSections("mp4", "png", DESCRIPTORS, "frames");
+    assert.equal(frames.frames, true);
+    assert.equal(frames.trim, false, "it is offered as frames instead");
+
+    const single = d.applicableSections("mp4", "png", DESCRIPTORS, "thumbnail");
+    assert.equal(single.frames, true);
+
+    // ...and it is not offered where there is nothing moving to pick from.
+    assert.equal(d.applicableSections("png", "jpg", DESCRIPTORS, "transcode").frames, false);
+});
+
+test("dialog: an image source is never asked about audio", () => {
+    // An animated GIF into MP4 transcodes into a video container, which would
+    // otherwise show a full Audio section for a source that has none.
+    assert.equal(d.applicableSections("gif", "mp4", DESCRIPTORS, "transcode").audio, false);
+    assert.equal(d.applicableSections("png", "mp4", DESCRIPTORS, "assemble").audio, false);
+    assert.equal(d.applicableSections("mp4", "mkv", DESCRIPTORS, "transcode").audio, true);
 });
 
 test("dialog: a video target offers everything", () => {
-    const s = d.applicableSections("mp4", DESCRIPTORS);
+    const s = d.applicableSections("mp4", "mp4", DESCRIPTORS, "transcode");
     assert.equal(s.video, true);
     assert.equal(s.audio, true);
     assert.equal(s.trim, true);
@@ -385,8 +409,8 @@ test("dialog: a video target offers everything", () => {
 });
 
 test("dialog: an unknown target offers nothing rather than throwing", () => {
-    const s = d.applicableSections("nope", DESCRIPTORS);
-    assert.deepEqual(s, { video: false, audio: false, image: false, trim: false, resize: false });
+    const s = d.applicableSections("mp4", "nope", DESCRIPTORS, "transcode");
+    assert.deepEqual(s, { video: false, audio: false, image: false, trim: false, frames: false, resize: false });
 });
 
 test("dialog: codec choices come from the container's own capabilities", () => {
@@ -415,9 +439,53 @@ test("dialog: codecs get readable labels, unknown ones pass through", () => {
 });
 
 test("dialog: stream copy is offered only where the container supports it", () => {
-    assert.equal(d.canStreamCopy("mp4", DESCRIPTORS), true);
-    assert.equal(d.canStreamCopy("png", DESCRIPTORS), false);
-    assert.equal(d.canStreamCopy("nope", DESCRIPTORS), false);
+    assert.equal(d.canStreamCopy("mp4", DESCRIPTORS, "transcode"), true);
+    assert.equal(d.canStreamCopy("png", DESCRIPTORS, "transcode"), false);
+    assert.equal(d.canStreamCopy("nope", DESCRIPTORS, "transcode"), false);
+});
+
+test("dialog: extracting audio only copies when the stream already fits", () => {
+    // Every audio container claims stream-copy support, so without the codec
+    // check an AAC-carrying MP4 offers a copy into MP3, passes validation, and
+    // then fails inside ffmpeg.
+    const aac = { ok: true, audio: { codec: "aac" } };
+    assert.equal(d.canStreamCopy("m4a", DESCRIPTORS, "extract", aac), true, "m4a carries aac");
+    assert.equal(d.canStreamCopy("mp3", DESCRIPTORS, "extract", aac), false, "mp3 cannot");
+
+    // The table names encoders, a probe names codecs, and ffmpeg's own
+    // -encoders output spells out the three that differ. Comparing them raw
+    // would refuse a copy that works perfectly.
+    const mp3 = { ok: true, audio: { codec: "mp3" } };
+    assert.equal(d.canStreamCopy("mp3", DESCRIPTORS, "extract", mp3), true, "libmp3lame is codec mp3");
+    assert.equal(d.canStreamCopy("ogg", DESCRIPTORS, "extract", { ok: true, audio: { codec: "vorbis" } }), true);
+    assert.equal(d.canStreamCopy("opus", DESCRIPTORS, "extract", { ok: true, audio: { codec: "opus" } }), true);
+    assert.equal(d.canStreamCopy("flac", DESCRIPTORS, "extract", mp3), false, "flac cannot carry mp3");
+
+    // Unprobed, or nothing to copy: refuse rather than offer a maybe.
+    assert.equal(d.canStreamCopy("mp3", DESCRIPTORS, "extract", null), false);
+    assert.equal(d.canStreamCopy("mp3", DESCRIPTORS, "extract", { ok: false }), false);
+});
+
+test("display: a frame count says roughly what you are about to get", () => {
+    const meta = { ok: true, duration: 600, video: { fps: 30 } };
+    assert.equal(d.describeOutput("frames", null, meta), "about 18,000 images");
+    assert.equal(d.describeOutput("frames", { start: 10, end: 15 }, meta), "about 150 images");
+    assert.equal(d.describeOutput("thumbnail", null, meta), "1 image");
+
+    // Nothing to say about conversions that do not make images.
+    assert.equal(d.describeOutput("transcode", null, meta), null);
+    assert.equal(d.describeOutput("extract", null, meta), null);
+
+    // Nor before the probe lands, or without a frame rate to go on.
+    assert.equal(d.describeOutput("frames", null, null), null);
+    assert.equal(d.describeOutput("frames", null, { ok: true, duration: 10 }), null);
+    assert.equal(d.describeOutput("frames", null, { ok: false }), null);
+});
+
+test("display: a frame range is clamped to the material that exists", () => {
+    const meta = { ok: true, duration: 10, video: { fps: 25 } };
+    assert.equal(d.estimateFrames("frames", { start: 0, end: 999 }, meta), 250);
+    assert.equal(d.estimateFrames("frames", { start: 8, end: 4 }, meta), 1, "never fewer than one");
 });
 
 test("dialog: image quality descriptors carry their real range", () => {
@@ -515,4 +583,35 @@ test("dialog: a codec pick is recorded before the controls are rebuilt", () => {
     const syncAt = renderer.indexOf('addEventListener("change", syncModalControls)', recordAt);
     assert.ok(recordAt !== -1 && syncAt !== -1 && recordAt < syncAt,
         "the pick must be recorded before syncModalControls rebuilds the select");
+});
+
+test("display: the renderer's mode agrees with the job model's, everywhere", () => {
+    // display.js cannot require core/job.js, so effectiveMode() reimplements
+    // defaultModeFor(). This is the guard that stops the two drifting — the
+    // same treatment STATUS gets, and for the same reason.
+    const { defaultModeFor } = require("../src/core/job");
+    const metas = [null, { ok: true, duration: null }, { ok: true, duration: 5 }, { ok: false }];
+
+    let checked = 0;
+    for (const sourceExt of formats.SUPPORTED_EXTENSIONS) {
+        for (const target of TARGETS[sourceExt]) {
+            for (const meta of metas) {
+                const job = { ext: sourceExt, targetExt: target.ext, meta };
+                assert.equal(
+                    d.effectiveMode(job, TARGETS, DESCRIPTORS),
+                    defaultModeFor(sourceExt, target.ext, meta),
+                    `${sourceExt} -> ${target.ext} with ${JSON.stringify(meta)}`
+                );
+                checked++;
+            }
+        }
+    }
+    assert.ok(checked > 800, `expected the whole matrix, walked ${checked}`);
+});
+
+test("display: a mode chosen by hand is not second-guessed", () => {
+    const job = { ext: "mp4", targetExt: "png", meta: { ok: true, duration: 60 }, settings: { mode: "thumbnail" } };
+    assert.equal(d.effectiveMode(job, TARGETS, DESCRIPTORS), "thumbnail");
+    assert.equal(d.effectiveMode({ ext: "mp4", targetExt: null }, TARGETS, DESCRIPTORS), null);
+    assert.equal(d.effectiveMode({ ext: "mp4", targetExt: "nope" }, TARGETS, DESCRIPTORS), null);
 });

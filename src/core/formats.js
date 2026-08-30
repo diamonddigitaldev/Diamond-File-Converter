@@ -160,14 +160,6 @@ const EXT_ALIASES = {
 
 const SUPPORTED_EXTENSIONS = Object.keys(FORMATS);
 
-// Image formats that hold exactly one frame. Used to decide whether a moving
-// source has to be exploded into a sequence rather than written as one file.
-const STATIC_IMAGE_EXTS = new Set(
-    Object.values(FORMATS)
-        .filter(f => f.kind === KIND.IMAGE && !f.animated)
-        .map(f => f.ext)
-);
-
 /** Resolve a raw extension (with or without a leading dot) to a canonical key. */
 function canonicalExt(raw) {
     if (typeof raw !== "string") return null;
@@ -217,7 +209,13 @@ function allowedModes(fromExt, toExt) {
         if (to.animated) modes.push(MODE.TRANSCODE, MODE.FRAMES, MODE.THUMBNAIL);
         else modes.push(MODE.FRAMES, MODE.THUMBNAIL);
     } else if (from.kind === KIND.IMAGE && to.kind === KIND.VIDEO) {
-        modes.push(MODE.ASSEMBLE);
+        // A container that can hold an animation (gif, webp) is transcoded so
+        // the motion survives. Assembling it would treat the whole animation as
+        // a single still and loop that instead. A plain still has only the
+        // second option, and defaultModeFor() picks between them once a probe
+        // has said whether this particular file actually moves.
+        if (from.animated) modes.push(MODE.TRANSCODE, MODE.ASSEMBLE);
+        else modes.push(MODE.ASSEMBLE);
     }
 
     return modes;
@@ -258,20 +256,18 @@ function targetsFor(ext) {
 }
 
 /**
- * The v1 renderer's `{ [ext]: { type, targets } }` shape, restricted to
- * same-kind targets so the existing format grid behaves exactly as it did.
- * Cross-kind targets are already available through targetsFor(); surfacing
- * them in the UI is TODO item 6.
+ * `{ [ext]: { type } }` — what the renderer needs to decide whether a dropped
+ * file is supported at all, and which kind icon to put on its card.
+ *
+ * It used to carry a same-kind-filtered `targets` array as well, from when the
+ * grid was ported from v1. Nothing has read that since target lists moved to
+ * the full capability graph in targetsFor(), so it is gone rather than sitting
+ * there implying the UI is still same-kind only.
  */
 function buildLegacyConversionMap() {
     const map = {};
     for (const from of Object.values(FORMATS)) {
-        map[from.ext] = {
-            type: from.kind,
-            targets: targetsFor(from.ext)
-                .filter(t => t.sameKind)
-                .map(t => ({ ext: t.ext, label: t.label, group: t.group })),
-        };
+        map[from.ext] = { type: from.kind };
     }
     return map;
 }
@@ -282,7 +278,6 @@ module.exports = {
     FORMATS,
     EXT_ALIASES,
     SUPPORTED_EXTENSIONS,
-    STATIC_IMAGE_EXTS,
     canonicalExt,
     getFormat,
     kindOf,

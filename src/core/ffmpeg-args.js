@@ -20,7 +20,10 @@ const PRESET_CODECS = new Set(["libx264", "libx265", "libsvtav1"]);
 // Codecs that need an explicit 8-bit 4:2:0 pixel format for player compatibility.
 const NEEDS_YUV420P = new Set(["libx264", "libx265"]);
 
-const FRAME_PATTERN = "frame_%04d";
+// Six digits, not four: ffmpeg widens the field rather than truncating, so
+// %04d runs frame_9999 straight into frame_10000 and the directory stops
+// sorting in capture order exactly when there are enough frames to care.
+const FRAME_PATTERN = "frame_%06d";
 const DEFAULT_ASSEMBLE_FPS = 25;
 const DEFAULT_STILL_DURATION = 5; // seconds, for one image looped into a video
 
@@ -51,21 +54,24 @@ function buildArgs(job, opts = {}) {
 
     const { start, end } = job.trim ?? {};
 
+    // A single frame with no position asked for is taken from the middle. Frame
+    // zero is a fade-in or a black slate often enough that it is the wrong
+    // default for something whose entire purpose is to represent the video.
+    const seek = (mode === formats.MODE.THUMBNAIL && start == null && job.inputMeta?.duration > 0)
+        ? job.inputMeta.duration / 2
+        : start;
+
     // Input-side seek. Fast and frame-accurate for re-encodes; with -c copy it
     // lands on the nearest preceding keyframe, which is inherent to remuxing.
-    if (start != null && start > 0) {
-        args.push("-ss", formatSeconds(start));
+    if (seek != null && seek > 0) {
+        args.push("-ss", formatSeconds(seek));
     }
 
     if (mode === formats.MODE.ASSEMBLE) {
+        // A single still looped into a clip of a fixed length.
         const fps = job.video?.fps ?? DEFAULT_ASSEMBLE_FPS;
-        if (job.inputIsSequence) {
-            args.push("-framerate", String(fps), "-i", job.inputPath);
-        } else {
-            // A single still looped into a clip of a fixed length.
-            args.push("-loop", "1", "-framerate", String(fps), "-i", job.inputPath);
-            args.push("-t", formatSeconds(durationOrDefault(job, DEFAULT_STILL_DURATION)));
-        }
+        args.push("-loop", "1", "-framerate", String(fps), "-i", job.inputPath);
+        args.push("-t", formatSeconds(durationOrDefault(job, DEFAULT_STILL_DURATION)));
     } else {
         args.push("-i", job.inputPath);
     }
@@ -151,11 +157,6 @@ function buildArgs(job, opts = {}) {
         // Move the index to the front so the file is streamable / seekable
         // before it has fully downloaded.
         args.push("-movflags", "+faststart");
-    }
-
-    // Extra raw filters carried on the job.
-    if (Array.isArray(job.extraArgs) && job.extraArgs.length > 0) {
-        args.push(...job.extraArgs.map(String));
     }
 
     if (progress) {

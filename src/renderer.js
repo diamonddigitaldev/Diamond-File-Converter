@@ -171,6 +171,11 @@ function removeJobs(ids) {
     render();
 }
 
+/** The kind of output a format produces, or null when there is none chosen. */
+function kindOfTarget(ext) {
+    return ext && DESCRIPTORS && DESCRIPTORS[ext] ? DESCRIPTORS[ext].kind : null;
+}
+
 /** Can this source actually produce that format? */
 function canTarget(job, targetExt) {
     return display.commonTargets([job.ext], TARGETS).some(t => t.ext === targetExt);
@@ -196,6 +201,13 @@ function setTarget(ids, targetExt) {
         // cannot produce. Does not apply when clearing.
         if (next !== null && !canTarget(job, next)) continue;
         if (job.targetExt === next) continue;
+
+        // Codecs, quality and stream modes were chosen for the old target and
+        // mean nothing against a different kind of output. Carrying them across
+        // is what makes retargeting a configured MP4 card to PNG fail with
+        // "PNG does not support the video codec libx264" — a setting the user
+        // never asked to apply to a picture.
+        if (kindOfTarget(job.targetExt) !== kindOfTarget(next)) job.settings = {};
 
         job.targetExt = next;
 
@@ -566,6 +578,7 @@ function renderActionBar() {
 
 let jobModal = null;
 let modalScope = [];        // ids the dialog is editing
+let modalChosenMode = null; // frames vs a single frame, when that is a choice
 let previewTimer = null;
 
 const ENCODER_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast",
@@ -791,19 +804,40 @@ function loadSettingsIntoForm(settings) {
     $("jm-iquality").dataset.wanted = i.quality ?? "";
 }
 
+/**
+ * The card the dialog describes when it has to speak about one file. Sections
+ * and modes depend on where a conversion is coming from, not only where it is
+ * going, and across a mixed selection the first is as good an answer as exists.
+ */
+function modalSample() {
+    return jobs.find(j => modalScope.includes(j.id)) ?? null;
+}
+
+/** The mode the dialog is currently configuring, for a candidate target. */
+function modalMode(target) {
+    const sample = modalSample();
+    if (!sample || !target) return null;
+    return display.effectiveMode(
+        { ...sample, targetExt: target, settings: { mode: modalChosenMode } }, TARGETS, DESCRIPTORS);
+}
+
 /** Rebuild every capability-dependent control for the chosen target. */
 function syncModalControls() {
     const target = $("jm-target").value || null;
-    const sections = display.applicableSections(target, DESCRIPTORS);
+    const sample = modalSample();
+    const mode = modalMode(target);
+    const sections = display.applicableSections(sample?.ext, target, DESCRIPTORS, mode);
 
-    // The per-target rules decide which sections apply.
+    // Which sections apply depends on the pair and the mode, not the target
+    // alone — frames out of a video are a span, not a trim.
     $("jm-video-section").classList.toggle("d-none", !sections.video);
     $("jm-audio-section").classList.toggle("d-none", !sections.audio);
     $("jm-image-section").classList.toggle("d-none", !sections.image);
-    $("jm-trim-section").classList.toggle("d-none", !sections.trim);
+    $("jm-trim-section").classList.toggle("d-none", !sections.trim && !sections.frames);
 
-    // Stream modes: copy is only offered where the container supports remuxing.
-    const canCopy = display.canStreamCopy(target, DESCRIPTORS);
+    // Stream modes: copy is only offered where the container supports remuxing
+    // and, when extracting, where the source stream already fits it.
+    const canCopy = display.canStreamCopy(target, DESCRIPTORS, mode, sample?.meta);
     const modeOptions = (other) => [
         { value: "encode", label: "Re-encode" },
         ...(canCopy ? [{ value: "copy", label: "Copy without re-encoding" }] : []),
@@ -891,7 +925,7 @@ function effectiveVideoCodec() {
 /** Read the form back into a partial job spec. */
 function readSettingsFromForm() {
     const target = $("jm-target").value || null;
-    const sections = display.applicableSections(target, DESCRIPTORS);
+    const sections = display.applicableSections(modalSample()?.ext, target, DESCRIPTORS, modalMode(target));
     const num = (id) => { const v = $(id).value; return v === "" ? null : Number(v); };
     // Match syncModalControls: quality mode is only meaningful once the
     // effective codec is known.

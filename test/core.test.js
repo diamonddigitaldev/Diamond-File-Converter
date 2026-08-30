@@ -7,7 +7,7 @@ const fs = require("fs");
 const path = require("path");
 
 const formats = require("../src/core/formats");
-const { createJob, patchJob, validateJob, STREAM_MODE, CONFLICT, OUTPUT_ROUTING } = require("../src/core/job");
+const { createJob, patchJob, validateJob, defaultModeFor, STREAM_MODE, CONFLICT, OUTPUT_ROUTING } = require("../src/core/job");
 const { buildArgs, normaliseBitrate, buildScaleFilter } = require("../src/core/ffmpeg-args");
 const paths = require("../src/core/paths");
 const { parseProgressLines } = require("../src/core/runner");
@@ -54,14 +54,17 @@ test("formats: audio cannot become video or images", () => {
     assert.equal(formats.canConvert("mp3", "flac"), true);
 });
 
-test("formats: legacy map stays within-group so the v1 grid is unchanged", () => {
+test("formats: the ingest map says what is supported and nothing more", () => {
+    // It answers two questions for the renderer: may this file be dropped at
+    // all, and which kind icon goes on its card. It used to carry a same-kind
+    // target list too, which nothing has read since target lists moved to the
+    // full graph — carrying it implied the UI was still same-kind only.
     const map = formats.buildLegacyConversionMap();
     assert.equal(Object.keys(map).length, 21);
     assert.equal(map.mp4.type, "video");
-    assert.equal(map.mp4.targets.length, 7);
-    assert.ok(map.mp4.targets.every(t => t.group === "Video"));
-    assert.equal(map.mp3.targets.length, 8);
-    assert.equal(map.jpg.targets.length, 6);
+    assert.equal(map.mp3.type, "audio");
+    assert.equal(map.jpg.type, "image");
+    assert.ok(Object.values(map).every(e => Object.keys(e).join() === "type"));
 });
 
 // ---------------------------------------------------------------------------
@@ -223,7 +226,9 @@ test("args: frame extraction writes a numbered pattern inside the output dir", (
     assert.equal(job.mode, formats.MODE.FRAMES);
     const args = buildArgs(job, { outputPath: path.join("C:", "out", "clip") });
 
-    assert.ok(args[args.length - 1].endsWith(`frame_%04d.png`));
+    // Six digits: ffmpeg widens rather than truncates, so %04d runs frame_9999
+    // into frame_10000 and the directory stops sorting in capture order.
+    assert.ok(args[args.length - 1].endsWith(`frame_%06d.png`));
     assert.equal(valueOf(args, "-fps_mode"), "passthrough");
 });
 
@@ -489,4 +494,125 @@ test("probe: an unconfigured binary degrades instead of throwing", async () => {
     assert.equal(result.ok, false);
     assert.match(result.error, /not been configured/);
     probe.setFfprobePath(before);
+});
+
+// ---------------------------------------------------------------------------
+// cross-kind conversions
+// ---------------------------------------------------------------------------
+
+const STILL = { ok: true, duration: null };
+const MOVING = { ok: true, duration: 3.2 };
+
+test("formats: an animated source keeps its motion into a video container", () => {
+    // gif -> mp4 used to be ASSEMBLE on kind alone, which treats the whole
+    // animation as one still and loops it for five seconds.
+    assert.deepEqual(formats.allowedModes("gif", "mp4"), [formats.MODE.TRANSCODE, formats.MODE.ASSEMBLE]);
+    assert.deepEqual(formats.allowedModes("webp", "mp4"), [formats.MODE.TRANSCODE, formats.MODE.ASSEMBLE]);
+
+    // A container that can only ever hold one frame still assembles.
+    assert.deepEqual(formats.allowedModes("png", "mp4"), [formats.MODE.ASSEMBLE]);
+    assert.deepEqual(formats.allowedModes("jpg", "mkv"), [formats.MODE.ASSEMBLE]);
+});
+
+test("job: whether a file moves is decided by the probe, not its extension", () => {
+    // The bug this exists to stop: an ordinary still WebP asked for PNG takes
+    // the animated path and lands as a directory containing one frame.
+    assert.equal(defaultModeFor("webp", "png", STILL), formats.MODE.THUMBNAIL);
+    assert.equal(defaultModeFor("webp", "png", MOVING), formats.MODE.FRAMES);
+
+    // A still in a container that could animate still loops into a clip.
+    assert.equal(defaultModeFor("gif", "mp4", STILL), formats.MODE.ASSEMBLE);
+    assert.equal(defaultModeFor("gif", "mp4", MOVING), formats.MODE.TRANSCODE);
+
+    // Video sources are unaffected — they always move.
+    assert.equal(defaultModeFor("mp4", "png", MOVING), formats.MODE.FRAMES);
+    assert.equal(defaultModeFor("mp4", "mp3", MOVING), formats.MODE.EXTRACT);
+});
+
+test("job: with no probe yet, the static default stands", () => {
+    // Cards are configurable long before their probe returns, so this must not
+    // throw or guess wrongly in the meantime.
+    assert.equal(defaultModeFor("webp", "png", null), formats.MODE.FRAMES);
+    assert.equal(defaultModeFor("webp", "png", { ok: false }), formats.MODE.FRAMES);
+    assert.equal(defaultModeFor(null, "png", STILL), null);
+    assert.equal(defaultModeFor("mp3", "png", MOVING), null, "an impossible pair has no mode");
+});
+
+test("job: createJob takes the mode it is given over any default", () => {
+    const job = createJob({ inputPath: "clip.mp4", targetExt: "png", mode: formats.MODE.THUMBNAIL });
+    assert.equal(job.mode, formats.MODE.THUMBNAIL);
+    assert.equal(validateJob(job).valid, true);
+
+    // ...but not one the pair does not allow.
+    const bogus = createJob({ inputPath: "clip.mp4", targetExt: "png", mode: formats.MODE.EXTRACT });
+    const result = validateJob(bogus);
+    assert.equal(result.valid, false);
+    assert.match(result.errors.join(" "), /not valid for/);
+});
+
+test("args: a single frame is taken from the middle, not from black", () => {
+    const job = createJob({ inputPath: "clip.mp4", targetExt: "jpg", mode: formats.MODE.THUMBNAIL });
+    job.inputMeta = { ok: true, duration: 60 };
+    const args = buildArgs(job, { outputPath: "out.jpg", progress: false });
+
+    assert.equal(valueOf(args, "-ss"), "30");
+    assert.equal(valueOf(args, "-frames:v"), "1");
+    assert.equal(valueOf(args, "-update"), "1");
+    assert.ok(!args.includes("-fps_mode"), "one frame is not a sequence");
+});
+
+test("args: an explicit position beats the midpoint", () => {
+    const job = createJob({
+        inputPath: "clip.mp4", targetExt: "jpg",
+        mode: formats.MODE.THUMBNAIL, trim: { start: 12, end: null },
+    });
+    job.inputMeta = { ok: true, duration: 60 };
+    assert.equal(valueOf(buildArgs(job, { outputPath: "out.jpg", progress: false }), "-ss"), "12");
+});
+
+test("args: an unprobed thumbnail does not invent a seek", () => {
+    const job = createJob({ inputPath: "clip.mp4", targetExt: "jpg", mode: formats.MODE.THUMBNAIL });
+    assert.ok(!buildArgs(job, { outputPath: "out.jpg", progress: false }).includes("-ss"));
+});
+
+test("args: an animated source transcodes into video rather than looping", () => {
+    const job = createJob({ inputPath: "anim.gif", targetExt: "mp4", inputMeta: MOVING });
+    assert.equal(job.mode, formats.MODE.TRANSCODE);
+
+    const args = buildArgs(job, { outputPath: "out.mp4", progress: false });
+    assert.ok(!args.includes("-loop"), "-loop belongs to the image2 demuxer, not gif");
+    assert.equal(valueOf(args, "-c:v"), "libx264");
+    // An image source has no audio, whichever mode it takes.
+    assert.ok(args.includes("-an"));
+    assert.ok(!args.includes("-c:a"));
+});
+
+test("args: a still assembled into video is still looped", () => {
+    const job = createJob({ inputPath: "still.png", targetExt: "mp4" });
+    assert.equal(job.mode, formats.MODE.ASSEMBLE);
+    const args = buildArgs(job, { outputPath: "out.mp4", progress: false });
+    assert.ok(args.includes("-loop"));
+    assert.equal(valueOf(args, "-framerate"), "25");
+    assert.equal(valueOf(args, "-t"), "5");
+});
+
+test("args: a real video keeps its audio", () => {
+    // Guards the image-source audio drop above from over-reaching.
+    const args = buildArgs(createJob({ inputPath: "clip.mp4", targetExt: "mkv" }),
+        { outputPath: "out.mkv", progress: false });
+    assert.equal(valueOf(args, "-c:a"), "aac");
+    assert.ok(!args.includes("-an"));
+});
+
+test("args: a frame range seeks and bounds like a trim", () => {
+    // Choosing which frames is the same mechanism as trimming, which is what
+    // lets the dialog reuse the trim slider for it.
+    const job = createJob({
+        inputPath: "clip.mp4", targetExt: "png",
+        mode: formats.MODE.FRAMES, trim: { start: 5, end: 8 },
+    });
+    const args = buildArgs(job, { outputPath: path.join("C:", "out", "clip"), progress: false });
+    assert.equal(valueOf(args, "-ss"), "5");
+    assert.equal(valueOf(args, "-t"), "3");
+    assert.ok(args[args.length - 1].endsWith("frame_%06d.png"));
 });
