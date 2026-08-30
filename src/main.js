@@ -1,11 +1,12 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu, shell, nativeTheme } = require("electron");
 const Store = require("electron-store").default;
 const fs = require("fs");
+const { spawn } = require("child_process");
 const path = require("path");
 
 const { APP_NAME, IPC, WINDOW, LOG, ARGV_BATCH_DEBOUNCE_MS, SETTINGS_DEFAULTS } = require("./constants");
 const formats = require("./core/formats");
-const { createJob, validateJob, STATUS } = require("./core/job");
+const { createJob, validateJob, defaultModeFor, STATUS } = require("./core/job");
 const { JobRunner, defaultConcurrency } = require("./core/runner");
 const { buildArgs } = require("./core/ffmpeg-args");
 const probe = require("./core/probe");
@@ -14,6 +15,10 @@ const scan = require("./core/scan");
 const version = require("./core/version");
 
 const LOG_LEVELS = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3 };
+
+// Frame previews are decoration beside a slider, not content.
+const PREVIEW_FRAME_HEIGHT = 144;
+const PREVIEW_FRAME_TIMEOUT_MS = 5000;
 
 const FILE_DIALOG_FILTERS = [
     { name: "Supported Files", extensions: formats.SUPPORTED_EXTENSIONS },
@@ -434,8 +439,19 @@ ipcMain.handle(IPC.JOB_RUN, async (_event, spec) => {
     // A failed probe is not fatal; the job simply reports indeterminate progress.
     if (!job.inputMeta) {
         const meta = await probe.probe(job.inputPath);
-        if (meta.ok) job.inputMeta = meta;
-        else log(LOG.WARN, `Could not probe ${job.inputPath}: ${meta.error}`);
+        if (meta.ok) {
+            job.inputMeta = meta;
+            // Now that we know whether this file actually moves, the default
+            // mode can be settled properly. gif and webp only *may* hold an
+            // animation, and createJob had to guess from the extension alone —
+            // which turns an ordinary still WebP into a directory of one frame.
+            // A mode the card asked for explicitly is never overridden.
+            if (!spec.mode) {
+                job.mode = defaultModeFor(job.sourceExt, job.output.ext, meta);
+            }
+        } else {
+            log(LOG.WARN, `Could not probe ${job.inputPath}: ${meta.error}`);
+        }
     }
 
     const validation = validateJob(job);
@@ -497,6 +513,51 @@ ipcMain.handle(IPC.SHELL_OPEN_EXTERNAL, (_event, url) => {
     // Only ever hand the OS an http(s) URL, whatever the page asked for.
     if (typeof url === "string" && /^https?:\/\//i.test(url)) return shell.openExternal(url);
     log(LOG.WARN, `Refused to open external URL: ${url}`);
+});
+
+/**
+ * Decode a single frame for the dialog to show. Deliberately forgiving: a source
+ * that will not seek, will not decode, or simply has no picture there resolves
+ * to null and the dialog shows nothing. A missing preview must never be able to
+ * block choosing a frame.
+ */
+ipcMain.handle(IPC.PREVIEW_FRAME, (_event, request) => {
+    const inputPath = request && request.inputPath;
+    const timestamp = Number(request && request.timestamp) || 0;
+    if (!inputPath) return null;
+
+    return new Promise((resolve) => {
+        const child = spawn(getFfmpegPath(), [
+            "-hide_banner", "-loglevel", "error",
+            // Seeking before -i is the fast path; frame-accurate enough for a
+            // thumbnail, and the difference is invisible at this size.
+            "-ss", String(timestamp),
+            "-i", inputPath,
+            "-frames:v", "1",
+            "-vf", `scale=-2:${PREVIEW_FRAME_HEIGHT}`,
+            "-f", "image2", "-c:v", "mjpeg", "-",
+        ], { windowsHide: true });
+
+        const chunks = [];
+        let settled = false;
+        const finish = (value) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            resolve(value);
+        };
+
+        // A pathological source must not leave an ffmpeg running behind a
+        // dialog the user has already closed.
+        const timer = setTimeout(() => { child.kill(); finish(null); }, PREVIEW_FRAME_TIMEOUT_MS);
+
+        child.stdout.on("data", (chunk) => chunks.push(chunk));
+        child.on("error", () => finish(null));
+        child.on("close", (code) => {
+            if (code !== 0 || chunks.length === 0) return finish(null);
+            finish(`data:image/jpeg;base64,${Buffer.concat(chunks).toString("base64")}`);
+        });
+    });
 });
 
 ipcMain.handle(IPC.APP_GET_VERSION, () => app.getVersion());

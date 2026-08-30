@@ -83,6 +83,13 @@ function normalise(raw, inputPath) {
         bitrate: toNumber(format.bit_rate),
         formatName: format.format_name ?? null,
         hasVideo: motionStreams.length > 0,
+        // Whether this file actually moves, which decides how a conversion out
+        // of it should behave. Read from the raw stream rather than from
+        // `hasVideo`, so it stays right regardless of how cover art is judged:
+        // a single frame has no average frame rate and no duration.
+        isStill: videoStreams.length > 0
+            && !(parseFrameRate(videoStreams[0].avg_frame_rate) > 0)
+            && !(duration > 0),
         hasAudio: audioStreams.length > 0,
         hasSubtitles: subtitleStreams.length > 0,
 
@@ -111,10 +118,21 @@ function normalise(raw, inputPath) {
     };
 }
 
+// Codecs that may carry either one picture or many, so the frame rate has to
+// decide which this is.
+const STILL_CODECS = ["mjpeg", "png", "bmp", "gif", "webp", "tiff"];
+
 function isAttachedPicture(stream) {
     if (stream.disposition?.attached_pic === 1) return true;
-    // Still-image codecs carried inside a media container are cover art.
-    return ["mjpeg", "png", "bmp", "gif"].includes(stream.codec_name) && !stream.avg_frame_rate?.startsWith("0/");
+    // A still carried inside a media container reports as a video stream with
+    // no meaningful average frame rate — ffprobe writes "0/0". That is what
+    // keeps a resolution badge off an MP3 which happens to embed cover art.
+    //
+    // This test used to be inverted: it called a stream cover art precisely
+    // when it *did* have a frame rate, so an animated GIF was reported as
+    // having no video at all while a still WebP was credited with 25fps from
+    // the r_frame_rate fallback below.
+    return STILL_CODECS.includes(stream.codec_name) && !(parseFrameRate(stream.avg_frame_rate) > 0);
 }
 
 /** ffprobe reports frame rates as "30000/1001" rationals. */

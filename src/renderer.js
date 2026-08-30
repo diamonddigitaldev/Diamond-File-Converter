@@ -171,6 +171,23 @@ function removeJobs(ids) {
     render();
 }
 
+// Enough images that writing them without asking would be a nasty surprise.
+const FRAME_CONFIRM_THRESHOLD = 1000;
+
+/** "about 18,000 images", for a card whose conversion writes a pile of them. */
+function describeJobOutput(job) {
+    if (!job.targetExt) return null;
+    const mode = display.effectiveMode(job, TARGETS, DESCRIPTORS);
+    return display.describeOutput(mode, job.settings?.trim ?? null, job.meta);
+}
+
+/** How many images a job will write, or 0 when it writes none. */
+function frameCountOf(job) {
+    if (!job.targetExt) return 0;
+    const mode = display.effectiveMode(job, TARGETS, DESCRIPTORS);
+    return display.estimateFrames(mode, job.settings?.trim ?? null, job.meta) ?? 0;
+}
+
 /** The kind of output a format produces, or null when there is none chosen. */
 function kindOfTarget(ext) {
     return ext && DESCRIPTORS && DESCRIPTORS[ext] ? DESCRIPTORS[ext].kind : null;
@@ -305,6 +322,16 @@ function buildCard(job) {
     const meta = document.createElement("div");
     meta.className = "card-meta";
 
+    const outputLine = document.createElement("button");
+    outputLine.type = "button";
+    outputLine.className = "card-output d-none";
+    // Clickable, because the answer to "that is far too many images" is the
+    // span control, and this is the only thing pointing at it.
+    outputLine.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openJobModal([job.id]);
+    });
+
     const settingsLine = document.createElement("div");
     settingsLine.className = "card-settings d-none";
 
@@ -349,7 +376,7 @@ function buildCard(job) {
     const actions = document.createElement("div");
     actions.className = "card-actions d-none";
 
-    card.append(head, meta, settingsLine, convert, status, progress, actions);
+    card.append(head, meta, outputLine, settingsLine, convert, status, progress, actions);
     card.addEventListener("click", (e) => handleCardClick(job.id, e));
 
     paintCard(card, job);
@@ -395,6 +422,11 @@ function paintCard(card, job) {
 
     // Show what has been configured, so a customised job is visibly different.
     const settingsLine = card.querySelector(".card-settings");
+    const output = describeJobOutput(job);
+    const outputLine = card.querySelector(".card-output");
+    outputLine.classList.toggle("d-none", !output);
+    if (output) outputLine.textContent = output;
+
     const summary = display.summariseSettings(job.settings);
     settingsLine.classList.toggle("d-none", !summary);
     if (summary) {
@@ -597,6 +629,124 @@ const TRIM_MIN_SPAN = 0.05;   // never let the two handles cross
 const TRIM_KEY_STEP = 1;      // seconds per arrow press
 const TRIM_FINE = 0.15;       // Shift multiplier while dragging
 
+const FRAME_PREVIEW_DEBOUNCE = 220;   // ms after the slider settles
+
+let framePreviewTimer = null;
+let framePreviewToken = 0;
+
+/**
+ * Show the frames at either end of the span.
+ *
+ * Debounced and token-guarded: dragging a handle asks for a great many frames
+ * in quick succession, and a slow decode that lands after the user has moved on
+ * must not paint a frame they are no longer looking at.
+ */
+/**
+ * Where to actually decode a preview from. Seeking to exactly the duration
+ * lands past the last frame and decodes nothing, which is precisely where the
+ * end handle sits until someone drags it.
+ */
+function previewAt(seconds) {
+    const limit = Math.max(0, trimState.duration - 0.05);
+    return Math.max(0, Math.min(seconds, limit));
+}
+
+function requestFramePreviews() {
+    const sample = modalSample();
+    const visible = !$("jm-frame-previews").classList.contains("d-none");
+    if (!visible || !sample || !trimState.available) return;
+
+    const wanted = isSingleFrame()
+        ? [["jm-frame-start", trimState.start]]
+        : [["jm-frame-start", trimState.start], ["jm-frame-end", trimState.end]];
+
+    // Captions are the user's own input, so they keep up with the drag rather
+    // than waiting on a decode.
+    for (const [id, seconds] of wanted) {
+        $(`${id}-cap`).textContent = display.formatDuration(seconds) ?? "0:00";
+    }
+
+    clearTimeout(framePreviewTimer);
+    framePreviewTimer = setTimeout(async () => {
+        const token = ++framePreviewToken;
+        for (const [id, seconds] of wanted) {
+            let data = null;
+            try {
+                data = await api.previewFrame({ inputPath: sample.filePath, timestamp: previewAt(seconds) });
+            } catch (_) {
+                // A source that will not decode simply shows no preview.
+            }
+            if (token !== framePreviewToken) return;
+            if (data) $(id).src = data;
+            else $(id).removeAttribute("src");
+        }
+    }, FRAME_PREVIEW_DEBOUNCE);
+}
+
+/** Is the dialog choosing frames out of a moving source, rather than trimming? */
+function framesMode() {
+    return !$("jm-frames-choice").classList.contains("d-none");
+}
+
+/** Is the dialog currently set to pull out one frame rather than a span? */
+function isSingleFrame() {
+    return modalChosenMode === "thumbnail";
+}
+
+/**
+ * Paint the "how many frames" choice and adapt the span control to it.
+ *
+ * There is no mode dropdown anywhere: a range means every frame in it, a single
+ * point means one frame, and that is the whole of the mode decision the user
+ * ever has to make. Everything else has only one sensible answer.
+ */
+function renderFramesChoice(sections) {
+    const on = !!sections.frames;
+    const single = on && isSingleFrame();
+
+    $("jm-trim-title").textContent = on ? "Frames" : "Trim";
+    $("jm-frames-choice").classList.toggle("d-none", !on);
+    $("jm-frames-estimate").classList.toggle("d-none", !on);
+    $("jm-frame-previews").classList.toggle("d-none", !on || !trimState.available);
+
+    for (const button of document.querySelectorAll("#jm-frames-choice [data-frame-mode]")) {
+        const active = button.dataset.frameMode === (modalChosenMode ?? "frames");
+        button.classList.toggle("selected", active);
+        button.setAttribute("aria-pressed", String(active));
+    }
+
+    // One handle for one frame: the second would have nothing to mean.
+    $("jm-trim-thumb-end").classList.toggle("d-none", single);
+    $("jm-frame-end-wrap").classList.toggle("d-none", single);
+    $("jm-trim-range").classList.toggle("d-none", single);
+    $("jm-trim-help").textContent = single
+        ? "Drag to choose the frame. Hold Shift while dragging for finer control."
+        : "Drag either end. Hold Shift while dragging for finer control.";
+
+    renderFramesEstimate();
+    requestFramePreviews();
+}
+
+/** How many images this is about to write, live as the span changes. */
+function renderFramesEstimate() {
+    const sample = modalSample();
+    const mode = modalMode($("jm-target").value || null);
+    $("jm-frames-estimate").textContent =
+        display.describeOutput(mode, readTrim(), sample?.meta) ?? "";
+}
+
+function setFrameMode(next) {
+    if (modalChosenMode === next) return;
+    modalChosenMode = next;
+    syncModalControls();
+}
+
+function initFramesChoice() {
+    for (const button of document.querySelectorAll("#jm-frames-choice [data-frame-mode]")) {
+        button.addEventListener("click", () => setFrameMode(button.dataset.frameMode));
+    }
+}
+
 /** Longest duration in scope — a selection may hold clips of different lengths. */
 function trimScopeDuration() {
     const scoped = jobs.filter(j => modalScope.includes(j.id));
@@ -635,7 +785,10 @@ function renderTrim() {
 
     $("jm-trim-start-label").textContent = display.formatDuration(start) ?? "0:00";
     $("jm-trim-end-label").textContent = display.formatDuration(end) ?? "";
-    $("jm-trim-kept").textContent = `keeping ${display.formatDuration(end - start) ?? "0:00"}`;
+    // The same span means different things: a trim keeps a stretch of the
+    // result, a frame range covers a stretch of the source.
+    const span = display.formatDuration(end - start) ?? "0:00";
+    $("jm-trim-kept").textContent = isSingleFrame() ? "" : `${framesMode() ? "covering" : "keeping"} ${span}`;
 
     for (const [id, value] of [["jm-trim-thumb-start", start], ["jm-trim-thumb-end", end]]) {
         const thumb = $(id);
@@ -650,9 +803,13 @@ function renderTrim() {
 function readTrim() {
     if (!trimState.available) return null;
     const { duration, start, end } = trimState;
+    const round = (v) => Math.round(v * 100) / 100;
     return {
-        start: start > 0 ? Math.round(start * 100) / 100 : null,
-        end: end < duration ? Math.round(end * 100) / 100 : null,
+        start: start > 0 ? round(start) : null,
+        // One frame is a position, not a span, so it carries no end. Leaving one
+        // on would put a pointless -t beside the -frames:v 1 that already says
+        // how much is wanted.
+        end: isSingleFrame() || end >= duration ? null : round(end),
     };
 }
 
@@ -664,6 +821,8 @@ function moveTrimHandle(handle, seconds) {
         trimState.end = Math.min(duration, Math.max(seconds, trimState.start + TRIM_MIN_SPAN));
     }
     renderTrim();
+    renderFramesEstimate();
+    requestFramePreviews();
     schedulePreview();
 }
 
@@ -758,6 +917,9 @@ function openJobModal(ids) {
     // Seed from existing settings so reopening shows what is set. Across a
     // selection this only happens when every file already agrees — otherwise
     // one file's values would be presented as if they applied to all.
+    const chosen = [...new Set(scoped.map(j => j.settings?.mode ?? null))];
+    modalChosenMode = chosen.length === 1 ? chosen[0] : null;
+
     const encoded = scoped.map(j => JSON.stringify(j.settings ?? {}));
     const uniform = encoded.every(x => x === encoded[0]);
     loadSettingsIntoForm(uniform ? (scoped[0].settings ?? {}) : {});
@@ -884,6 +1046,13 @@ function syncModalControls() {
     // Encode-only controls hide when the stream is copied or dropped.
     const vEncoding = $("jm-vmode").value === "encode";
     for (const el of document.querySelectorAll(".jm-vencode")) el.classList.toggle("d-none", !vEncoding);
+    // Codec, bitrate, preset and the stream mode itself mean nothing when the
+    // output is a picture — an export to PNG was offering an encoder preset and
+    // a target bitrate above the controls that actually decide anything.
+    for (const el of document.querySelectorAll(".jm-vcodec-only")) {
+        el.classList.toggle("d-none", !sections.videoEncode || (!vEncoding && el.classList.contains("jm-vencode")));
+    }
+    $("jm-video-title").textContent = sections.videoEncode ? "Video" : "Picture";
     const aEncoding = $("jm-amode").value === "encode";
     for (const el of document.querySelectorAll(".jm-aencode")) el.classList.toggle("d-none", !aEncoding);
 
@@ -902,7 +1071,12 @@ function syncModalControls() {
             : `${q.max} is best quality, ${q.min} is smallest file.`;
     }
 
-    if (sections.trim) setupTrim();
+    // Frames and trim are the same span control, and a frames conversion sets
+    // sections.trim false — without this the slider is never wired up at all.
+    // The frames choice is painted after it, not before: the previews and the
+    // count describe the span, so they need one to exist first.
+    if (sections.trim || sections.frames) setupTrim();
+    renderFramesChoice(sections);
 
     // The output folder only matters when a folder was chosen.
     const needsDir = $("jm-routing").value !== "alongside";
@@ -959,7 +1133,10 @@ function readSettingsFromForm() {
             channels: num("jm-achannels"),
         } : null,
         image: sections.image ? { quality: num("jm-iquality") } : null,
-        trim: sections.trim ? readTrim() : null,
+        trim: sections.trim || sections.frames ? readTrim() : null,
+        // Only ever set where there is genuinely a choice; everywhere else the
+        // pair has exactly one sensible mode and the job model picks it.
+        mode: sections.frames ? (modalChosenMode ?? "frames") : null,
     };
 
     // Defaults that were never touched are dropped, so the format keeps
@@ -1060,6 +1237,21 @@ async function startConversion() {
     const runnable = jobs.filter(j => j.targetExt && j.status !== "done");
     if (runnable.length === 0) return;
 
+    // Frame extraction can write thousands of files from one click, and the
+    // only hint beforehand is a line on the card. Ask once, with the number.
+    const frames = runnable.reduce((total, job) => total + frameCountOf(job), 0);
+    if (frames >= FRAME_CONFIRM_THRESHOLD) {
+        const ok = await confirmDialog({
+            title: "That is a lot of images",
+            body: `This writes about ${display.countOf(frames, "image")}. Narrow the range in `
+                + `Advanced options if that is more than you meant.`,
+            confirmLabel: "Write them",
+            variant: "warning",
+            icon: "burst_mode",
+        });
+        if (!ok) return;
+    }
+
     converting = true;
     for (const job of runnable) {
         job.status = "pending";
@@ -1117,6 +1309,48 @@ function announce(results) {
 
 // -- Wiring ------------------------------------------------------------------
 
+
+let confirmModal = null;
+
+/**
+ * Promise-wrapped confirm, per the house pattern. Resolves true only on the
+ * confirm button; every other way out resolves false, and both listeners are
+ * removed in one shared cleanup either way.
+ */
+function confirmDialog({ title, body, confirmLabel = "Confirm", variant = "primary", icon = "help_outline" }) {
+    return new Promise((resolve) => {
+        const modalEl = $("confirm-modal");
+        const okBtn = $("confirm-ok");
+
+        $("confirm-title").textContent = title;
+        $("confirm-body").textContent = body;
+        $("confirm-icon").textContent = icon;
+        okBtn.textContent = confirmLabel;
+        okBtn.className = `btn btn-${variant}`;
+
+        if (!confirmModal) confirmModal = new bootstrap.Modal(modalEl);
+
+        let confirmed = false;
+        const cleanup = () => {
+            okBtn.removeEventListener("click", onOk);
+            modalEl.removeEventListener("hidden.bs.modal", onHidden);
+        };
+        const onOk = () => {
+            confirmed = true;
+            cleanup();
+            confirmModal.hide();
+            resolve(true);
+        };
+        const onHidden = () => {
+            cleanup();
+            if (!confirmed) resolve(false);
+        };
+
+        okBtn.addEventListener("click", onOk);
+        modalEl.addEventListener("hidden.bs.modal", onHidden);
+        confirmModal.show();
+    });
+}
 
 // -- Views ---------------------------------------------------------------------
 //
@@ -1275,6 +1509,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         $(id).addEventListener("change", syncModalControls);
     }
     initTrimSlider();
+    initFramesChoice();
     for (const id of ["jm-crf", "jm-vbitrate", "jm-width", "jm-height", "jm-fit", "jm-fps",
                       "jm-abitrate", "jm-arate", "jm-achannels", "jm-encpreset",
                       "jm-name", "jm-conflict"]) {

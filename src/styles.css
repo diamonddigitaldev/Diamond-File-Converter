@@ -802,3 +802,106 @@ body.popup-window span:hover {
    d-none on the file-grid elements, so when a second section arrives its rules
    must force-hide rather than compete with it — the grid then keeps its own
    state and returns to it intact rather than being rebuilt. */
+
+/* ── Frame selection ─────────────────────────────────────────────────────── */
+
+/* Two mutually exclusive answers to "how many frames", sharing the span control
+   below them. Not the mode-tile pattern: this sits inside a dialog section
+   rather than choosing what the whole dialog is about. */
+.frame-choice {
+    display: flex;
+    gap: 0.35rem;
+    margin-bottom: 0.6rem;
+}
+
+.frame-choice-btn {
+    flex: 1 1 0;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--radius-control);
+    background: none;
+    color: var(--bs-body-color);
+    font-size: 0.8rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color var(--dur-state) var(--ease-state),
+                background-color var(--dur-state) var(--ease-state);
+}
+
+.frame-choice-btn:hover {
+    border-color: rgba(var(--accent-rgb), var(--wash-hover-border));
+    background-color: rgba(var(--accent-rgb), var(--wash-hover-fill));
+}
+
+.frame-choice-btn.selected {
+    border-color: var(--accent);
+    /* A shadow rather than a thicker border, so selecting does not reflow the
+       row — the same reasoning as the mode tiles it echoes. */
+    box-shadow: 0 0 0 1px var(--accent);
+    background-color: rgba(var(--accent-rgb), var(--wash-active-fill));
+}
+
+.frame-choice-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(var(--accent-rgb), 0.35);
+}
+
+.frame-previews {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Centred when there is only one, so a single-frame choice does not sit
+   awkwardly against the left edge. */
+.frame-previews:has(.frame-preview.d-none) {
+    justify-content: center;
+}
+
+.frame-preview {
+    margin: 0;
+    text-align: center;
+    font-size: 0.7rem;
+    color: var(--bs-secondary-color);
+}
+
+.frame-preview img {
+    display: block;
+    height: 72px;
+    width: auto;
+    max-width: 160px;
+    border-radius: var(--radius-control);
+    border: 1px solid var(--bs-border-color);
+    background-color: var(--bs-tertiary-bg);
+    object-fit: contain;
+}
+
+/* Nothing decoded yet, or a source that will not give up a frame. The box holds
+   its place so the dialog does not jump when one arrives. */
+.frame-preview img:not([src]) {
+    min-width: 96px;
+}
+
+/* The count of images a conversion is about to write. A button, because the
+   answer to "that is far too many" is the span control in the dialog. */
+.card-output {
+    align-self: flex-start;
+    padding: 0;
+    border: none;
+    background: none;
+    font-size: 0.78rem;
+    color: var(--bs-warning);
+    text-align: left;
+    cursor: pointer;
+}
+
+.card-output:hover {
+    text-decoration: underline;
+}
+
+.card-output:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(var(--accent-rgb), 0.35);
+    border-radius: var(--radius-control);
+}

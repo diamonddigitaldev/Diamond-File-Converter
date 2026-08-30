@@ -500,8 +500,10 @@ test("probe: an unconfigured binary degrades instead of throwing", async () => {
 // cross-kind conversions
 // ---------------------------------------------------------------------------
 
-const STILL = { ok: true, duration: null };
-const MOVING = { ok: true, duration: 3.2 };
+// A still reports no average frame rate; an animated GIF has one but still no
+// container duration, which is why isStill is an explicit signal.
+const STILL = { ok: true, isStill: true, duration: null };
+const MOVING = { ok: true, isStill: false, duration: 3.2 };
 
 test("formats: an animated source keeps its motion into a video container", () => {
     // gif -> mp4 used to be ASSEMBLE on kind alone, which treats the whole
@@ -534,6 +536,8 @@ test("job: with no probe yet, the static default stands", () => {
     // throw or guess wrongly in the meantime.
     assert.equal(defaultModeFor("webp", "png", null), formats.MODE.FRAMES);
     assert.equal(defaultModeFor("webp", "png", { ok: false }), formats.MODE.FRAMES);
+    assert.equal(defaultModeFor("webp", "png", { ok: true }), formats.MODE.FRAMES,
+        "a probe that says nothing about stillness is not evidence of it");
     assert.equal(defaultModeFor(null, "png", STILL), null);
     assert.equal(defaultModeFor("mp3", "png", MOVING), null, "an impossible pair has no mode");
 });

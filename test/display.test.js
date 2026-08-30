@@ -400,6 +400,17 @@ test("dialog: an image source is never asked about audio", () => {
     assert.equal(d.applicableSections("mp4", "mkv", DESCRIPTORS, "transcode").audio, true);
 });
 
+test("dialog: a picture target is not asked to pick a video codec", () => {
+    // Exporting frames to PNG was offering an encoder preset and a target
+    // bitrate above the controls that decide anything. Resizing and sampling
+    // still apply, so this is narrower than hiding the section outright.
+    assert.equal(d.applicableSections("mp4", "png", DESCRIPTORS, "frames").videoEncode, false);
+    assert.equal(d.applicableSections("png", "jpg", DESCRIPTORS, "transcode").videoEncode, false);
+    assert.equal(d.applicableSections("mp4", "gif", DESCRIPTORS, "transcode").videoEncode, false);
+    assert.equal(d.applicableSections("mp4", "mkv", DESCRIPTORS, "transcode").videoEncode, true);
+    assert.equal(d.applicableSections("mp4", "mp3", DESCRIPTORS, "extract").videoEncode, false);
+});
+
 test("dialog: a video target offers everything", () => {
     const s = d.applicableSections("mp4", "mp4", DESCRIPTORS, "transcode");
     assert.equal(s.video, true);
@@ -410,7 +421,7 @@ test("dialog: a video target offers everything", () => {
 
 test("dialog: an unknown target offers nothing rather than throwing", () => {
     const s = d.applicableSections("mp4", "nope", DESCRIPTORS, "transcode");
-    assert.deepEqual(s, { video: false, audio: false, image: false, trim: false, frames: false, resize: false });
+    assert.deepEqual(s, { video: false, videoEncode: false, audio: false, image: false, trim: false, frames: false, resize: false });
 });
 
 test("dialog: codec choices come from the container's own capabilities", () => {
@@ -590,7 +601,13 @@ test("display: the renderer's mode agrees with the job model's, everywhere", () 
     // defaultModeFor(). This is the guard that stops the two drifting — the
     // same treatment STATUS gets, and for the same reason.
     const { defaultModeFor } = require("../src/core/job");
-    const metas = [null, { ok: true, duration: null }, { ok: true, duration: 5 }, { ok: false }];
+    const metas = [
+        null,
+        { ok: true, isStill: true, duration: null },
+        { ok: true, isStill: false, duration: 5 },
+        { ok: true },
+        { ok: false },
+    ];
 
     let checked = 0;
     for (const sourceExt of formats.SUPPORTED_EXTENSIONS) {
@@ -610,7 +627,7 @@ test("display: the renderer's mode agrees with the job model's, everywhere", () 
 });
 
 test("display: a mode chosen by hand is not second-guessed", () => {
-    const job = { ext: "mp4", targetExt: "png", meta: { ok: true, duration: 60 }, settings: { mode: "thumbnail" } };
+    const job = { ext: "mp4", targetExt: "png", meta: { ok: true, isStill: false, duration: 60 }, settings: { mode: "thumbnail" } };
     assert.equal(d.effectiveMode(job, TARGETS, DESCRIPTORS), "thumbnail");
     assert.equal(d.effectiveMode({ ext: "mp4", targetExt: null }, TARGETS, DESCRIPTORS), null);
     assert.equal(d.effectiveMode({ ext: "mp4", targetExt: "nope" }, TARGETS, DESCRIPTORS), null);

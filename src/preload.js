@@ -25,6 +25,7 @@ const CH = {
     QUEUE_SET_CONCURRENCY: "queue:set-concurrency",
     PROBE_FILE:            "probe:file",
     FS_SCAN:               "fs:scan",
+    PREVIEW_FRAME:         "preview:frame",
     DIALOG_BROWSE_FILES:   "dialog:browse-files",
     DIALOG_BROWSE_FOLDER:  "dialog:browse-folder",
     DIALOG_CHOOSE_OUTPUT:  "dialog:choose-output",
@@ -59,6 +60,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
     // -- Inspection and ingest ------------------------------------------------
     probeFile: (filePath)    => ipcRenderer.invoke(CH.PROBE_FILE, filePath),
+
+    /**
+     * One frame, decoded at a timestamp, as a data URL — or null if the source
+     * will not give one up. Used to choose a frame by looking at it rather than
+     * by guessing a number.
+     */
+    previewFrame: (request) => ipcRenderer.invoke(CH.PREVIEW_FRAME, request),
     scanPaths: (paths, opts) => ipcRenderer.invoke(CH.FS_SCAN, paths, opts),
 
     /**

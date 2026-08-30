@@ -132,10 +132,13 @@ function defaultModeFor(sourceExt, targetExt, inputMeta) {
     const modes = formats.allowedModes(sourceExt, targetExt);
     if (modes.length === 0) return null;
 
+    // The probe says this outright: a GIF or WebP holding one picture reports
+    // no average frame rate. Duration alone cannot tell them apart, because
+    // neither an animated GIF nor a still one carries a container duration.
     const source = formats.getFormat(sourceExt);
     const isStill = source?.kind === formats.KIND.IMAGE
         && inputMeta?.ok === true
-        && !(inputMeta.duration > 0);
+        && inputMeta.isStill === true;
     if (!isStill) return modes[0];
 
     // One frame in means one file out: loop it into a clip for a video target,

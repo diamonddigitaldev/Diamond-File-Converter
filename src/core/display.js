@@ -203,7 +203,7 @@
         const source = descriptors ? descriptors[job.ext] : null;
         const meta = job.meta;
         const isStill = !!source && source.kind === "image"
-            && !!meta && meta.ok === true && !(meta.duration > 0);
+            && !!meta && meta.ok === true && meta.isStill === true;
         if (!isStill) return modes[0];
 
         const targetDesc = descriptors ? descriptors[job.targetExt] : null;
@@ -216,7 +216,7 @@
         return modes[0];
     }
 
-    const NONE = { video: false, audio: false, image: false, trim: false, frames: false, resize: false };
+    const NONE = { video: false, videoEncode: false, audio: false, image: false, trim: false, frames: false, resize: false };
 
     /**
      * Which sections of the dialog apply.
@@ -244,6 +244,11 @@
         return {
             // An audio container has no video stream to configure.
             video: !isAudio,
+            // ...and a picture has no video *codec* to choose: the container
+            // dictates one, there is no bitrate, preset or stream mode, and it
+            // is always encoded. Resizing and sampling still apply, which is
+            // why this is narrower than `video`.
+            videoEncode: !isAudio && !isImage,
             // An image has no audio stream, and neither has an image source.
             audio: !isImage && !fromImage,
             // Only image targets expose a quality knob of their own.
@@ -412,7 +417,11 @@
     function compactSettings(settings) {
         const out = {};
         for (const [section, values] of Object.entries(settings || {})) {
-            if (!values || typeof values !== "object") continue;
+            if (values === null || values === undefined || values === "") continue;
+            // A scalar is a setting in its own right rather than a group of
+            // fields to prune — `mode` is one, and dropping it silently threw
+            // away the choice between every frame and a single one.
+            if (typeof values !== "object") { out[section] = values; continue; }
             const kept = {};
             for (const [key, value] of Object.entries(values)) {
                 if (value === null || value === undefined || value === "") continue;

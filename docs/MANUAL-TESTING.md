@@ -21,7 +21,7 @@ sections — the history is useful.
 
 ```
 npm install
-npm test          # expect 126 passing, 0 failing
+npm test          # expect 145 passing, 0 failing
 npm start
 ```
 
@@ -731,3 +731,122 @@ This is the regression sweep — all of it worked in alpha.3 and must still:
 - [ ] "Apply to all remaining files" on an output conflict.
 - [ ] Convert does not re-run already-finished cards.
 - [ ] Toasts, Credits, F12 Developer Tools, and both themes.
+
+---
+
+## 2.0.0-alpha.4 — cross-kind conversions
+
+> **Status: not started.** Written 2026-08-30.
+
+Converting between *kinds* — a video into audio, a video into stills, a GIF into
+a video — has been offered in the format dropdown since the card grid landed.
+What it did once you chose it was another matter. The queue described this item
+as "surface the cross-kind conversions"; they were already surfaced, and quietly
+wrong.
+
+What changed, and so what to poke at:
+
+- **Choosing which frames.** A conversion that produces stills now has a
+  **Frames** section instead of Trim: a span with a preview of the frame at each
+  end, a choice between every frame in that span and a single one, and a running
+  count of the images it will write.
+- **An animated GIF into MP4 keeps its animation.** It used to be treated as one
+  still and looped for five seconds.
+- **A still WebP into PNG makes one file.** It used to make a *folder* holding
+  one frame.
+- **Retargeting across kinds no longer fails** on settings chosen for the old
+  target.
+- A picture target no longer asks for a video codec, bitrate or encoder preset.
+
+### Frames: choosing which ones
+
+- [ ] Queue a video of a minute or so and set its format to **PNG**.
+- [ ] The card shows roughly how many images that is, in amber, under the format
+      row. Click that line — **Advanced options opens.**
+- [ ] The section is headed **Frames**, not Trim, and offers **Every frame in
+      the range** / **A single frame**.
+- [ ] A preview of the actual frame appears at each end of the span, with its
+      timestamp beneath. **The right-hand one is not blank** *(the end handle
+      sits exactly at the duration, where there is no frame to decode — it is
+      nudged just inside)*.
+- [ ] Drag either handle: the previews follow, the timestamps update, and the
+      image count changes with them.
+- [ ] Drag quickly back and forth, then stop. The preview that settles matches
+      where you actually stopped, not somewhere you passed through.
+- [ ] The readout says **covering** a span, not "keeping" one.
+- [ ] Press **A single frame**: one handle, one preview, the readout clears, and
+      the count reads **1 image**.
+- [ ] Apply, and the card now reads **1 image**.
+- [ ] Reopen the dialog — it is still on **A single frame**.
+- [ ] Convert. Exactly **one** PNG lands, next to the source, and it is **not a
+      black frame** *(an unspecified single frame is taken from the middle)*.
+- [ ] Set a narrow range and **Every frame in the range**, convert, and count the
+      files. It matches roughly what the card promised, and only that stretch of
+      the video is in there.
+- [ ] The files are named `frame_000001.png` upwards and **sort in capture
+      order** in Explorer.
+
+### The volume guard
+
+- [ ] With a target of PNG over a long video, press **Convert**. A dialog says
+      about how many images this writes.
+- [ ] **Cancel** — nothing converts, the card stays Ready.
+- [ ] Confirm — it runs.
+- [ ] Narrow the range so it is under a thousand images and press Convert — **no
+      dialog**, it just runs.
+- [ ] Convert a single frame, or anything that is not a frame export — no dialog.
+
+### Conversions that used to be wrong
+
+- [ ] **An animated GIF to MP4.** The result *plays the animation* and is about
+      as long as the GIF. It must not be a single frozen frame held for five
+      seconds.
+- [ ] **A still WebP or GIF to PNG.** One file appears. **Not a folder.**
+- [ ] An animated WebP to PNG still gives you the Frames control and a folder,
+      because that one genuinely does move.
+- [ ] **A video to MP3.** Plays, right length, no video stream.
+- [ ] **A video to GIF.** Still animated, still good colours.
+- [ ] **A still image to MP4.** A short clip holding that picture.
+
+### Retargeting across kinds
+
+- [ ] Queue a video, open Advanced options, set a codec and a quality
+      deliberately, Apply.
+- [ ] Now change that card's format to **PNG** and convert. It works. *(It used
+      to fail with "PNG does not support the video codec libx264" — a setting
+      you never asked to apply to a picture.)*
+- [ ] Changing between two formats of the **same** kind — MP4 to MKV — **keeps**
+      your settings.
+
+### The dialog suits the conversion
+
+- [ ] Target **PNG**: the section is headed **Picture** and offers only Resize
+      and Frame rate. **No Stream, Codec, Quality or Encoder preset.**
+- [ ] Target **MP4**: headed **Video**, all of them present.
+- [ ] Target **MP3** from a video: no video section at all, no Resize.
+- [ ] An **image source into MP4**: no Audio section — a picture has none.
+- [ ] **Stream copy** is offered for MP4 to MKV.
+- [ ] Extracting audio from a video to **MP3**: "Copy without re-encoding" is
+      offered **only** if that video's audio is already MP3. From a normal
+      AAC-carrying MP4 it must be absent. *(It used to always be offered and
+      then fail inside ffmpeg.)*
+- [ ] Extracting to **M4A** from an AAC video does offer it, and copying works.
+
+### Metadata reads correctly for images
+
+The probe's still-vs-moving test was inverted, so this is worth a look:
+
+- [ ] An **animated GIF** card shows its dimensions.
+- [ ] A **still PNG or WebP** card shows its type without claiming a frame rate.
+- [ ] A video card is unchanged — resolution, duration, codec, size.
+- [ ] A corrupt file still settles on "unreadable".
+
+### Nothing else regressed
+
+- [ ] Drag and drop, folder ingest, selection, the two-click flow.
+- [ ] Trim still works normally on a video-to-video conversion, and still says
+      **keeping**.
+- [ ] The command preview updates as you change anything.
+- [ ] Convert several files of mixed kinds at once.
+- [ ] Both themes, and at the 880×600 minimum — **the frame previews and the
+      Frames block must fit** without the dialog scrolling sideways.

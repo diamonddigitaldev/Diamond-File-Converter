@@ -161,17 +161,17 @@
             </div>
 
             <div id="jm-video-section">
-              <h6 class="jm-section">Video</h6>
+              <h6 class="jm-section" id="jm-video-title">Video</h6>
               <div class="jm-grid">
-                <div class="jm-row">
+                <div class="jm-row jm-vcodec-only">
                   <label class="form-label" for="jm-vmode">Stream</label>
                   <select id="jm-vmode" class="form-select form-select-sm"></select>
                 </div>
-                <div class="jm-row jm-vencode">
+                <div class="jm-row jm-vencode jm-vcodec-only">
                   <label class="form-label" for="jm-vcodec">Codec</label>
                   <select id="jm-vcodec" class="form-select form-select-sm"></select>
                 </div>
-                <div class="jm-row jm-vencode jm-row-wide">
+                <div class="jm-row jm-vencode jm-vcodec-only jm-row-wide">
                   <label class="form-label" for="jm-quality-mode">Quality</label>
                   <div class="input-group input-group-sm">
                     <select id="jm-quality-mode" class="form-select jm-fixed-sm">
@@ -184,7 +184,7 @@
                   </div>
                   <div id="jm-crf-note" class="form-text"></div>
                 </div>
-                <div class="jm-row jm-vencode">
+                <div class="jm-row jm-vencode jm-vcodec-only">
                   <label class="form-label" for="jm-encpreset">Encoder preset</label>
                   <select id="jm-encpreset" class="form-select form-select-sm"></select>
                 </div>
@@ -259,8 +259,33 @@
             </div>
 
             <div id="jm-trim-section">
-              <h6 class="jm-section">Trim</h6>
+              <!-- Trim and frame selection are the same span control under two
+                   names. Cutting a clip and choosing which frames to export both
+                   come out as -ss/-t, so the slider is shared; what changes is
+                   the heading, whether there are two handles or one, and the
+                   count of images it is about to write. -->
+              <h6 class="jm-section" id="jm-trim-title">Trim</h6>
+
+              <div id="jm-frames-choice" class="frame-choice d-none" role="group" aria-label="How many frames">
+                <button type="button" class="frame-choice-btn selected" data-frame-mode="frames" aria-pressed="true">
+                  Every frame in the range
+                </button>
+                <button type="button" class="frame-choice-btn" data-frame-mode="thumbnail" aria-pressed="false">
+                  A single frame
+                </button>
+              </div>
+
               <div id="jm-trim-wrap">
+                <div id="jm-frame-previews" class="frame-previews d-none">
+                  <figure class="frame-preview">
+                    <img id="jm-frame-start" alt="">
+                    <figcaption id="jm-frame-start-cap">0:00</figcaption>
+                  </figure>
+                  <figure class="frame-preview" id="jm-frame-end-wrap">
+                    <img id="jm-frame-end" alt="">
+                    <figcaption id="jm-frame-end-cap">0:00</figcaption>
+                  </figure>
+                </div>
                 <div id="jm-trim-slider" class="trim-slider">
                   <div class="trim-track"></div>
                   <div id="jm-trim-range" class="trim-range"></div>
@@ -274,7 +299,8 @@
                   <span id="jm-trim-kept" class="text-body-secondary"></span>
                   <span id="jm-trim-end-label">0:00</span>
                 </div>
-                <div class="form-text">Drag either end. Hold <kbd>Shift</kbd> while dragging for finer control.</div>
+                <div class="form-text" id="jm-trim-help">Drag either end. Hold <kbd>Shift</kbd> while dragging for finer control.</div>
+                <div id="jm-frames-estimate" class="form-text d-none"></div>
               </div>
               <div id="jm-trim-unavailable" class="form-text d-none">
                 Duration is not known for this file, so it cannot be trimmed.
@@ -291,6 +317,30 @@
             <button type="button" class="btn btn-primary" id="jm-apply">Apply</button>
           </div>
 
+        </div>
+      </div>
+    </div>
+
+    <!-- Generic confirm. A blocking dialog is for a decision only the user can
+         make right now, before something irreversible-ish happens. Anything
+         merely reporting what already happened is a toast instead. -->
+    <div class="modal fade" id="confirm-modal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header border-0 pb-2">
+            <h5 class="modal-title d-flex align-items-center gap-2">
+              <span id="confirm-icon" class="material-icons-round accent">help_outline</span>
+              <span id="confirm-title">Are you sure?</span>
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body pt-0">
+            <p id="confirm-body" class="mb-0 text-body-secondary"></p>
+          </div>
+          <div class="modal-footer border-0 pt-0">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" id="confirm-ok">Confirm</button>
+          </div>
         </div>
       </div>
     </div>

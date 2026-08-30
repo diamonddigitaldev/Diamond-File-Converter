@@ -28,6 +28,9 @@ const IPC = {
     PROBE_FILE:     "probe:file",      // invoke(path)          -> metadata
     FS_SCAN:        "fs:scan",         // invoke(paths, opts)   -> { files, skipped, ... }
 
+    // One decoded frame, for choosing which frame to keep.
+    PREVIEW_FRAME:        "preview:frame",
+
     // Dialogs.
     DIALOG_BROWSE_FILES:  "dialog:browse-files",
     DIALOG_BROWSE_FOLDER: "dialog:browse-folder",
