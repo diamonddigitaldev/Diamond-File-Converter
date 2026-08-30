@@ -79,6 +79,7 @@ const SETTINGS_DEFAULTS = {
     concurrency:     null,   // null = derive from the CPU count
     nameTemplate:    "{name}",
     lastTargetByKind: {},
+    navCollapsed:    false,
 };
 
 module.exports = {

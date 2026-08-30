@@ -476,6 +476,16 @@ ipcMain.handle(IPC.JOB_RUN, async (_event, spec) => {
             return { jobId: job.id, status: STATUS.ERROR, error: resolved.error };
         }
         runnable = resolved.job;
+
+        // A pipeline's encode node can name a codec the target container cannot
+        // carry. The check above ran before the pipeline was folded in, so it
+        // never saw those settings — without this, ffmpeg is the first thing to
+        // object, and it does so in its own words rather than the app's.
+        const afterPipeline = validateJob(runnable);
+        if (!afterPipeline.valid) {
+            log(LOG.ERROR, `Pipeline settings rejected for ${job.inputPath}: ${afterPipeline.errors.join(" ")}`);
+            return { jobId: job.id, status: STATUS.ERROR, error: afterPipeline.errors[0] };
+        }
     }
 
     const result = await runJobToCompletion(runnable);
@@ -563,6 +573,12 @@ ipcMain.handle(IPC.JOB_PREVIEW, (_event, spec) => {
             const resolved = resolvePipeline(job, spec.pipelineId);
             if (resolved.error) return { ok: false, errors: [resolved.error], args: [] };
             job = resolved.job;
+
+            // Same reason as the run path: encode-node settings arrive after
+            // the first check, so the preview has to look again or it would
+            // show a command the run would then refuse.
+            const afterPipeline = validateJob(job);
+            if (!afterPipeline.valid) return { ok: false, errors: afterPipeline.errors, args: [] };
         } else if (spec.pipelineId === null && spec.processing === "pipeline") {
             return { ok: false, errors: ["Choose a pipeline."], args: [] };
         }

@@ -657,3 +657,229 @@ test("probe: an unconfigured binary degrades instead of throwing", async () => {
     assert.match(result.error, /not been configured/);
     probe.setFfprobePath(before);
 });
+
+// ---------------------------------------------------------------------------
+// pipeline — the editor's view layer
+// ---------------------------------------------------------------------------
+
+test("pipeline: the module stays loadable by the renderer", () => {
+    const file = path.join(__dirname, "..", "src", "core", "pipeline.js");
+    const code = fs.readFileSync(file, "utf8");
+
+    // The renderer loads this as a plain <script> with no Node access, so a
+    // single require() would break the editor at load time. display.js is
+    // policed the same way, for the same reason.
+    assert.ok(!/\brequire\s*\(/.test(code), "pipeline.js must not call require()");
+
+    const vm = require("vm");
+    const sandbox = { self: {} };
+    vm.createContext(sandbox);
+    vm.runInContext(code, sandbox);
+
+    assert.deepEqual(
+        Object.keys(sandbox.self.pipeline).sort(),
+        Object.keys(pipeline).sort(),
+        "both load paths must expose the same surface"
+    );
+});
+
+test("pipeline: every node type declares the parameters it reads", () => {
+    for (const [type, spec] of Object.entries(pipeline.NODE_TYPES)) {
+        assert.ok(Array.isArray(spec.params), `${type} has no params array`);
+
+        const keys = new Set(spec.params.map(p => p.key));
+        for (const key of spec.required ?? []) {
+            assert.ok(keys.has(key), `${type}: required "${key}" has no schema entry`);
+        }
+
+        for (const param of spec.params) {
+            assert.ok(param.key, `${type}: a param has no key`);
+            assert.ok(param.label, `${type}.${param.key} has no label`);
+            assert.ok(["number", "seconds", "enum"].includes(param.type),
+                `${type}.${param.key} has unusable type "${param.type}"`);
+            if (param.type === "enum") {
+                assert.ok(Array.isArray(param.options) && param.options.length > 0,
+                    `${type}.${param.key} is an enum with no options`);
+                for (const option of param.options) {
+                    assert.ok(option.value, `${type}.${param.key} has an option with no value`);
+                    assert.ok(option.label, `${type}.${param.key} has an option with no label`);
+                }
+            }
+        }
+    }
+});
+
+test("pipeline: the nodes needing a second source file are hidden", () => {
+    // A pipeline binds to one card and one input. Joining several files is a
+    // separate surface; these stay in the model so saved graphs still compile.
+    assert.equal(pipeline.NODE_TYPES.concat.hidden, true);
+    assert.equal(pipeline.NODE_TYPES.overlay.hidden, true);
+
+    const offered = Object.entries(pipeline.NODE_TYPES)
+        .filter(([, spec]) => !spec.hidden)
+        .map(([type]) => type);
+    assert.deepEqual(offered,
+        ["input", "trim", "scale", "crop", "fps", "volume", "encode", "output"]);
+});
+
+function connectable() {
+    return pipeline.createPipeline({
+        nodes: [
+            { id: "in", type: "input" },
+            { id: "sc", type: "scale", params: { width: 640 } },
+            { id: "vol", type: "volume", params: { volume: 1 } },
+            { id: "out", type: "output" },
+        ],
+        edges: [],
+    });
+}
+
+test("pipeline: a legal connection is allowed", () => {
+    const result = pipeline.canConnect(connectable(),
+        { from: "in", fromPort: "video", to: "sc", toPort: "in" });
+    assert.deepEqual(result, { ok: true, reason: null });
+});
+
+test("pipeline: connections the compiler could not honour are refused", () => {
+    const graph = connectable();
+
+    const mismatch = pipeline.canConnect(graph,
+        { from: "in", fromPort: "video", to: "vol", toPort: "in" });
+    assert.equal(mismatch.ok, false);
+    assert.match(mismatch.reason, /video cannot feed/);
+
+    const itself = pipeline.canConnect(graph,
+        { from: "sc", fromPort: "out", to: "sc", toPort: "in" });
+    assert.equal(itself.ok, false);
+    assert.match(itself.reason, /cannot connect to itself/);
+
+    const noSuchPort = pipeline.canConnect(graph,
+        { from: "in", fromPort: "subtitles", to: "sc", toPort: "in" });
+    assert.equal(noSuchPort.ok, false);
+    assert.match(noSuchPort.reason, /no subtitles output/);
+
+    const noSuchNode = pipeline.canConnect(graph,
+        { from: "ghost", fromPort: "video", to: "sc", toPort: "in" });
+    assert.equal(noSuchNode.ok, false);
+    assert.match(noSuchNode.reason, /No such node/);
+});
+
+test("pipeline: an input port takes one edge, because compile drops the rest", () => {
+    const graph = connectable();
+    graph.edges.push({ from: "in", fromPort: "video", to: "out", toPort: "video" });
+
+    // Same port type, so this is refused for occupancy rather than typing.
+    const second = pipeline.canConnect(graph,
+        { from: "sc", fromPort: "out", to: "out", toPort: "video" });
+    assert.equal(second.ok, false);
+    assert.match(second.reason, /already connected/);
+});
+
+test("pipeline: an output feeds one node, because a filter label is consumed once", () => {
+    const graph = connectable();
+    graph.edges.push({ from: "in", fromPort: "video", to: "sc", toPort: "in" });
+
+    // Legal as far as validate() is concerned; ffmpeg would refuse it without
+    // a split filter, which the compiler never emits.
+    const fanOut = pipeline.canConnect(graph,
+        { from: "in", fromPort: "video", to: "out", toPort: "video" });
+    assert.equal(fanOut.ok, false);
+    assert.match(fanOut.reason, /only feed one node/);
+});
+
+test("pipeline: a loop is refused at the edge rather than found later", () => {
+    const graph = pipeline.createPipeline({
+        nodes: [
+            { id: "in", type: "input" },
+            { id: "a", type: "scale", params: { width: 100 } },
+            { id: "b", type: "scale", params: { width: 200 } },
+            { id: "out", type: "output" },
+        ],
+        edges: [{ from: "a", fromPort: "out", to: "b", toPort: "in" }],
+    });
+
+    const loop = pipeline.canConnect(graph, { from: "b", fromPort: "out", to: "a", toPort: "in" });
+    assert.equal(loop.ok, false);
+    assert.match(loop.reason, /loop/);
+});
+
+test("pipeline: autoLayout puts a node to the right of whatever feeds it", () => {
+    const graph = linearPipeline();
+    pipeline.autoLayout(graph);
+
+    const at = (id) => graph.nodes.find(n => n.id === id).ui;
+    assert.ok(at("in").x < at("sc").x, "scale sits right of input");
+    assert.ok(at("sc").x < at("out").x, "output sits right of scale");
+    for (const node of graph.nodes) {
+        assert.ok(Number.isFinite(node.ui.x) && Number.isFinite(node.ui.y));
+    }
+});
+
+test("pipeline: autoLayout leaves a placed node where the user put it", () => {
+    const graph = linearPipeline();
+    graph.nodes.find(n => n.id === "sc").ui = { x: 999, y: 777 };
+    pipeline.autoLayout(graph);
+
+    assert.deepEqual(graph.nodes.find(n => n.id === "sc").ui, { x: 999, y: 777 });
+    assert.ok(Number.isFinite(graph.nodes.find(n => n.id === "in").ui.x));
+});
+
+test("pipeline: autoLayout still places every node in a cyclic graph", () => {
+    // The editor has to draw a broken graph in order for it to be fixable.
+    const graph = pipeline.createPipeline({
+        nodes: [
+            { id: "a", type: "scale", params: { width: 100 } },
+            { id: "b", type: "scale", params: { width: 200 } },
+        ],
+        edges: [
+            { from: "a", fromPort: "out", to: "b", toPort: "in" },
+            { from: "b", fromPort: "out", to: "a", toPort: "in" },
+        ],
+    });
+
+    pipeline.autoLayout(graph);
+    for (const node of graph.nodes) {
+        assert.ok(Number.isFinite(node.ui.x) && Number.isFinite(node.ui.y));
+    }
+});
+
+test("pipeline: node positions survive validate and compile untouched", () => {
+    const graph = linearPipeline();
+    pipeline.autoLayout(graph);
+
+    assert.equal(pipeline.validate(graph).valid, true);
+    const compiled = pipeline.compile(graph);
+    assert.match(compiled.filterComplex, /scale=640:360/);
+    assert.ok(graph.nodes.every(n => n.ui));
+});
+
+test("pipeline: an encode node carries its settings onto the job", () => {
+    // The only route to quality control on a card in pipeline mode, since its
+    // manual settings are dormant while a pipeline is assigned.
+    const graph = pipeline.createPipeline({
+        nodes: [
+            { id: "in", type: "input" },
+            { id: "enc", type: "encode", params: { video: { crf: 20 }, audio: { bitrate: 192 } } },
+            { id: "out", type: "output" },
+        ],
+        edges: [
+            { from: "in", fromPort: "video", to: "enc", toPort: "video" },
+            { from: "in", fromPort: "audio", to: "enc", toPort: "audio" },
+            { from: "enc", fromPort: "video", to: "out", toPort: "video" },
+            { from: "enc", fromPort: "audio", to: "out", toPort: "audio" },
+        ],
+    });
+
+    const job = createJob({ inputPath: "/clip.mp4", targetExt: "mp4" });
+    const applied = pipeline.applyToJob(job, graph);
+
+    assert.equal(applied.video.crf, 20);
+    assert.equal(applied.audio.bitrate, 192);
+    assert.equal(applied.video.codec, job.video.codec, "settings it does not name are left alone");
+    assert.equal(applied.pipelineId, graph.id);
+
+    // Passing straight through an encode node must not bracket a raw stream.
+    const compiled = pipeline.compile(graph);
+    assert.equal(compiled.filterComplex, null);
+    assert.deepEqual(compiled.maps, ["0:v", "0:a"]);
+});

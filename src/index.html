@@ -19,11 +19,31 @@
 </head>
 <body>
 
-    <div class="app-shell">
+    <div class="app-frame">
+
+        <!-- Files and Pipelines are siblings, not a stack: the rail stays put
+             so neither is somewhere you have to back out of. A third item
+             joins them when the Join surface lands. -->
+        <nav id="nav-rail" class="nav-rail" aria-label="Sections">
+            <button class="nav-item" data-view="files" type="button" aria-current="page">
+                <span class="material-icons-round nav-icon">grid_view</span>
+                <span class="nav-label">Files</span>
+            </button>
+            <button class="nav-item" data-view="pipelines" type="button">
+                <span class="material-icons-round nav-icon">account_tree</span>
+                <span class="nav-label">Pipelines</span>
+            </button>
+            <button id="nav-collapse" class="nav-collapse" type="button" title="Collapse">
+                <span class="material-icons-round nav-icon">chevron_left</span>
+                <span class="nav-label">Collapse</span>
+            </button>
+        </nav>
+
+    <div class="app-shell" data-view="files">
 
         <header class="app-header">
             <h1 class="app-title">Diamond File Converter</h1>
-            <div class="d-flex gap-2 align-items-center">
+            <div class="d-flex gap-2 align-items-center view-files-only">
                 <button id="btn-add-files" class="btn btn-sm btn-secondary d-inline-flex align-items-center gap-1">
                     <span class="material-icons-round" style="font-size:16px">note_add</span>Add Files
                 </button>
@@ -83,6 +103,66 @@
             </div>
         </footer>
 
+        <!-- Pipelines. A pipeline binds to one card and one input file, so the
+             palette offers no node needing a second source; joining several
+             files is the Join surface's job. The graph model, compiler and
+             validator all predate this view — it only draws them. -->
+        <div id="view-pipelines" class="pl-view">
+
+            <aside class="pl-library">
+                <div class="pl-library-head">
+                    <span class="pl-panel-title">Saved</span>
+                    <button id="pl-new" class="btn btn-sm btn-secondary d-inline-flex align-items-center gap-1">
+                        <span class="material-icons-round" style="font-size:15px">add</span>New
+                    </button>
+                </div>
+                <div id="pl-list" class="pl-list"></div>
+                <p id="pl-library-empty" class="pl-hint d-none">
+                    Nothing saved yet. Press <strong>New</strong> to build one.
+                </p>
+            </aside>
+
+            <section class="pl-main">
+                <div class="pl-toolbar">
+                    <input id="pl-name" class="form-control form-control-sm pl-name"
+                           type="text" placeholder="Pipeline name" aria-label="Pipeline name" disabled>
+                    <span id="pl-dirty" class="pl-dirty d-none">Unsaved</span>
+                    <div class="ms-auto d-flex gap-2">
+                        <button id="pl-tidy" class="btn btn-sm btn-outline-secondary" disabled>Tidy up</button>
+                        <button id="pl-duplicate" class="btn btn-sm btn-outline-secondary" disabled>Duplicate</button>
+                        <button id="pl-delete" class="btn btn-sm btn-outline-danger" disabled>Delete</button>
+                        <button id="pl-save" class="btn btn-sm btn-primary" disabled>Save</button>
+                    </div>
+                </div>
+
+                <div id="pl-canvas" class="pl-canvas">
+                    <svg id="pl-edges" class="pl-edges"></svg>
+                    <div id="pl-nodes" class="pl-nodes"></div>
+                    <p id="pl-canvas-empty" class="pl-hint pl-canvas-empty">
+                        Select a pipeline on the left, or create one.
+                    </p>
+                </div>
+
+                <div class="pl-footer">
+                    <div id="pl-messages" class="pl-messages"></div>
+                    <pre id="pl-preview" class="pl-preview"></pre>
+                </div>
+            </section>
+
+            <aside class="pl-inspector">
+                <div id="pl-palette-section" class="pl-inspector-section d-none">
+                    <span class="pl-panel-title">Add a step</span>
+                    <div id="pl-palette" class="pl-palette"></div>
+                </div>
+                <div id="pl-settings-section" class="pl-inspector-section">
+                    <span class="pl-panel-title">Settings</span>
+                    <div id="pl-settings"></div>
+                </div>
+            </aside>
+
+        </div>
+
+    </div>
     </div>
 
     <!-- New Job dialog. In-page Bootstrap modal per the house pattern: border-0
@@ -173,6 +253,10 @@
               <div id="jm-pipeline-empty" class="form-text d-none">
                 You have not built any pipelines yet.
               </div>
+              <button id="jm-pipeline-edit" type="button"
+                      class="btn btn-sm btn-outline-secondary mt-2 d-inline-flex align-items-center gap-1">
+                <span class="material-icons-round" style="font-size:15px">account_tree</span>Open the pipeline editor
+              </button>
             </div>
 
             <div id="jm-video-section">
@@ -310,13 +394,39 @@
       </div>
     </div>
 
+    <!-- Generic confirm. A blocking dialog is for a decision only the user can
+         make right now — discarding edits, deleting a pipeline. Anything that
+         merely reports what already happened is a toast instead. -->
+    <div class="modal fade" id="confirm-modal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header border-0 pb-2">
+            <h5 class="modal-title d-flex align-items-center gap-2">
+              <span id="confirm-icon" class="material-icons-round accent">help_outline</span>
+              <span id="confirm-title">Are you sure?</span>
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body pt-0">
+            <p id="confirm-body" class="mb-0 text-body-secondary"></p>
+          </div>
+          <div class="modal-footer border-0 pt-0">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" id="confirm-cancel">Cancel</button>
+            <button type="button" class="btn btn-primary" id="confirm-ok">Confirm</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="toast-host" class="toast-host" aria-live="polite"></div>
 
     <script src="../node_modules/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- display.js is dual-loaded: required by tests in Node, loaded here as a
-         plain script. It must come before renderer.js, which reads it off the
-         global. -->
+    <!-- display.js and pipeline.js are dual-loaded: required by tests in Node,
+         loaded here as plain scripts. Both must come before renderer.js, which
+         reads them off the global. pipeline.js gives the editor NODE_TYPES and
+         synchronous validation without an IPC round trip. -->
     <script src="core/display.js"></script>
+    <script src="core/pipeline.js"></script>
     <script src="renderer.js"></script>
 </body>
 </html>

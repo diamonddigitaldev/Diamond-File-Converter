@@ -1,0 +1,105 @@
+<!-- @dsCard group="Shell" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>Navigation Rail</title>
+<style>
+:root{
+  --accent:#9740fb; --accent-hover:#b06cff; --accent-muted:#c796ff; --accent-rgb:151,64,251;
+  --bg:#212529; --surface:#2b3035; --surface-2:#343a40; --border:#495057;
+  --text:#dee2e6; --text-dim:rgba(222,226,230,.75); --text-faint:rgba(222,226,230,.5);
+  --success:#198754; --warning:#ffc107; --danger:#dc3545; --info:#0dcaf0;
+  --success-rgb:25,135,84; --warning-rgb:255,193,7; --danger-rgb:220,53,69;
+  --radius-control:5px; --radius-card:8px; --radius-zone:12px;
+  --dur-micro:120ms; --dur-state:.2s; --dur-default:.3s;
+  --ease-standard:cubic-bezier(.4,0,.2,1);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;padding:40px;background:var(--bg);color:var(--text);
+  font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;font-size:16px;line-height:1.5;
+}
+h1{font-size:24px;margin:0 0 6px;font-weight:600;letter-spacing:-.01em}
+.sub{color:var(--text-dim);font-size:14px;margin:0 0 32px;max-width:70ch}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-faint);
+   margin:36px 0 14px;font-weight:600}
+h2:first-of-type{margin-top:0}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.stack{display:flex;flex-direction:column;gap:10px}
+.grid{display:grid;gap:14px}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);padding:18px}
+code,.mono{font-family:Consolas,'Courier New',monospace;font-size:12.5px}
+code{background:rgba(255,255,255,.07);padding:2px 6px;border-radius:4px;color:var(--accent-muted)}
+.note{font-size:13px;color:var(--text-dim);margin-top:10px;max-width:74ch}
+.note b{color:var(--text);font-weight:600}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{text-align:left;color:var(--text-faint);font-weight:600;font-size:11px;
+   text-transform:uppercase;letter-spacing:.08em;padding:0 14px 8px 0;border-bottom:1px solid var(--border)}
+td{padding:9px 14px 9px 0;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.swatch{width:26px;height:26px;border-radius:5px;border:1px solid rgba(255,255,255,.16);display:inline-block;vertical-align:middle}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:50rem;
+     background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border)}
+.caption{font-size:11.5px;color:var(--text-faint);margin-top:8px}
+</style>
+</head><body>
+<h1>Navigation Rail</h1>
+<p class="sub">A persistent left rail for an app with more than one top-level surface. Sections are siblings you switch between, never a view you have to back out of.</p>
+
+<style>
+.raildemo{display:flex;height:230px;border:1px solid var(--border);border-radius:var(--radius-card);overflow:hidden;max-width:560px}
+.rail{display:flex;flex-direction:column;gap:.25rem;width:168px;padding:1rem .5rem;background:var(--surface-2);border-right:1px solid var(--border);flex-shrink:0}
+.rail.narrow{width:56px}
+.ni{display:flex;align-items:center;gap:.6rem;padding:.5rem .6rem;border:1px solid transparent;border-radius:var(--radius-control);font-size:.9rem;white-space:nowrap;overflow:hidden;cursor:pointer}
+.ni:hover{border-color:rgba(var(--accent-rgb),.5);background:rgba(var(--accent-rgb),.04)}
+.ni.on{border-color:var(--accent);background:rgba(var(--accent-rgb),.06);color:var(--accent)}
+.ni .ic{font-size:1.05rem;flex-shrink:0}
+.ni.last{margin-top:auto;color:var(--text-faint)}
+.rail.narrow .lbl{display:none}
+.body{flex:1;min-width:0;padding:1rem;background:var(--bg)}
+.body h4{margin:0 0 4px;font-size:.95rem;font-weight:600}
+.body p{margin:0;font-size:.8rem;color:var(--text-dim)}
+</style>
+
+<h2>Expanded and collapsed</h2>
+<div class="row" style="align-items:flex-start;gap:18px">
+  <div class="raildemo">
+    <div class="rail">
+      <div class="ni on"><span class="ic">▦</span><span class="lbl">Files</span></div>
+      <div class="ni"><span class="ic">⑂</span><span class="lbl">Pipelines</span></div>
+      <div class="ni last"><span class="ic">‹</span><span class="lbl">Collapse</span></div>
+    </div>
+    <div class="body"><h4>Files</h4><p>The active section fills the rest of the window.</p></div>
+  </div>
+  <div class="raildemo" style="max-width:300px">
+    <div class="rail narrow">
+      <div class="ni on"><span class="ic">▦</span><span class="lbl">Files</span></div>
+      <div class="ni"><span class="ic">⑂</span><span class="lbl">Pipelines</span></div>
+      <div class="ni last"><span class="ic">›</span><span class="lbl">Expand</span></div>
+    </div>
+    <div class="body"><h4>Collapsed</h4><p>Icons only, label moved to <code>title</code>.</p></div>
+  </div>
+</div>
+
+<h2>The recipe</h2>
+<table>
+<tr><th>Part</th><th>Value</th></tr>
+<tr><td>Rail</td><td><code>168px</code> expanded, <code>56px</code> collapsed, <code>--dur-state --ease-state</code> on width</td></tr>
+<tr><td>Surface</td><td><code>--bs-tertiary-bg</code> with a <code>--bs-border-color</code> right edge — a step back from the content, not a block of accent</td></tr>
+<tr><td>Item</td><td><code>.5rem .6rem</code> padding, <code>--radius-control</code>, icon <code>20px</code> + label, <code>.6rem</code> gap</td></tr>
+<tr><td>Hover</td><td>border <code>rgba(accent, .5)</code>, fill <code>rgba(accent, .04)</code> — the standard wash ladder</td></tr>
+<tr><td>Active</td><td>border <code>rgba(accent, 1)</code>, fill <code>rgba(accent, .06)</code>, <b>and the label in <code>--accent</code></b></td></tr>
+<tr><td>Collapse control</td><td>Pinned with <code>margin-top:auto</code>, muted, chevron rotated 180° when collapsed</td></tr>
+<tr><td>Focus</td><td><code>box-shadow: 0 0 0 .2rem rgba(accent, .35)</code> on <code>:focus-visible</code>, <code>outline:none</code></td></tr>
+</table>
+
+<h2>Where it sits in the shell</h2>
+<p class="note">The rail is <b>outside</b> the padded content column, so it reaches the window edge. That means the shell is no longer the outermost element: an <code>.app-frame</code> row wraps the rail and the column, and the column keeps the padding, the header, the content and the footer. Give the column <code>min-width:0</code> or a wide child stretches it and the whole window scrolls sideways.</p>
+
+<h2>Switching</h2>
+<p class="note"><b>One attribute decides what is visible.</b> A <code>data-view</code> on the shell, and CSS keyed off it. Where the sections' own elements already manage a <code>d-none</code> of their own, the view rules <b>force-hide</b> with <code>!important</code> rather than competing — each section keeps its internal state and returns to it intact instead of being rebuilt.</p>
+<p class="note"><b>Every route out goes through one function.</b> A rail click, a link from a dialog and a file drop all call the same switcher, so an unsaved-work guard cannot be sidestepped by arriving a different way. A drop onto a non-file section runs the guard, switches, then ingests — and a declined guard cancels the drop rather than ingesting behind it.</p>
+<p class="note"><b>The keyboard follows the view.</b> A global key handler that already bails while a modal is open must bail outside the active section too, or Delete acts on something the user cannot see.</p>
+<p class="note"><b>Collapse is remembered.</b> A narrow window is exactly where someone collapses it, and exactly where being made to do it again every launch would grate. Persist it with the app's normal settings store.</p>
+<p class="note"><b>Do not ship a destination that goes nowhere.</b> A section gets a rail item when it is built. A greyed "coming soon" item is a dead end the user cannot resolve — the locked tile in <a href="../components/mode-tiles.html" style="color:var(--accent-muted)">Mode Tiles</a> works only because saving one pipeline unlocks it.</p>
+
+</body></html>

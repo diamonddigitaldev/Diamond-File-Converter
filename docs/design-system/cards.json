@@ -103,5 +103,15 @@
     "file": "patterns/theme.html",
     "title": "Theming",
     "group": "Patterns"
+  },
+  {
+    "file": "shell/nav-rail.html",
+    "title": "Navigation Rail",
+    "group": "Shell"
+  },
+  {
+    "file": "components/node-canvas.html",
+    "title": "Node Canvas",
+    "group": "Components"
   }
 ]
