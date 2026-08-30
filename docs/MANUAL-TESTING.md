@@ -481,8 +481,9 @@ With no pipelines saved (a clean profile):
 
 ## 2.0.0-alpha.3 — fixes from the first manual test pass
 
-> **Status: not started.** Written 2026-08-28. These fix defects found by the
-> first hands-on pass on real Windows; nothing below has been re-tested yet.
+> **Status: PASSED.** Written 2026-08-28, run and passed 2026-08-30. Every
+> check below was executed by hand on real Windows and passed, including the
+> two "still unconfirmed" items at the end.
 
 The first pass reported nine issues. Seven were reproduced in the code and are
 fixed here. **Two were not reproducible and are still open** — see "Still
