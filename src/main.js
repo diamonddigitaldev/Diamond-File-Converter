@@ -11,7 +11,6 @@ const { buildArgs } = require("./core/ffmpeg-args");
 const probe = require("./core/probe");
 const paths = require("./core/paths");
 const scan = require("./core/scan");
-const pipeline = require("./core/pipeline");
 const version = require("./core/version");
 
 const LOG_LEVELS = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3 };
@@ -58,7 +57,6 @@ const store = new Store({
         },
         settings: SETTINGS_DEFAULTS,
         presets: [],
-        pipelines: [],
     }
 });
 
@@ -419,27 +417,6 @@ function runJobToCompletion(job) {
 
 // ── IPC ──────────────────────────────────────────────────────────────────────
 
-/**
- * Fold a saved pipeline into a job. Returns { job, error }.
- *
- * A missing or invalid graph is an error rather than a silent fallback: the
- * file would otherwise convert with whatever settings happened to be left on
- * it, which is not what was asked for.
- */
-function resolvePipeline(job, pipelineId) {
-    const graph = (store.get("pipelines") ?? []).find(p => p.id === pipelineId);
-    if (!graph) return { job: null, error: "That pipeline no longer exists." };
-
-    const check = pipeline.validate(graph);
-    if (!check.valid) return { job: null, error: `Pipeline is not valid: ${check.errors[0]}` };
-
-    try {
-        return { job: pipeline.applyToJob(job, graph), error: null };
-    } catch (err) {
-        return { job: null, error: err.message };
-    }
-}
-
 ipcMain.handle(IPC.JOB_RUN, async (_event, spec) => {
     const settings = store.get("settings") ?? SETTINGS_DEFAULTS;
 
@@ -468,27 +445,7 @@ ipcMain.handle(IPC.JOB_RUN, async (_event, spec) => {
         return { jobId: job.id, status: STATUS.ERROR, error: validation.errors[0] };
     }
 
-    let runnable = job;
-    if (spec.pipelineId) {
-        const resolved = resolvePipeline(job, spec.pipelineId);
-        if (resolved.error) {
-            log(LOG.ERROR, `Pipeline failed for ${job.inputPath}: ${resolved.error}`);
-            return { jobId: job.id, status: STATUS.ERROR, error: resolved.error };
-        }
-        runnable = resolved.job;
-
-        // A pipeline's encode node can name a codec the target container cannot
-        // carry. The check above ran before the pipeline was folded in, so it
-        // never saw those settings — without this, ffmpeg is the first thing to
-        // object, and it does so in its own words rather than the app's.
-        const afterPipeline = validateJob(runnable);
-        if (!afterPipeline.valid) {
-            log(LOG.ERROR, `Pipeline settings rejected for ${job.inputPath}: ${afterPipeline.errors.join(" ")}`);
-            return { jobId: job.id, status: STATUS.ERROR, error: afterPipeline.errors[0] };
-        }
-    }
-
-    const result = await runJobToCompletion(runnable);
+    const result = await runJobToCompletion(job);
 
     // Failures are reported on the card and in a toast, not as a blocking
     // dialog. v1 opened one modal per failed file mid-queue, which with a
@@ -565,23 +522,9 @@ ipcMain.handle(IPC.APP_GET_FORMATS, () => ({
 // argument builder, so what the dialog shows is what will actually be executed.
 ipcMain.handle(IPC.JOB_PREVIEW, (_event, spec) => {
     try {
-        let job = createJob(spec);
+        const job = createJob(spec);
         const validation = validateJob(job);
         if (!validation.valid) return { ok: false, errors: validation.errors, args: [] };
-
-        if (spec.pipelineId) {
-            const resolved = resolvePipeline(job, spec.pipelineId);
-            if (resolved.error) return { ok: false, errors: [resolved.error], args: [] };
-            job = resolved.job;
-
-            // Same reason as the run path: encode-node settings arrive after
-            // the first check, so the preview has to look again or it would
-            // show a command the run would then refuse.
-            const afterPipeline = validateJob(job);
-            if (!afterPipeline.valid) return { ok: false, errors: afterPipeline.errors, args: [] };
-        } else if (spec.pipelineId === null && spec.processing === "pipeline") {
-            return { ok: false, errors: ["Choose a pipeline."], args: [] };
-        }
 
         return { ok: true, errors: [], args: buildArgs(job, { outputPath: "<output>", progress: false }) };
     } catch (err) {
@@ -607,20 +550,6 @@ ipcMain.handle(IPC.PRESET_DELETE, (_event, id) => {
     store.set("presets", presets);
     return presets;
 });
-
-ipcMain.handle(IPC.PIPELINE_LIST, () => store.get("pipelines"));
-ipcMain.handle(IPC.PIPELINE_SAVE, (_event, graph) => {
-    const pipelines = store.get("pipelines").filter(p => p.id !== graph.id);
-    pipelines.push(graph);
-    store.set("pipelines", pipelines);
-    return pipelines;
-});
-ipcMain.handle(IPC.PIPELINE_DELETE, (_event, id) => {
-    const pipelines = store.get("pipelines").filter(p => p.id !== id);
-    store.set("pipelines", pipelines);
-    return pipelines;
-});
-ipcMain.handle(IPC.PIPELINE_VALIDATE, (_event, graph) => pipeline.validate(graph));
 
 // ── Auto-update ──────────────────────────────────────────────────────────────
 

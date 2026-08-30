@@ -113,12 +113,8 @@
         return parts.join(" · ");
     }
 
-    /**
-     * Short status line for a card, plus the semantic tone to colour it with.
-     * `pipelines` is optional and only needed to spot a card pointing at a
-     * pipeline that has since been deleted.
-     */
-    function describeStatus(job, pipelines) {
+    /** Short status line for a card, plus the semantic tone to colour it with. */
+    function describeStatus(job) {
         switch (job.status) {
             case STATUS.RUNNING:
                 return { text: "Converting", tone: "running" };
@@ -135,45 +131,8 @@
                 return { text: "Skipped", tone: "muted" };
             default:
                 if (!job.targetExt) return { text: "Choose a format", tone: "warning" };
-                // Same amber treatment as an unset format: something is missing
-                // and the file cannot run until it is resolved.
-                if (job.processing === "pipeline" && !job.pipelineId) {
-                    return { text: "Choose a pipeline", tone: "warning" };
-                }
-                if (job.processing === "pipeline" && !hasUsableProcessing(job, pipelines)) {
-                    return { text: "Pipeline missing", tone: "warning" };
-                }
                 return { text: "Ready", tone: "ready" };
         }
-    }
-
-    /**
-     * Is this card actually runnable? A pipeline-mode card whose pipeline has
-     * since been deleted is not — it must not quietly fall back to whatever
-     * manual settings it happens to still hold.
-     */
-    function findPipeline(job, pipelines) {
-        if (!job || job.processing !== "pipeline") return null;
-        const list = pipelines || [];
-        for (const p of list) if (p.id === job.pipelineId) return p;
-        return null;
-    }
-
-    function hasUsableProcessing(job, pipelines) {
-        if (!job || job.processing !== "pipeline") return true;
-        return findPipeline(job, pipelines) !== null;
-    }
-
-    /**
-     * The line under a card's metadata: the pipeline it runs, or a summary of
-     * whatever manual settings were changed. Null when there is nothing to say.
-     */
-    function describeProcessing(job, pipelines) {
-        if (job && job.processing === "pipeline") {
-            const found = findPipeline(job, pipelines);
-            return found ? `Pipeline: ${found.name}` : null;
-        }
-        return summariseSettings(job ? job.settings : null);
     }
 
     /** "3 files converted, 1 failed" — the post-run summary. */
@@ -451,9 +410,6 @@
         qualityDescriptor,
         summariseSettings,
         compactSettings,
-        describeProcessing,
-        hasUsableProcessing,
-        findPipeline,
         CODEC_LABELS,
         formatDuration,
         formatBytes,

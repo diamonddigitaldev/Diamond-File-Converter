@@ -31,10 +31,6 @@ const CH = {
     PRESET_LIST:           "preset:list",
     PRESET_SAVE:           "preset:save",
     PRESET_DELETE:         "preset:delete",
-    PIPELINE_LIST:         "pipeline:list",
-    PIPELINE_SAVE:         "pipeline:save",
-    PIPELINE_DELETE:       "pipeline:delete",
-    PIPELINE_VALIDATE:     "pipeline:validate",
     SHELL_OPEN_PATH:       "shell:open-path",
     SHELL_SHOW_IN_FOLDER:  "shell:show-in-folder",
     SHELL_OPEN_EXTERNAL:   "shell:open-external",
@@ -91,14 +87,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     browseFolder: () => ipcRenderer.invoke(CH.DIALOG_BROWSE_FOLDER),
     chooseOutput: () => ipcRenderer.invoke(CH.DIALOG_CHOOSE_OUTPUT),
 
-    // -- Presets and pipelines ------------------------------------------------
+    // -- Presets --------------------------------------------------------------
     listPresets:      ()       => ipcRenderer.invoke(CH.PRESET_LIST),
     savePreset:       (preset) => ipcRenderer.invoke(CH.PRESET_SAVE, preset),
     deletePreset:     (id)     => ipcRenderer.invoke(CH.PRESET_DELETE, id),
-    listPipelines:    ()       => ipcRenderer.invoke(CH.PIPELINE_LIST),
-    savePipeline:     (p)      => ipcRenderer.invoke(CH.PIPELINE_SAVE, p),
-    deletePipeline:   (id)     => ipcRenderer.invoke(CH.PIPELINE_DELETE, id),
-    validatePipeline: (p)      => ipcRenderer.invoke(CH.PIPELINE_VALIDATE, p),
 
     // -- Shell and app --------------------------------------------------------
     openPath:     (target) => ipcRenderer.invoke(CH.SHELL_OPEN_PATH, target),

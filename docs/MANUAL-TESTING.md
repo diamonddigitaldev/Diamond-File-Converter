@@ -7,21 +7,21 @@ the real filesystem, real dialogs and real Windows integration.
 A new section is appended for each version or fix. Do not rewrite earlier
 sections — the history is useful.
 
-> ### Nothing here has been run yet
+> ### Read the status line on each section
 >
-> **No manual testing has been carried out on any section of this document.** It
-> is deliberately on hold until the team has approved the UX direction — there is
-> no value in working through a long checklist against an interface that may
-> still change shape.
+> **2.0.0-alpha.3 has been run in full and passed.** Earlier sections were
+> deliberately held until the UX direction settled, and one section is marked
+> **WITHDRAWN** because the feature it covers was removed.
 >
-> Every section carries its own status line. A written checklist is not a passed
-> one; do not describe any build as tested on the strength of this file existing.
+> A written checklist is not a passed one. Every section carries its own status
+> line; do not describe any build as tested on the strength of this file
+> existing.
 
 **Before starting:**
 
 ```
 npm install
-npm test          # expect 138 passing, 0 failing
+npm test          # expect 126 passing, 0 failing
 npm start
 ```
 
@@ -49,7 +49,9 @@ broad rather than targeted.
 ### Window and first run
 
 - [ ] App opens at roughly 1100×780 on a clean profile.
-- [ ] Window cannot be resized below about 720×560.
+- [ ] Window cannot be resized below 880×600. *(Raised from 720×560 in
+      alpha.4 — below roughly 800px wide the selection bar clipped its own
+      buttons.)*
 - [ ] Resize and move the window, close and reopen — position and size are
       remembered.
 - [ ] Menu bar shows **Menu** and **Credits**.
@@ -406,10 +408,13 @@ no scrollbar — the text just disappears. Check at a few window sizes.
 
 ---
 
-## 2.0.0-alpha.2 — Processing mode (Manual settings / Pipeline)
+## 2.0.0-alpha.2 — Processing mode (Manual settings / Pipeline) — WITHDRAWN
 
-> **Status: not started.** Written 2026-08-28, awaiting UX sign-off before the
-> pass begins. Nothing below has been executed.
+> **Status: WITHDRAWN 2026-08-30. Do not run this section.** Pipelines were
+> removed from the application: too complex for what the app is for, and the
+> editor built on top of them in alpha.4 was unintuitive in use. There is no
+> processing-mode chooser any more — a file is configured by hand, full stop.
+> Kept here as a record of what was tried, not as work to do.
 
 A card is configured **either** by hand **or** by a saved pipeline, never both.
 The chooser is two tiles at the top of the advanced options dialog.
@@ -605,203 +610,86 @@ establishing whether there is a bug at all, not confirming a fix.
       menu had been used more than once, and whether focus had been in another
       application first.
 
-
 ---
 
-## 2.0.0-alpha.4 — Pipeline editor
+## 2.0.0-alpha.4 — pipelines removed, window minimum raised
 
 > **Status: not started.** Written 2026-08-30.
 
-alpha.2 shipped everything downstream of a pipeline — the Manual settings /
-Pipeline tiles, the card's `processing` mode, the amber "Pipeline missing"
-state — but no way to *make* one. The Pipeline tile has been locked in every
-released build, with nothing able to unlock it. This closes that.
+Two changes, both subtractive.
 
-Two things changed shape as a result, and both need looking at even where they
-were not touched directly:
+**Pipelines are gone.** The feature was out of proportion to what this app is
+for: a node editor is a large, fiddly thing to learn in order to do something
+the advanced options dialog already does per file, and in use it proved
+unintuitive. Everything has been removed — the editor, the Manual settings /
+Pipeline chooser in the advanced options dialog, the graph model and compiler,
+the IPC channels and the stored pipelines. Joining several files into one is
+still wanted and is tracked separately; it was never going to be built on this.
 
-- **The window has a navigation rail down the left.** Files and Pipelines are
-  siblings now. Everything in the files view should behave exactly as it did in
-  alpha.3, only narrower.
-- **A pipeline binds to one file.** Joining several files together is a separate
-  surface, not yet built, so the palette offers no step that would need a second
-  source. `Concatenate` and `Overlay` still exist in the saved format and still
-  compile — they simply cannot be added from the editor.
+**The window will no longer shrink to a size that breaks it.** The old minimum
+of 720×560 let the selection bar run past the right edge and clip its own
+buttons.
 
-An automated pass drove the real app through building, saving and converting
-through a pipeline, and checked the output with ffprobe. What it cannot judge is
-whether any of it *looks* right, whether dragging feels right, or what happens
-when two things are done at once.
+So most of this section is checking that removing something did not take
+anything else with it.
 
-### The navigation rail
+### The window minimum
 
-- [ ] The app opens on **Files**, with that item marked in green.
-- [ ] Click **Pipelines**. The card grid disappears, the editor fills the
-      window, and the green mark moves. **Add Files** and **Add Folder** go
-      with the grid — the header keeps only the title.
-- [ ] Click **Files** again. The grid comes back **exactly as it was** — same
-      cards, same selection, same scroll position, mid-conversion progress
-      still ticking if a batch is running.
-- [ ] Press **Collapse** at the bottom. The rail narrows to icons; hovering one
-      shows its name. The chevron turns round.
-- [ ] Collapse it, **quit and reopen the app** — it is still collapsed. Expand
-      it, quit and reopen — still expanded.
-- [ ] Tab through the rail. Each item takes a visible green focus ring, and
-      Enter activates it.
+- [ ] The window will not resize below **880×600** in either direction.
+- [ ] At exactly the minimum, with several files queued and all selected:
+      the selection bar fits, **no button is cut off at the right edge**, and
+      the Deselect button is fully visible.
+- [ ] At the minimum the footer still shows the summary, the progress bar and
+      all three buttons without overlap.
+- [ ] At the minimum at least one full row of cards is visible in the grid.
+- [ ] Collapse the rail at the minimum size — nothing reflows badly.
+- [ ] An existing install that had a smaller window remembered will open at or
+      above the new minimum rather than at the old saved size.
 
-### Getting to the editor from the dialog
+### Nothing offers a pipeline any more
 
-- [ ] With no pipelines saved, drop a file, open **Advanced options**. The
-      **Pipeline** tile is locked and says why.
-- [ ] Press **Open the pipeline editor**. The dialog closes and Pipelines
-      opens.
-- [ ] Build and save one, go back to Files, reopen **Advanced options** on the
-      same file — the **Pipeline** tile is now unlocked and the pipeline is in
-      the dropdown.
+- [ ] The rail shows **Files** only. There is no Pipelines item.
+- [ ] Open **Advanced options** on a card. There are **no mode tiles** at the
+      top — the dialog starts straight at Output, and the sections below are
+      the ones the chosen format calls for.
+- [ ] There is no "Use pipeline" dropdown and no link to any editor anywhere.
+- [ ] No card ever reads "Choose a pipeline" or "Pipeline missing".
+- [ ] Every card with a format reads **Ready**.
+- [ ] The settings summary under a card shows the manual settings applied to
+      it, and is blank when none have been.
 
-### Building a pipeline
+### An existing install that had pipelines saved
 
-- [ ] Press **New**. A pipeline appears named "New pipeline", the name field
-      is focused with the text selected, and the list on the left shows it as
-      **(unsaved)**.
-- [ ] It arrives with **Input** and **Output** already placed and connected —
-      video to video, audio to audio — and the strip underneath reads
-      **Ready to use** with "Nothing is filtered".
-- [ ] The palette on the right offers exactly: Trim, Scale, Crop, Frame rate,
-      Volume, Encode. **No Concatenate and no Overlay.**
-- [ ] Press **Scale**. A node appears in the middle of the canvas, already
-      selected, with its settings on the right. Press **Scale** three more
-      times — each lands in a clear space, never on top of the last.
-- [ ] Drag a node around. It moves smoothly, its edges follow, and the cursor
-      is a closed hand while dragging.
-- [ ] Drag a node far to the right and down — the canvas gains scrollbars
-      rather than clipping it. Drag it back; when the graph fits, **the
-      scrollbars go away again**.
+Worth doing on a profile that ran alpha.4's first build, if you still have one:
 
-### Connecting
+- [ ] The app opens normally with no error.
+- [ ] Cards that were previously set to use a pipeline now behave as ordinary
+      cards: they take their manual settings and convert.
+- [ ] Nothing in the interface refers to the pipelines that were saved.
 
-- [ ] Drag from **Input's** top (video) dot. A dashed line follows the pointer,
-      and only the ports it could legally land on light up green — the rest
-      dim.
-- [ ] Drop it on Scale's input. The connection is made and drawn in blue.
-- [ ] Video edges are blue, audio edges are green, and each takes the colour of
-      the port it comes *from*.
-- [ ] Try to connect **Input's audio to Scale** — refused, with a message
-      naming the two types rather than a generic complaint.
-- [ ] Try to connect a **second** thing into an input that is already
-      connected — refused with "That input is already connected."
-- [ ] Try to connect **one output into two different nodes** — refused with
-      "An output can only feed one node." *(This one matters: the saved format
-      allows it and it would only fail once ffmpeg ran.)*
-- [ ] Wire a node **back into something upstream of itself** — refused with
-      "That would make a loop", at the moment of the drop.
-- [ ] **Click a connected input dot.** The connection is removed.
-- [ ] Press **Tidy up**. Every node is re-laid-out left to right in the order
-      the streams flow through them.
+### The rail still works with one destination
 
-### Settings on a step
+- [ ] Clicking **Files** when already on Files does nothing awkward.
+- [ ] Collapse and expand still work, and the choice survives a restart.
+- [ ] Keyboard: Tab reaches the rail items, each takes a focus ring, Enter
+      activates.
 
-- [ ] Select **Crop** without filling anything in. Its node border turns
-      **amber**, the strip below names it as missing a required setting, and
-      the required fields say "Required." in amber.
-- [ ] Fill in width and height. The amber clears and the node's summary line
-      shows the values.
-- [ ] Select **Scale**, set only a width. The help says the other side is
-      worked out from it, and the command preview shows `-2` for the height.
-- [ ] Set **Fit** to each of its three options and watch the preview change.
-- [ ] **Volume** takes a multiplier: 1 changes nothing, 0.5 halves it. Setting
-      2 shows `volume=2` in the preview.
-- [ ] Clear a field entirely — the value is unset, not zero.
-- [ ] Press **Remove this step** on a Scale node. It goes, and so do its
-      connections.
-- [ ] Select a node and press **Delete**. Same result.
-- [ ] Select **Input** or **Output** and press Delete — refused, with
-      "Every pipeline needs its Input and its Output." Neither has a
-      **Remove this step** button.
-- [ ] Press **Escape** — the selection clears and the inspector says to select
-      a step.
+### Everything else still behaves
 
-### The command preview
+This is the regression sweep — all of it worked in alpha.3 and must still:
 
-- [ ] With Input → Scale(640×360) → Output and audio passing straight through,
-      the preview reads `-filter_complex [0:v]scale=…[v0]`, then `-map [v0]`,
-      then `-map 0:a`.
-- [ ] **The filtered stream is bracketed and the untouched one is not.**
-      `-map [v0]` with brackets, `-map 0:a` without. Brackets on an unfiltered
-      stream make ffmpeg fail to open the output — this is the defect that
-      survived weeks of passing unit tests.
-- [ ] Disconnect a step so a node no longer reaches the Output. The strip warns
-      that it will be ignored, in amber, but the pipeline is **still usable** —
-      warnings do not block.
-- [ ] The preview text can be **selected and copied**.
-
-### Saving, duplicating, deleting
-
-- [ ] Change anything. **Unsaved** appears in amber next to the name and
-      **Save** becomes available.
-- [ ] Press **Save**. A toast confirms it by name, the amber marker clears, and
-      the list entry loses "(unsaved)".
-- [ ] Try to save a pipeline with a required setting missing — refused with the
-      reason, and nothing is saved.
-- [ ] Rename it. The list updates as you type.
-- [ ] Press **Duplicate**. A copy appears named "… copy", unsaved, and editing
-      it does **not** change the original.
-- [ ] Press **Delete** on a saved pipeline. A confirm asks first; **Cancel**
-      leaves it alone.
-- [ ] Delete one that is assigned to cards. The confirm says how many files use
-      it. Confirm, go to Files — those cards read **Pipeline missing** in amber
-      and **Convert is disabled**.
-
-### Leaving with unsaved changes
-
-The guard is one code path, so it must fire from every direction:
-
-- [ ] Make a change, then click **Files** in the rail — asked to discard.
-      Cancel returns you to the editor with the change intact.
-- [ ] Same, then **Discard** — you land on Files and the change is gone.
-- [ ] Make a change, then click a **different pipeline** in the list — asked.
-- [ ] Make a change, then press **New** — asked.
-- [ ] Make a change, then **drag a file onto the window** — asked. Cancel, and
-      **the file is not added** and you stay in the editor. Repeat and
-      Discard — you land on Files with the file added.
-- [ ] With no unsaved changes, all of the above happen immediately with no
-      prompt.
-
-### Converting through a pipeline
-
-- [ ] Assign a pipeline to a card, press Convert, and check the output really
-      is what the pipeline described — resolution with ffprobe or any player.
-- [ ] A stream the pipeline does not touch **survives** — audio still present
-      and not re-encoded to something unexpected.
-- [ ] Add an **Encode** step, set a video codec the target format cannot carry
-      (ProRes into a WebM, say). The card fails with a **readable reason from
-      the app**, not raw ffmpeg output.
-- [ ] Set a CRF on an Encode step and confirm the output really changed size.
-- [ ] Convert several files through the same pipeline at once. All succeed and
-      progress is reported per card.
-- [ ] Edit a pipeline that cards are already using, save, go back — those cards
-      pick up the change without being re-assigned.
-
-### Nothing about the files view regressed
-
-- [ ] Drop a folder of mixed media. Cards, probes, skipped-file toast — all as
-      before.
-- [ ] Selection: click, ctrl+click, shift+click, **Ctrl+A**, Escape, Delete.
-- [ ] While the **editor** is showing, press Ctrl+A, Delete and Escape — none
-      of them touch the cards behind it.
-- [ ] Bulk bar, advanced options, trim slider, conflict prompts, Convert and
-      Cancel all behave as they did in alpha.3.
-- [ ] Drag a file over the window while on Files — the grid highlights. Do the
-      same while on Pipelines — **no highlight**, and the drop still works.
-
-### Appearance
-
-- [ ] **Dark and light.** Switch Windows between them and check the rail, the
-      canvas dot grid, node borders, port colours, the amber incomplete state
-      and the preview block in both. Nothing should be a fixed white or black.
-- [ ] At the default **1100×780** the three columns and the canvas all fit
-      without the window scrolling sideways.
-- [ ] Collapse the rail — the canvas gets the space.
-- [ ] Resize the window small and large. The canvas takes the slack; the side
-      panels stay put.
-- [ ] The toast still appears over everything, including the editor.
+- [ ] Drop files and folders; unsupported files are reported, not discarded.
+- [ ] Selection: click, ctrl+click, shift+click, Ctrl+A, Escape, Delete.
+- [ ] The two-click flow: drop a folder, pick one format in the bulk bar,
+      Convert.
+- [ ] Per-card format dropdowns, and clearing one back to "Choose format…".
+- [ ] Advanced options: output routing, name template, conflict policy, video
+      and audio settings, image quality, the trim slider.
+- [ ] The codec you choose is the codec you get, and it survives Apply and
+      reopening. *(The alpha.3 fix — it lived next to the removed code.)*
+- [ ] The live command preview updates as you change settings.
+- [ ] Convert several files at once; per-card progress and per-card cancel.
+- [ ] A failing file marks its own card and the queue carries on.
+- [ ] "Apply to all remaining files" on an output conflict.
+- [ ] Convert does not re-run already-finished cards.
+- [ ] Toasts, Credits, F12 Developer Tools, and both themes.

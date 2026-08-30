@@ -612,7 +612,7 @@ card("components/mode-tiles.html", "Mode Tiles",
 <h2>States</h2>
 <div class="tiles">
   <div class="tile selected"><div class="ic">\u25C9</div><div class="t">Manual settings</div><div class="d">Set the format, quality and trim yourself</div></div>
-  <div class="tile locked" title="No pipelines saved yet"><div class="ic">\u25CB</div><div class="t">Pipeline</div><div class="d">Apply a saved processing pipeline</div></div>
+  <div class="tile locked" title="Nothing saved yet"><div class="ic">\u25CB</div><div class="t">From a template</div><div class="d">Start from something already saved</div></div>
 </div>
 <p class="caption">Selected \u00b7 locked. Hover the left tile to see the idle-to-hover wash.</p>
 
@@ -639,7 +639,7 @@ card("components/mode-tiles.html", "Mode Tiles",
 <h2>Behaviour</h2>
 <p class="note"><b>One source of truth.</b> A click sets a single state variable, then every tile recomputes its own <code>selected</code> class from it. Do not toggle tiles against each other.</p>
 <p class="note"><b>Strictly one or the other.</b> Re-clicking the active tile does nothing. Craftbox's create-server source tiles are tri-state \u2014 clicking the selected one deselects back to "from scratch" \u2014 but that only works because it has a meaningful third state. Where there are exactly two modes, deselection would leave the form in no mode at all.</p>
-<p class="note"><b>Fail closed, then unlock.</b> A tile with nothing behind it ships locked and is enabled at runtime once its data exists \u2014 Craftbox locks Template until a template is saved; File Converter locks Pipeline until a pipeline is saved. Enforce it in the handler as well as the CSS: <code>pointer-events:none</code> stops a mouse but not a keyboard or a programmatic activation.</p>
+<p class="note"><b>Fail closed, then unlock.</b> A tile with nothing behind it ships locked and is enabled at runtime once its data exists \u2014 Craftbox locks Template until a template is saved. Enforce it in the handler as well as the CSS: <code>pointer-events:none</code> stops a mouse but not a keyboard or a programmatic activation.</p>
 <p class="note"><b>Keyboard operable.</b> <code>role="button"</code>, <code>tabindex="0"</code> (<code>-1</code> when locked), <code>aria-pressed</code>, and Enter/Space activation, with a <code>:focus-visible</code> ring. The original pattern has only <code>role="button"</code> and cannot be reached from the keyboard at all \u2014 do not copy that part.</p>
 
 <h2>Dependent sections</h2>
@@ -928,7 +928,7 @@ card("shell/nav-rail.html", "Navigation Rail",
   <div class="raildemo">
     <div class="rail">
       <div class="ni on"><span class="ic">▦</span><span class="lbl">Files</span></div>
-      <div class="ni"><span class="ic">⑂</span><span class="lbl">Pipelines</span></div>
+      <div class="ni"><span class="ic">⑂</span><span class="lbl">Join</span></div>
       <div class="ni last"><span class="ic">‹</span><span class="lbl">Collapse</span></div>
     </div>
     <div class="body"><h4>Files</h4><p>The active section fills the rest of the window.</p></div>
@@ -936,7 +936,7 @@ card("shell/nav-rail.html", "Navigation Rail",
   <div class="raildemo" style="max-width:300px">
     <div class="rail narrow">
       <div class="ni on"><span class="ic">▦</span><span class="lbl">Files</span></div>
-      <div class="ni"><span class="ic">⑂</span><span class="lbl">Pipelines</span></div>
+      <div class="ni"><span class="ic">⑂</span><span class="lbl">Join</span></div>
       <div class="ni last"><span class="ic">›</span><span class="lbl">Expand</span></div>
     </div>
     <div class="body"><h4>Collapsed</h4><p>Icons only, label moved to <code>title</code>.</p></div>
@@ -963,91 +963,8 @@ card("shell/nav-rail.html", "Navigation Rail",
 <p class="note"><b>Every route out goes through one function.</b> A rail click, a link from a dialog and a file drop all call the same switcher, so an unsaved-work guard cannot be sidestepped by arriving a different way. A drop onto a non-file section runs the guard, switches, then ingests — and a declined guard cancels the drop rather than ingesting behind it.</p>
 <p class="note"><b>The keyboard follows the view.</b> A global key handler that already bails while a modal is open must bail outside the active section too, or Delete acts on something the user cannot see.</p>
 <p class="note"><b>Collapse is remembered.</b> A narrow window is exactly where someone collapses it, and exactly where being made to do it again every launch would grate. Persist it with the app's normal settings store.</p>
-<p class="note"><b>Do not ship a destination that goes nowhere.</b> A section gets a rail item when it is built. A greyed "coming soon" item is a dead end the user cannot resolve — the locked tile in <a href="../components/mode-tiles.html" style="color:var(--accent-muted)">Mode Tiles</a> works only because saving one pipeline unlocks it.</p>
+<p class="note"><b>Do not ship a destination that goes nowhere.</b> A section gets a rail item when it is built, never before. A greyed "coming soon" item is a dead end the user cannot resolve, and a rail with a single destination is at least honest — it costs a strip of width and promises nothing it cannot do.</p>
 `);
-
-card("components/node-canvas.html", "Node Canvas",
-    "A directed graph the user edits by hand: boxes with typed ports, dragged into place and wired together. Built from absolutely positioned elements over one SVG layer, with no library.",
-    "Components", `
-<style>
-.canvas{position:relative;height:250px;border:1px solid var(--border);border-radius:var(--radius-card);
-  background:var(--bg);background-image:radial-gradient(circle,var(--border) 1px,transparent 1px);
-  background-size:22px 22px;max-width:560px;overflow:hidden}
-.nd{position:absolute;width:150px;min-height:62px;padding:.4rem .55rem .5rem;border:1px solid var(--border);
-  border-radius:var(--radius-card);background:var(--surface);cursor:grab}
-.nd.sel{border-color:var(--accent);background:rgba(var(--accent-rgb),.06)}
-.nd.warn{border-color:var(--warning)}
-.nd .t{font-size:.8rem;font-weight:600}
-.nd .s{font-size:.72rem;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pt{position:absolute;width:11px;height:11px;border-radius:50%;border:2px solid var(--bg)}
-.pt.i{left:-6px}.pt.o{right:-6px}
-.pt.v{background:var(--info)}.pt.a{background:var(--accent)}.pt.n{background:var(--text-faint)}
-.pt.cand{box-shadow:0 0 0 4px rgba(var(--accent-rgb),.35)}
-.pt.blk{opacity:.5}
-.edges{position:absolute;inset:0;pointer-events:none}
-.eg{fill:none;stroke-width:2}
-.eg.v{stroke:var(--info)}.eg.a{stroke:var(--accent)}
-.eg.live{stroke:var(--accent);stroke-dasharray:5 4}
-</style>
-
-<h2>A graph</h2>
-<div class="canvas">
-  <svg class="edges" width="560" height="250">
-    <path class="eg v" d="M 190 56 C 245 56, 245 150, 300 150"/>
-    <path class="eg v" d="M 450 150 C 495 150, 350 56, 390 56"/>
-    <path class="eg a" d="M 190 74 C 260 74, 320 74, 390 74"/>
-  </svg>
-  <div class="nd" style="left:40px;top:30px">
-    <div class="t">Input</div><div class="s">The file being converted</div>
-    <div class="pt o v" style="top:21px"></div><div class="pt o a" style="top:39px"></div>
-  </div>
-  <div class="nd sel" style="left:300px;top:124px">
-    <div class="t">Scale</div><div class="s">640 px · 360 px · Fit inside</div>
-    <div class="pt i v" style="top:21px"></div><div class="pt o v" style="top:21px"></div>
-  </div>
-  <div class="nd" style="left:390px;top:30px">
-    <div class="t">Output</div><div class="s">The converted file</div>
-    <div class="pt i v" style="top:21px"></div><div class="pt i a" style="top:39px"></div>
-  </div>
-</div>
-<p class="caption">Selected node accented. Video edges in <code>--bs-info</code>, audio in <code>--accent</code>.</p>
-
-<h2>Ports</h2>
-<div class="row" style="gap:26px;margin-top:6px">
-  <span><span class="pt v" style="position:static;display:inline-block;vertical-align:middle"></span> video</span>
-  <span><span class="pt a" style="position:static;display:inline-block;vertical-align:middle"></span> audio</span>
-  <span><span class="pt n" style="position:static;display:inline-block;vertical-align:middle"></span> any</span>
-  <span><span class="pt v cand" style="position:static;display:inline-block;vertical-align:middle"></span> candidate</span>
-  <span><span class="pt v blk" style="position:static;display:inline-block;vertical-align:middle"></span> blocked</span>
-</div>
-
-<h2>The recipe</h2>
-<table>
-<tr><th>Part</th><th>Value</th></tr>
-<tr><td>Canvas</td><td><code>position:relative</code>, scrolls, <code>touch-action:none</code>, 22px dot grid via <code>radial-gradient</code></td></tr>
-<tr><td>Layers</td><td>One <code>&lt;svg&gt;</code> for edges beneath one div for nodes. Both sized in script to the graph extent, <b>floored at the canvas size</b> or a graph that fits still shows a scrollbar</td></tr>
-<tr><td>Node</td><td><code>150px</code> wide, <code>min-height</code> clearing the lowest port, <code>--radius-card</code>, <code>cursor:grab</code> → <code>grabbing</code></td></tr>
-<tr><td>Port</td><td><code>11px</code> dot, <code>2px</code> border in the canvas background so it reads as cut out of the node edge, <code>cursor:crosshair</code></td></tr>
-<tr><td>Port colour</td><td>By type, not by direction — the colour is what tells the user what may connect to what</td></tr>
-<tr><td>Edge</td><td>Cubic bezier, control points offset horizontally by <code>max(30, |dx| / 2)</code>, coloured by the source port's type</td></tr>
-<tr><td>Incomplete node</td><td><code>--bs-warning</code> border — the same amber a row uses for "something is missing", not danger</td></tr>
-</table>
-
-<h2>Dragging</h2>
-<p class="note"><b>Pointer events with capture, not mousedown on the document.</b> <code>setPointerCapture</code> on the node, deltas measured from the pointer's origin against <code>getBoundingClientRect()</code>, and both listeners removed on <code>pointerup</code>. The same idiom as any other drag handle in the house.</p>
-<p class="note"><b>Do not measure the DOM to draw edges.</b> Port positions are computed from the node's stored coordinates and its index in the port list. Measuring means a layout pass per frame, and it breaks entirely while a node is mid-transition.</p>
-<p class="note"><b>Repaint the edges, not the graph.</b> While a node is being dragged, move its element and redraw the edge layer only. Rebuild the whole canvas once, on release.</p>
-
-<h2>Refusing a connection</h2>
-<p class="note"><b>Light only what would work.</b> While a link is being dragged, every input port is tested and marked <code>candidate</code> or <code>blocked</code>. The user should not have to drop it to find out.</p>
-<p class="note"><b>The editor enforces what the model tolerates.</b> A permissive data model is right — it has to load whatever is on disk — but the editor is where a bad edge is prevented. Type mismatch, an input that is already connected, an output fanned into two nodes, a self-connection, a loop. Each gets its own sentence, not a generic "invalid".</p>
-<p class="note"><b>Say the reason, in the app's words.</b> "An output can only feed one node." beats surfacing whatever the underlying tool would eventually have said, and beats a graph that validates cleanly and then fails at run time.</p>
-
-<h2>Around the canvas</h2>
-<p class="note">A three-column layout: the saved list on the left, the canvas in the middle, an inspector on the right, and a validation strip with a live compiled preview beneath. <b>The canvas is what needs the room</b> — keep the side panels as narrow as their content allows, and let collapsing the nav rail be the user's lever for more.</p>
-<p class="note"><b>Drive the inspector from a schema, not a hand-written form per node type.</b> Each node type declares its parameters — label, type, unit, bounds, options, help — and one function renders any of them. A second hand-maintained table of the same facts drifts from the first.</p>
-`);
-
 
 const byGroup = cards.reduce((acc, c) => {
     (acc[c.group] ||= []).push(c);

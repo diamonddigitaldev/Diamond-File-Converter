@@ -65,7 +65,7 @@ tr:last-child td{border-bottom:none}
   <div class="raildemo">
     <div class="rail">
       <div class="ni on"><span class="ic">▦</span><span class="lbl">Files</span></div>
-      <div class="ni"><span class="ic">⑂</span><span class="lbl">Pipelines</span></div>
+      <div class="ni"><span class="ic">⑂</span><span class="lbl">Join</span></div>
       <div class="ni last"><span class="ic">‹</span><span class="lbl">Collapse</span></div>
     </div>
     <div class="body"><h4>Files</h4><p>The active section fills the rest of the window.</p></div>
@@ -73,7 +73,7 @@ tr:last-child td{border-bottom:none}
   <div class="raildemo" style="max-width:300px">
     <div class="rail narrow">
       <div class="ni on"><span class="ic">▦</span><span class="lbl">Files</span></div>
-      <div class="ni"><span class="ic">⑂</span><span class="lbl">Pipelines</span></div>
+      <div class="ni"><span class="ic">⑂</span><span class="lbl">Join</span></div>
       <div class="ni last"><span class="ic">›</span><span class="lbl">Expand</span></div>
     </div>
     <div class="body"><h4>Collapsed</h4><p>Icons only, label moved to <code>title</code>.</p></div>
@@ -100,6 +100,6 @@ tr:last-child td{border-bottom:none}
 <p class="note"><b>Every route out goes through one function.</b> A rail click, a link from a dialog and a file drop all call the same switcher, so an unsaved-work guard cannot be sidestepped by arriving a different way. A drop onto a non-file section runs the guard, switches, then ingests — and a declined guard cancels the drop rather than ingesting behind it.</p>
 <p class="note"><b>The keyboard follows the view.</b> A global key handler that already bails while a modal is open must bail outside the active section too, or Delete acts on something the user cannot see.</p>
 <p class="note"><b>Collapse is remembered.</b> A narrow window is exactly where someone collapses it, and exactly where being made to do it again every launch would grate. Persist it with the app's normal settings store.</p>
-<p class="note"><b>Do not ship a destination that goes nowhere.</b> A section gets a rail item when it is built. A greyed "coming soon" item is a dead end the user cannot resolve — the locked tile in <a href="../components/mode-tiles.html" style="color:var(--accent-muted)">Mode Tiles</a> works only because saving one pipeline unlocks it.</p>
+<p class="note"><b>Do not ship a destination that goes nowhere.</b> A section gets a rail item when it is built, never before. A greyed "coming soon" item is a dead end the user cannot resolve, and a rail with a single destination is at least honest — it costs a strip of width and promises nothing it cannot do.</p>
 
 </body></html>

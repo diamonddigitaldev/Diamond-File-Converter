@@ -33,14 +33,10 @@ const IPC = {
     DIALOG_BROWSE_FOLDER: "dialog:browse-folder",
     DIALOG_CHOOSE_OUTPUT: "dialog:choose-output",
 
-    // Presets and pipelines. The store is wired; the editors are TODO.
+    // Presets. The store is wired; the editor is TODO.
     PRESET_LIST:      "preset:list",
     PRESET_SAVE:      "preset:save",
     PRESET_DELETE:    "preset:delete",
-    PIPELINE_LIST:     "pipeline:list",
-    PIPELINE_SAVE:     "pipeline:save",
-    PIPELINE_DELETE:   "pipeline:delete",
-    PIPELINE_VALIDATE: "pipeline:validate",
 
     // Shell and app.
     SHELL_OPEN_PATH:      "shell:open-path",
@@ -59,11 +55,15 @@ const IPC = {
 // Window size constraints. Widened for the card grid — the v1 single column
 // was 700px, which fits only two cards per row. Existing users keep their
 // saved bounds; this only changes the first-run default.
+// The minimum is measured, not guessed: below 800px wide the selection bar
+// runs out of room and clips its own buttons, which is what the old 720 let
+// happen. 880 keeps 80px of headroom over that, and the height leaves the grid
+// enough room for a full card row under the bars.
 const WINDOW = {
     DEFAULT_WIDTH:  1100,
     DEFAULT_HEIGHT: 780,
-    MIN_WIDTH:      720,
-    MIN_HEIGHT:     560,
+    MIN_WIDTH:      880,
+    MIN_HEIGHT:     600,
 };
 
 // Windows spawns one process per file when several are selected in Explorer,

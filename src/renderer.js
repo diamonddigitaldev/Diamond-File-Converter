@@ -58,9 +58,7 @@ function addFiles(filePaths) {
             ext,
             kind: entry.type,
             targetExt: null,
-            processing: "manual",   // "manual" | "pipeline"
-            pipelineId: null,
-            settings: {},           // kept while in pipeline mode, so switching back is lossless
+            settings: {},
             meta: null,
             status: "pending",
             progress: 0,
@@ -385,14 +383,14 @@ function paintCard(card, job) {
 
     // Show what has been configured, so a customised job is visibly different.
     const settingsLine = card.querySelector(".card-settings");
-    const summary = display.describeProcessing(job, pipelines);
+    const summary = display.summariseSettings(job.settings);
     settingsLine.classList.toggle("d-none", !summary);
     if (summary) {
         settingsLine.textContent = summary;
         settingsLine.title = summary;
     }
 
-    const { text, tone } = display.describeStatus(job, pipelines);
+    const { text, tone } = display.describeStatus(job);
     const status = card.querySelector(".card-status");
     status.className = `card-status tone-${tone}`;
     const statusText = status.querySelector(".status-text");
@@ -505,8 +503,7 @@ function renderSelection() {
 
 function renderActionBar() {
     const total = jobs.length;
-    // A pipeline-mode card whose pipeline no longer exists cannot run.
-    const ready = jobs.filter(j => j.targetExt && display.hasUsableProcessing(j, pipelines)).length;
+    const ready = jobs.filter(j => j.targetExt).length;
     const withoutTarget = total - ready;
     const running = jobs.filter(j => j.status === "running").length;
     const settled = jobs.filter(j => j.status !== "pending" && j.status !== "running").length;
@@ -546,7 +543,7 @@ function renderActionBar() {
     // "still need a format" copy is derived from — so the button needs its own
     // count, or it sits enabled doing nothing once a batch has finished.
     $("btn-convert").disabled = jobs.filter(
-        j => j.targetExt && j.status !== "done" && display.hasUsableProcessing(j, pipelines)
+        j => j.targetExt && j.status !== "done"
     ).length === 0;
     $("bulk-edit").disabled = converting;
     $("btn-cancel-all").classList.toggle("d-none", !converting);
@@ -567,92 +564,9 @@ function renderActionBar() {
 let jobModal = null;
 let modalScope = [];        // ids the dialog is editing
 let previewTimer = null;
-let modalProcessing = "manual";
-let pipelines = [];
 
 const ENCODER_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast",
     "medium", "slow", "slower", "veryslow"];
-
-// -- Processing mode ---------------------------------------------------------
-
-/** Paint the tiles from modalProcessing. One source of truth, like Craftbox. */
-function renderModeTiles() {
-    for (const tile of document.querySelectorAll("#jm-mode .mode-tile")) {
-        const active = tile.dataset.mode === modalProcessing;
-        tile.classList.toggle("selected", active);
-        tile.setAttribute("aria-pressed", String(active));
-        // A locked tile stays out of the tab order entirely.
-        const locked = tile.classList.contains("mode-tile-locked");
-        tile.setAttribute("tabindex", locked ? "-1" : "0");
-    }
-}
-
-function setProcessingMode(next) {
-    // Strictly one or the other: re-clicking the active tile does nothing.
-    // (Craftbox's source tiles deselect back to a third state; there is no
-    // third state here.)
-    if (next === modalProcessing) return;
-
-    // A locked tile is not selectable. pointer-events:none stops a mouse but
-    // not a keyboard or a programmatic activation, so the rule lives here as
-    // well as in the CSS rather than being purely presentational.
-    const tile = document.querySelector(`#jm-mode .mode-tile[data-mode="${next}"]`);
-    if (tile && tile.classList.contains("mode-tile-locked")) return;
-
-    modalProcessing = next;
-    syncModalControls();
-}
-
-/**
- * Load saved pipelines. The Pipeline tile ships locked and is unlocked only
- * once there is something to pick — fail closed, then open.
- */
-async function refreshPipelines() {
-    pipelines = await api.listPipelines();
-    const select = $("jm-pipeline");
-    fillSelect(select, pipelines.map(x => ({ value: x.id, label: x.name })),
-        select.dataset.wanted || undefined, "Choose a pipeline\u2026");
-
-    const none = pipelines.length === 0;
-    $("jm-pipeline-empty").classList.toggle("d-none", !none);
-    select.classList.toggle("d-none", none);
-
-    const tile = $("jm-mode-pipeline");
-    tile.classList.toggle("mode-tile-locked", none);
-    if (none) {
-        tile.setAttribute("title", "No pipelines saved yet");
-        // Nothing to select, so a card cannot sit in pipeline mode.
-        if (modalProcessing === "pipeline") modalProcessing = "manual";
-    } else {
-        tile.removeAttribute("title");
-    }
-    renderModeTiles();
-}
-
-function initModeTiles() {
-    for (const tile of document.querySelectorAll("#jm-mode .mode-tile")) {
-        tile.addEventListener("click", () => setProcessingMode(tile.dataset.mode));
-        tile.addEventListener("keydown", (e) => {
-            // Craftbox's tiles are mouse-only; these are not.
-            if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
-                e.preventDefault();
-                setProcessingMode(tile.dataset.mode);
-            }
-        });
-    }
-    $("jm-pipeline").addEventListener("change", () => {
-        $("jm-pipeline").dataset.wanted = $("jm-pipeline").value;
-        schedulePreview();
-    });
-
-    // The editor is a view, not a nested dialog, so the dialog closes on the
-    // way there. modalScope is module state and survives, which is what lets
-    // the same selection be reopened afterwards.
-    $("jm-pipeline-edit").addEventListener("click", () => {
-        jobModal?.hide();
-        showView("pipelines");
-    });
-}
 
 // -- Trim slider -------------------------------------------------------------
 //
@@ -832,11 +746,6 @@ function openJobModal(ids) {
     const uniform = encoded.every(x => x === encoded[0]);
     loadSettingsIntoForm(uniform ? (scoped[0].settings ?? {}) : {});
 
-    const modes = [...new Set(scoped.map(j => j.processing ?? "manual"))];
-    modalProcessing = modes.length === 1 ? modes[0] : "manual";
-    const pipeIds = [...new Set(scoped.map(j => j.pipelineId ?? ""))];
-    $("jm-pipeline").dataset.wanted = pipeIds.length === 1 ? pipeIds[0] : "";
-    refreshPipelines();
     $("jm-scope").textContent += uniform ? "" : " · these files are currently configured differently";
 
     syncModalControls();
@@ -884,17 +793,11 @@ function syncModalControls() {
     const target = $("jm-target").value || null;
     const sections = display.applicableSections(target, DESCRIPTORS);
 
-    // A file is configured by hand or handed to a pipeline, never both, so the
-    // encoding sections and the pipeline picker are mutually exclusive. Within
-    // manual mode the per-target rules still decide which sections apply.
-    const manual = modalProcessing === "manual";
-    renderModeTiles();
-
-    $("jm-pipeline-section").classList.toggle("d-none", manual);
-    $("jm-video-section").classList.toggle("d-none", manual ? !sections.video : true);
-    $("jm-audio-section").classList.toggle("d-none", manual ? !sections.audio : true);
-    $("jm-image-section").classList.toggle("d-none", manual ? !sections.image : true);
-    $("jm-trim-section").classList.toggle("d-none", manual ? !sections.trim : true);
+    // The per-target rules decide which sections apply.
+    $("jm-video-section").classList.toggle("d-none", !sections.video);
+    $("jm-audio-section").classList.toggle("d-none", !sections.audio);
+    $("jm-image-section").classList.toggle("d-none", !sections.image);
+    $("jm-trim-section").classList.toggle("d-none", !sections.trim);
 
     // Stream modes: copy is only offered where the container supports remuxing.
     const canCopy = display.canStreamCopy(target, DESCRIPTORS);
@@ -962,7 +865,7 @@ function syncModalControls() {
             : `${q.max} is best quality, ${q.min} is smallest file.`;
     }
 
-    if (manual && sections.trim) setupTrim();
+    if (sections.trim) setupTrim();
 
     // The output folder only matters when a folder was chosen.
     const needsDir = $("jm-routing").value !== "alongside";
@@ -1044,9 +947,8 @@ function schedulePreview() {
             $("jm-errors").textContent = "";
             return;
         }
-        const result = await api.previewJob(modalProcessing === "pipeline"
-            ? { inputPath: sample.filePath, targetExt: target, pipelineId: $("jm-pipeline").value || null }
-            : { inputPath: sample.filePath, targetExt: target, ...readSettingsFromForm() });
+        const result = await api.previewJob(
+            { inputPath: sample.filePath, targetExt: target, ...readSettingsFromForm() });
         $("jm-preview").textContent = `ffmpeg ${result.args.join(" ")}`;
         $("jm-errors").textContent = result.ok ? "" : result.errors.join(" ");
         $("jm-apply").disabled = !result.ok;
@@ -1061,14 +963,7 @@ function applyJobModal() {
         if (!modalScope.includes(job.id)) continue;
         if (job.status === "running") continue;
 
-        job.processing = modalProcessing;
-        if (modalProcessing === "pipeline") {
-            job.pipelineId = $("jm-pipeline").value || null;
-            // Manual settings are deliberately NOT cleared — switching back
-            // restores them rather than losing the work.
-        } else {
-            job.settings = settings;
-        }
+        job.settings = settings;
         updateCard(job);
     }
     if (target) setTarget(modalScope, target);
@@ -1140,9 +1035,8 @@ async function startConversion() {
     // Every job is submitted at once; the runner's pool decides how many
     // actually run in parallel. v1 awaited them one at a time.
     const results = await Promise.all(runnable.map(async (job) => {
-        const result = await api.runJob(job.processing === "pipeline"
-            ? { id: job.id, inputPath: job.filePath, targetExt: job.targetExt, pipelineId: job.pipelineId }
-            : { id: job.id, inputPath: job.filePath, targetExt: job.targetExt, ...(job.settings ?? {}) });
+        const result = await api.runJob(
+            { id: job.id, inputPath: job.filePath, targetExt: job.targetExt, ...(job.settings ?? {}) });
         applyResult(job, result);
         return result;
     }));
@@ -1189,61 +1083,16 @@ function announce(results) {
 
 // -- Views ---------------------------------------------------------------------
 //
-// Files and Pipelines are siblings behind a rail, not a stack. Everything the
-// files view owns keeps its own d-none state while hidden, so switching back
-// restores the grid exactly as it was rather than rebuilding it.
+// The rail currently has one destination. It stays because the surface for
+// joining files together will sit beside Files, and because everything the file
+// grid owns keeps its own d-none state while hidden — so arriving back restores
+// the grid exactly as it was rather than rebuilding it.
 
 let currentView = "files";
-let confirmModal = null;
 
-/**
- * Promise-wrapped confirm, per the house pattern. Resolves true only on the
- * confirm button; every other way out resolves false, and both listeners are
- * removed in one shared cleanup either way.
- */
-function confirmDialog({ title, body, confirmLabel = "Confirm", variant = "primary", icon = "help_outline" }) {
-    return new Promise((resolve) => {
-        const modalEl = $("confirm-modal");
-        const okBtn = $("confirm-ok");
-
-        $("confirm-title").textContent = title;
-        $("confirm-body").textContent = body;
-        $("confirm-icon").textContent = icon;
-        okBtn.textContent = confirmLabel;
-        okBtn.className = `btn btn-${variant}`;
-
-        if (!confirmModal) confirmModal = new bootstrap.Modal(modalEl);
-
-        let confirmed = false;
-        const cleanup = () => {
-            okBtn.removeEventListener("click", onOk);
-            modalEl.removeEventListener("hidden.bs.modal", onHidden);
-        };
-        const onOk = () => {
-            confirmed = true;
-            cleanup();
-            confirmModal.hide();
-            resolve(true);
-        };
-        const onHidden = () => {
-            cleanup();
-            if (!confirmed) resolve(false);
-        };
-
-        okBtn.addEventListener("click", onOk);
-        modalEl.addEventListener("hidden.bs.modal", onHidden);
-        confirmModal.show();
-    });
-}
-
-/**
- * The single route between views. A rail click, the advanced dialog's link and
- * a file drop all come through here, so the unsaved-work guard cannot be
- * sidestepped by arriving a different way.
- */
+/** The single route between views: a rail click, or a file drop from elsewhere. */
 async function showView(name) {
     if (name === currentView) return;
-    if (currentView === "pipelines" && !(await confirmLeaveEditor())) return;
 
     currentView = name;
     document.querySelector(".app-shell").dataset.view = name;
@@ -1255,15 +1104,7 @@ async function showView(name) {
         else item.removeAttribute("aria-current");
     }
 
-    if (name === "pipelines") {
-        await openEditor();
-    } else {
-        // A pipeline may have been saved, renamed or deleted while away, so the
-        // cards have to re-resolve — that is what clears or raises the amber
-        // "Pipeline missing" state.
-        pipelines = await api.listPipelines();
-        render();
-    }
+    if (name === "files") render();
 }
 
 function setNavCollapsed(collapsed) {
@@ -1271,770 +1112,10 @@ function setNavCollapsed(collapsed) {
     $("nav-collapse").title = collapsed ? "Expand" : "Collapse";
 }
 
-// -- Pipeline editor -----------------------------------------------------------
-//
-// A pure view layer: core/pipeline.js already owns the schema, the compiler and
-// the validator, and is loaded here as a plain script so validation and the
-// command preview are synchronous. What the editor adds is the handful of rules
-// the model tolerates but ffmpeg does not — see canConnect.
-
-/** Loaded as a plain script by index.html, like display. */
-const pl = window.pipeline;
-
-/** Mirrors .pl-node in the stylesheet; edges are drawn from these, not measured. */
-const NODE_W = 150;
-const PORT_TOP = 30;
-const PORT_GAP = 18;
-
-let editorGraph = null;      // working copy; Save is what writes it back
-let editorSelection = null;  // selected node id
-let editorDirty = false;
-let linking = null;          // { from, fromPort, type } while dragging a connection
-
-/** Input and Output are structural — every pipeline needs exactly one of each. */
-function paletteTypes() {
-    return Object.entries(pl.NODE_TYPES)
-        .filter(([type, spec]) => !spec.hidden && type !== "input" && type !== "output")
-        .map(([type, spec]) => ({ type, label: spec.label }));
-}
-
-function getByPath(obj, path) {
-    return path.split(".").reduce((acc, key) => (acc == null ? undefined : acc[key]), obj);
-}
-
-function setByPath(obj, path, value) {
-    const keys = path.split(".");
-    const last = keys.pop();
-    let target = obj;
-    for (const key of keys) {
-        if (typeof target[key] !== "object" || target[key] === null) target[key] = {};
-        target = target[key];
-    }
-    if (value === null || value === undefined) delete target[last];
-    else target[last] = value;
-}
-
-function uniqueNodeId() {
-    let id;
-    do { id = `n${Math.random().toString(36).slice(2, 8)}`; }
-    while (editorGraph.nodes.some(n => n.id === id));
-    return id;
-}
-
-function markDirty() {
-    editorDirty = true;
-    $("pl-dirty").classList.remove("d-none");
-    $("pl-save").disabled = false;
-}
-
-async function confirmLeaveEditor() {
-    if (!editorDirty) return true;
-    return confirmDialog({
-        title: "Discard unsaved changes?",
-        body: `"${editorGraph?.name ?? "This pipeline"}" has changes that have not been saved.`,
-        confirmLabel: "Discard",
-        variant: "danger",
-        icon: "warning",
-    });
-}
-
-async function openEditor() {
-    pipelines = await api.listPipelines();
-
-    // The graph left open last time may have been deleted from another route.
-    if (editorGraph && !editorDirty && !pipelines.some(x => x.id === editorGraph.id)) {
-        editorGraph = null;
-    }
-    if (!editorGraph && pipelines.length > 0) {
-        loadIntoEditor(pipelines[0]);
-        return;
-    }
-    renderPipelineList();
-    renderEditor();
-}
-
-function loadIntoEditor(graph) {
-    // A working copy, so abandoning changes really does abandon them.
-    editorGraph = JSON.parse(JSON.stringify(graph));
-    pl.autoLayout(editorGraph);
-    editorSelection = null;
-    editorDirty = false;
-    renderPipelineList();
-    renderEditor();
-}
-
-async function selectPipeline(id) {
-    if (editorGraph?.id === id) return;
-    if (!(await confirmLeaveEditor())) return;
-    const found = pipelines.find(x => x.id === id);
-    if (found) loadIntoEditor(found);
-}
-
-function uniqueName(base) {
-    const taken = new Set(pipelines.map(x => x.name));
-    if (!taken.has(base)) return base;
-    let n = 2;
-    while (taken.has(`${base} ${n}`)) n++;
-    return `${base} ${n}`;
-}
-
-async function newPipeline() {
-    if (!(await confirmLeaveEditor())) return;
-
-    // A pipeline is meaningless without its two ends and nothing can stand in
-    // for them, so a new one arrives with both placed and already passing both
-    // streams through — which is a valid, if inert, pipeline.
-    editorGraph = pl.createPipeline({
-        name: uniqueName("New pipeline"),
-        nodes: [
-            { id: "in", type: "input", params: {} },
-            { id: "out", type: "output", params: {} },
-        ],
-        edges: [
-            { from: "in", fromPort: "video", to: "out", toPort: "video" },
-            { from: "in", fromPort: "audio", to: "out", toPort: "audio" },
-        ],
-    });
-    pl.autoLayout(editorGraph);
-    editorSelection = null;
-    editorDirty = false;
-    renderPipelineList();
-    renderEditor();
-    markDirty();
-    $("pl-name").focus();
-    $("pl-name").select();
-}
-
-function addNode(type) {
-    if (!editorGraph) return;
-    const spec = pl.NODE_TYPES[type];
-    const node = { id: uniqueNodeId(), type, params: {} };
-    for (const param of spec.params ?? []) {
-        if (param.default !== undefined) setByPath(node.params, param.key, param.default);
-    }
-
-    // Placed in view rather than left to autoLayout, which would put an
-    // as-yet-unconnected node in the leftmost column — behind the Input, so
-    // wiring it up then draws the graph backwards.
-    node.ui = freeSpotForNewNode();
-
-    editorGraph.nodes.push(node);
-    editorSelection = node.id;
-    markDirty();
-    renderEditor();
-}
-
-/** Middle of what the user is actually looking at, cascading clear of anything
- *  already there so repeated adds do not stack into one pile. */
-function freeSpotForNewNode() {
-    const canvas = $("pl-canvas");
-    const x = Math.round(canvas.scrollLeft + Math.max(40, canvas.clientWidth / 2 - NODE_W / 2));
-    let y = Math.round(canvas.scrollTop + 50);
-    while (editorGraph.nodes.some(n =>
-        n.ui && Math.abs(n.ui.x - x) < NODE_W && Math.abs(n.ui.y - y) < 72)) {
-        y += 78;
-    }
-    return { x, y };
-}
-
-function removeSelectedNode() {
-    if (!editorGraph || !editorSelection) return;
-    const node = editorGraph.nodes.find(n => n.id === editorSelection);
-    if (!node) return;
-
-    if (node.type === "input" || node.type === "output") {
-        toast("Every pipeline needs its Input and its Output.", "warning");
-        return;
-    }
-
-    editorGraph.nodes = editorGraph.nodes.filter(n => n.id !== node.id);
-    editorGraph.edges = editorGraph.edges.filter(e => e.from !== node.id && e.to !== node.id);
-    editorSelection = null;
-    markDirty();
-    renderEditor();
-}
-
-function tidyLayout() {
-    if (!editorGraph) return;
-    for (const node of editorGraph.nodes) delete node.ui;
-    pl.autoLayout(editorGraph);
-    markDirty();
-    renderCanvas();
-}
-
-async function duplicatePipeline() {
-    if (!editorGraph) return;
-    if (!(await confirmLeaveEditor())) return;
-
-    const copy = JSON.parse(JSON.stringify(editorGraph));
-    copy.id = `pl_${Date.now().toString(36)}`;
-    copy.name = uniqueName(`${editorGraph.name} copy`);
-    editorGraph = copy;
-    editorSelection = null;
-    editorDirty = false;
-    renderPipelineList();
-    renderEditor();
-    markDirty();
-}
-
-async function saveCurrentPipeline() {
-    if (!editorGraph) return;
-
-    const name = $("pl-name").value.trim();
-    editorGraph.name = name || "Untitled pipeline";
-
-    // The renderer already validated to paint the messages panel; this is the
-    // authoritative pass, through the same module main.js will use to run it.
-    const result = await api.validatePipeline(editorGraph);
-    if (!result.valid) {
-        toast(result.errors[0], "warning");
-        return;
-    }
-
-    pipelines = await api.savePipeline(editorGraph);
-    editorDirty = false;
-    renderPipelineList();
-    renderEditor();
-    toast(`Saved "${editorGraph.name}".`, "success");
-}
-
-async function deleteCurrentPipeline() {
-    if (!editorGraph) return;
-
-    const inUse = jobs.filter(j => j.pipelineId === editorGraph.id).length;
-    const ok = await confirmDialog({
-        title: "Delete this pipeline?",
-        body: inUse > 0
-            ? `"${editorGraph.name}" is assigned to ${display.countOf(inUse, "file")}. Those files will need another pipeline before they can convert.`
-            : `"${editorGraph.name}" will be removed. This cannot be undone.`,
-        confirmLabel: "Delete",
-        variant: "danger",
-        icon: "delete",
-    });
-    if (!ok) return;
-
-    pipelines = await api.deletePipeline(editorGraph.id);
-    editorGraph = null;
-    editorSelection = null;
-    editorDirty = false;
-    renderPipelineList();
-    renderEditor();
-    toast("Pipeline deleted.", "info");
-}
-
-// -- Editor painting -----------------------------------------------------------
-
-function renderPipelineList() {
-    const list = $("pl-list");
-    list.innerHTML = "";
-
-    const entries = pipelines.map(x => ({ id: x.id, name: x.name, saved: true }));
-    // A pipeline that has never been saved still belongs in the list, or it
-    // looks as though New did nothing.
-    if (editorGraph && !pipelines.some(x => x.id === editorGraph.id)) {
-        entries.unshift({ id: editorGraph.id, name: editorGraph.name, saved: false });
-    }
-
-    for (const entry of entries) {
-        const item = document.createElement("button");
-        item.type = "button";
-        item.className = "pl-list-item";
-        item.classList.toggle("active", editorGraph?.id === entry.id);
-
-        const icon = document.createElement("span");
-        icon.className = "material-icons-round";
-        icon.style.fontSize = "15px";
-        icon.textContent = "account_tree";
-
-        const name = document.createElement("span");
-        name.className = "pl-list-name";
-        name.textContent = entry.saved ? entry.name : `${entry.name} (unsaved)`;
-
-        item.append(icon, name);
-        item.addEventListener("click", () => selectPipeline(entry.id));
-        list.appendChild(item);
-    }
-
-    $("pl-library-empty").classList.toggle("d-none", entries.length > 0);
-}
-
-function renderEditor() {
-    const has = !!editorGraph;
-
-    $("pl-name").disabled = !has;
-    $("pl-name").value = has ? editorGraph.name : "";
-    $("pl-tidy").disabled = !has;
-    $("pl-duplicate").disabled = !has;
-    $("pl-delete").disabled = !has || !pipelines.some(x => x.id === editorGraph.id);
-    $("pl-save").disabled = !has || !editorDirty;
-    $("pl-dirty").classList.toggle("d-none", !editorDirty);
-    $("pl-palette-section").classList.toggle("d-none", !has);
-
-    renderCanvas();
-    renderInspector();
-    renderValidation();
-}
-
-function summariseNode(node) {
-    if (node.type === "input") return "The file being converted";
-    if (node.type === "output") return "The converted file";
-
-    const spec = pl.NODE_TYPES[node.type];
-    const parts = [];
-    for (const param of spec.params ?? []) {
-        const value = getByPath(node.params ?? {}, param.key);
-        if (value === null || value === undefined || value === "") continue;
-        parts.push(param.type === "enum"
-            ? (param.options.find(o => o.value === value)?.label ?? String(value))
-            : `${value}${param.unit ? ` ${param.unit}` : ""}`);
-    }
-    return parts.length > 0 ? parts.join(" · ") : "Not set";
-}
-
-function nodeIsIncomplete(node) {
-    const spec = pl.NODE_TYPES[node.type];
-    return (spec?.required ?? []).some(key => getByPath(node.params ?? {}, key) == null);
-}
-
-function buildNode(node) {
-    const spec = pl.NODE_TYPES[node.type];
-    const box = document.createElement("div");
-    box.className = "pl-node";
-    box.dataset.id = node.id;
-    box.style.left = `${node.ui.x}px`;
-    box.style.top = `${node.ui.y}px`;
-    box.classList.toggle("selected", editorSelection === node.id);
-    box.classList.toggle("incomplete", nodeIsIncomplete(node));
-
-    const title = document.createElement("div");
-    title.className = "pl-node-title";
-    title.textContent = spec.label;
-
-    const summary = document.createElement("div");
-    summary.className = "pl-node-summary";
-    summary.textContent = summariseNode(node);
-
-    box.append(title, summary);
-
-    spec.inputs.forEach((port, i) => box.appendChild(buildPort(node, port, "in", i)));
-    spec.outputs.forEach((port, i) => box.appendChild(buildPort(node, port, "out", i)));
-
-    box.addEventListener("pointerdown", (e) => {
-        if (e.target.classList.contains("pl-port")) return;
-        startNodeDrag(e, node, box);
-    });
-
-    return box;
-}
-
-function buildPort(node, port, direction, index) {
-    const dot = document.createElement("div");
-    dot.className = `pl-port ${direction} ${port.type}`;
-    dot.dataset.node = node.id;
-    dot.dataset.port = port.name;
-    dot.dataset.dir = direction;
-    dot.dataset.type = port.type;
-    dot.style.top = `${PORT_TOP + index * PORT_GAP - 5}px`;
-    dot.title = `${port.name} (${port.type})`;
-
-    if (direction === "out") {
-        dot.addEventListener("pointerdown", (e) => startLink(e, node, port));
-    } else {
-        // Clicking a connected input is how a connection is undone; there is no
-        // other affordance for an edge, which is not itself clickable.
-        dot.addEventListener("click", (e) => {
-            e.stopPropagation();
-            const before = editorGraph.edges.length;
-            editorGraph.edges = editorGraph.edges.filter(
-                edge => !(edge.to === node.id && edge.toPort === port.name));
-            if (editorGraph.edges.length !== before) {
-                markDirty();
-                renderCanvas();
-                renderValidation();
-            }
-        });
-    }
-    return dot;
-}
-
-function portCentre(nodeId, portName, direction) {
-    const node = editorGraph.nodes.find(n => n.id === nodeId);
-    if (!node) return null;
-    const spec = pl.NODE_TYPES[node.type];
-    const list = direction === "out" ? spec.outputs : spec.inputs;
-    const index = list.findIndex(p => p.name === portName);
-    if (index < 0) return null;
-    return {
-        x: node.ui.x + (direction === "out" ? NODE_W : 0),
-        y: node.ui.y + PORT_TOP + index * PORT_GAP,
-    };
-}
-
-function edgePath(a, b) {
-    const dx = Math.max(30, Math.abs(b.x - a.x) / 2);
-    return `M ${a.x} ${a.y} C ${a.x + dx} ${a.y}, ${b.x - dx} ${b.y}, ${b.x} ${b.y}`;
-}
-
-function renderCanvas() {
-    const nodesLayer = $("pl-nodes");
-    const edgesLayer = $("pl-edges");
-    nodesLayer.innerHTML = "";
-    while (edgesLayer.firstChild) edgesLayer.removeChild(edgesLayer.firstChild);
-
-    $("pl-canvas-empty").classList.toggle("d-none", !!editorGraph);
-    if (!editorGraph) return;
-
-    for (const node of editorGraph.nodes) nodesLayer.appendChild(buildNode(node));
-
-    // Both layers are sized to the extent of the graph, so a node dragged past
-    // the fold scrolls into view instead of being clipped. Filling the canvas
-    // when the graph is smaller is left to min-width/min-height in CSS —
-    // measuring the canvas here instead would be a feedback loop, since the
-    // layer that fills it is what makes a scrollbar appear and shrinks it.
-    const width = Math.max(...editorGraph.nodes.map(n => n.ui.x + NODE_W), 0) + 40;
-    const height = Math.max(...editorGraph.nodes.map(n => n.ui.y), 0) + 140;
-    nodesLayer.style.width = `${width}px`;
-    nodesLayer.style.height = `${height}px`;
-    edgesLayer.setAttribute("width", width);
-    edgesLayer.setAttribute("height", height);
-
-    drawEdges();
-}
-
-function drawEdges() {
-    const edgesLayer = $("pl-edges");
-    while (edgesLayer.firstChild) edgesLayer.removeChild(edgesLayer.firstChild);
-    if (!editorGraph) return;
-
-    for (const edge of editorGraph.edges) {
-        const a = portCentre(edge.from, edge.fromPort, "out");
-        const b = portCentre(edge.to, edge.toPort, "in");
-        if (!a || !b) continue;
-
-        const node = editorGraph.nodes.find(n => n.id === edge.from);
-        const type = pl.NODE_TYPES[node?.type]?.outputs.find(p => p.name === edge.fromPort)?.type;
-
-        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        path.setAttribute("class", `pl-edge ${type ?? ""}`);
-        path.setAttribute("d", edgePath(a, b));
-        edgesLayer.appendChild(path);
-    }
-
-    if (linking?.cursor) {
-        const a = portCentre(linking.from, linking.fromPort, "out");
-        if (a) {
-            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            path.setAttribute("class", `pl-edge pl-edge-live ${linking.type}`);
-            path.setAttribute("d", edgePath(a, linking.cursor));
-            edgesLayer.appendChild(path);
-        }
-    }
-}
-
-// -- Editor interaction --------------------------------------------------------
-
-/** Pointer capture and delta-from-origin, the same idiom as the trim slider. */
-function startNodeDrag(e, node, box) {
-    e.preventDefault();
-    selectNode(node.id);
-    box.setPointerCapture(e.pointerId);
-
-    const originX = e.clientX;
-    const originY = e.clientY;
-    const startPos = { x: node.ui.x, y: node.ui.y };
-    let moved = false;
-
-    const onMove = (ev) => {
-        const x = Math.max(0, startPos.x + (ev.clientX - originX));
-        const y = Math.max(0, startPos.y + (ev.clientY - originY));
-        if (x !== node.ui.x || y !== node.ui.y) moved = true;
-        node.ui.x = x;
-        node.ui.y = y;
-        box.style.left = `${x}px`;
-        box.style.top = `${y}px`;
-        drawEdges();
-    };
-    const onUp = (ev) => {
-        box.releasePointerCapture(ev.pointerId);
-        box.removeEventListener("pointermove", onMove);
-        box.removeEventListener("pointerup", onUp);
-        if (moved) {
-            markDirty();
-            renderCanvas();
-        }
-    };
-
-    box.addEventListener("pointermove", onMove);
-    box.addEventListener("pointerup", onUp);
-}
-
-function startLink(e, node, port) {
-    e.preventDefault();
-    e.stopPropagation();
-
-    linking = { from: node.id, fromPort: port.name, type: port.type, cursor: null };
-    markLinkCandidates();
-
-    const canvas = $("pl-canvas");
-    const onMove = (ev) => {
-        const rect = canvas.getBoundingClientRect();
-        linking.cursor = {
-            x: ev.clientX - rect.left + canvas.scrollLeft,
-            y: ev.clientY - rect.top + canvas.scrollTop,
-        };
-        drawEdges();
-    };
-    const onUp = (ev) => {
-        document.removeEventListener("pointermove", onMove);
-        document.removeEventListener("pointerup", onUp);
-
-        const target = document.elementFromPoint(ev.clientX, ev.clientY);
-        finishLink(target);
-    };
-
-    document.addEventListener("pointermove", onMove);
-    document.addEventListener("pointerup", onUp);
-}
-
-/** Only the ports a connection could legally land on stay lit while dragging. */
-function markLinkCandidates() {
-    for (const dot of document.querySelectorAll(".pl-port.in")) {
-        const check = pl.canConnect(editorGraph, {
-            from: linking.from,
-            fromPort: linking.fromPort,
-            to: dot.dataset.node,
-            toPort: dot.dataset.port,
-        });
-        dot.classList.toggle("candidate", check.ok);
-        dot.classList.toggle("blocked", !check.ok);
-    }
-}
-
-function clearLinkCandidates() {
-    for (const dot of document.querySelectorAll(".pl-port")) {
-        dot.classList.remove("candidate", "blocked");
-    }
-}
-
-function finishLink(target) {
-    const wanted = linking;
-    linking = null;
-    clearLinkCandidates();
-
-    if (!target || !target.classList.contains("pl-port") || target.dataset.dir !== "in") {
-        drawEdges();
-        return;
-    }
-
-    const edge = {
-        from: wanted.from,
-        fromPort: wanted.fromPort,
-        to: target.dataset.node,
-        toPort: target.dataset.port,
-    };
-
-    const check = pl.canConnect(editorGraph, edge);
-    if (!check.ok) {
-        toast(check.reason, "warning");
-        drawEdges();
-        return;
-    }
-
-    editorGraph.edges.push(edge);
-    markDirty();
-    renderCanvas();
-    renderValidation();
-}
-
-function selectNode(id) {
-    if (editorSelection === id) return;
-    editorSelection = id;
-    for (const box of document.querySelectorAll(".pl-node")) {
-        box.classList.toggle("selected", box.dataset.id === id);
-    }
-    renderInspector();
-}
-
-function handleEditorKey(e) {
-    if (e.key === "Delete" && editorSelection) {
-        e.preventDefault();
-        removeSelectedNode();
-    } else if (e.key === "Escape") {
-        selectNode(null);
-    }
-}
-
-// -- Inspector -----------------------------------------------------------------
-
-function renderInspector() {
-    const host = $("pl-settings");
-    host.innerHTML = "";
-
-    if (!editorGraph) {
-        host.appendChild(hint("No pipeline open."));
-        return;
-    }
-    const node = editorGraph.nodes.find(n => n.id === editorSelection);
-    if (!node) {
-        host.appendChild(hint("Select a step to change its settings."));
-        return;
-    }
-
-    const spec = pl.NODE_TYPES[node.type];
-    const heading = document.createElement("div");
-    heading.className = "fw-semibold mb-2";
-    heading.textContent = spec.label;
-    host.appendChild(heading);
-
-    if ((spec.params ?? []).length === 0) {
-        host.appendChild(hint(summariseNode(node)));
-    }
-
-    for (const param of spec.params ?? []) {
-        host.appendChild(buildParamField(node, param, spec));
-    }
-
-    if (node.type !== "input" && node.type !== "output") {
-        const remove = document.createElement("button");
-        remove.className = "btn btn-sm btn-outline-danger w-100 pl-remove-node";
-        remove.textContent = "Remove this step";
-        remove.addEventListener("click", removeSelectedNode);
-        host.appendChild(remove);
-    }
-}
-
-function hint(text) {
-    const p = document.createElement("p");
-    p.className = "pl-hint";
-    p.textContent = text;
-    return p;
-}
-
-function buildParamField(node, param, spec) {
-    const wrap = document.createElement("div");
-    wrap.className = "pl-field";
-
-    const label = document.createElement("label");
-    label.className = "form-label";
-    label.textContent = param.unit ? `${param.label} (${param.unit})` : param.label;
-    wrap.appendChild(label);
-
-    const current = getByPath(node.params ?? {}, param.key);
-    const required = (spec.required ?? []).includes(param.key);
-
-    let control;
-    if (param.type === "enum") {
-        control = document.createElement("select");
-        control.className = "form-select form-select-sm";
-        fillSelect(control, param.options, current ?? param.default ?? "",
-            param.default === undefined ? "Not set" : undefined);
-    } else {
-        control = document.createElement("input");
-        control.type = "number";
-        control.className = "form-control form-control-sm";
-        control.value = current ?? "";
-        if (param.min !== undefined) control.min = String(param.min);
-        if (param.max !== undefined) control.max = String(param.max);
-        control.step = String(param.step ?? (param.type === "seconds" ? 0.1 : 1));
-    }
-
-    label.htmlFor = control.id = `plp-${node.id}-${param.key.replace(/\./g, "-")}`;
-
-    control.addEventListener("change", () => {
-        const raw = control.value;
-        const value = raw === "" ? null : (param.type === "enum" ? raw : Number(raw));
-        if (value !== null && param.type !== "enum" && !Number.isFinite(value)) return;
-
-        node.params = node.params ?? {};
-        setByPath(node.params, param.key, value);
-        markDirty();
-        renderCanvas();
-        renderValidation();
-    });
-    wrap.appendChild(control);
-
-    const help = document.createElement("div");
-    help.className = "form-text";
-    help.textContent = param.help ?? (required && current == null ? "Required." : "");
-    if (required && current == null) help.classList.add("text-warning");
-    wrap.appendChild(help);
-
-    return wrap;
-}
-
-// -- Validation and command preview --------------------------------------------
-
-function renderValidation() {
-    const box = $("pl-messages");
-    const pre = $("pl-preview");
-    box.innerHTML = "";
-    pre.textContent = "";
-
-    if (!editorGraph) return;
-
-    const result = pl.validate(editorGraph);
-    for (const error of result.errors) box.appendChild(message(error, "error"));
-    for (const warning of result.warnings) box.appendChild(message(warning, "warning"));
-    if (result.valid && result.warnings.length === 0) {
-        box.appendChild(message("Ready to use.", "ok"));
-    }
-    if (!result.valid) return;
-
-    try {
-        const compiled = pl.compile(editorGraph);
-        const parts = [];
-        if (compiled.filterComplex) parts.push(`-filter_complex ${compiled.filterComplex}`);
-        for (const map of compiled.maps) parts.push(`-map ${map}`);
-        pre.textContent = parts.length > 0
-            ? parts.join("\n")
-            : "Nothing is filtered — both streams pass straight through.";
-    } catch {
-        // validate() already said why; the preview simply has nothing to show.
-    }
-}
-
-function message(text, tone) {
-    const line = document.createElement("div");
-    line.className = `pl-message ${tone}`;
-    line.textContent = text;
-    return line;
-}
-
-function initEditor() {
-    const palette = $("pl-palette");
-    for (const entry of paletteTypes()) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "pl-palette-btn";
-        button.textContent = entry.label;
-        button.addEventListener("click", () => addNode(entry.type));
-        palette.appendChild(button);
-    }
-
-    $("pl-new").addEventListener("click", newPipeline);
-    $("pl-save").addEventListener("click", saveCurrentPipeline);
-    $("pl-delete").addEventListener("click", deleteCurrentPipeline);
-    $("pl-duplicate").addEventListener("click", duplicatePipeline);
-    $("pl-tidy").addEventListener("click", tidyLayout);
-
-    $("pl-name").addEventListener("input", () => {
-        if (!editorGraph) return;
-        editorGraph.name = $("pl-name").value;
-        markDirty();
-        renderPipelineList();
-    });
-
-    // Clicking the canvas background deselects, matching the card grid.
-    $("pl-canvas").addEventListener("click", (e) => {
-        if (e.target === $("pl-canvas") || e.target === $("pl-nodes")) selectNode(null);
-    });
-}
-
 document.addEventListener("DOMContentLoaded", async () => {
     FORMATS = await api.getFormats();
     TARGETS = FORMATS.targetsByExt;
     DESCRIPTORS = FORMATS.descriptors;
-    pipelines = await api.listPipelines();
 
     // Navigation rail. Collapse is remembered, because a narrow window is
     // exactly where someone collapses it and exactly where it would be most
@@ -2050,8 +1131,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         setNavCollapsed(collapsed);
         await api.setSettings({ ...(await api.getSettings()), navCollapsed: collapsed });
     });
-
-    initEditor();
 
     // Drag and drop. The document-level guard stops a stray drop navigating the
     // window to the file and replacing the app with it.
@@ -2154,7 +1233,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     for (const id of ["jm-vmode", "jm-amode", "jm-vcodec", "jm-acodec", "jm-quality-mode", "jm-routing"]) {
         $(id).addEventListener("change", syncModalControls);
     }
-    initModeTiles();
     initTrimSlider();
     for (const id of ["jm-crf", "jm-vbitrate", "jm-width", "jm-height", "jm-fit", "jm-fps",
                       "jm-abitrate", "jm-arate", "jm-achannels", "jm-encpreset",
@@ -2199,12 +1277,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         // would remove the very cards being edited behind it.
         if (document.querySelector(".modal.show")) return;
 
-        // Same reasoning one level up: the editor owns these keys while it is
-        // showing, or Delete would remove cards on a view you cannot even see.
-        if (currentView !== "files") {
-            handleEditorKey(e);
-            return;
-        }
+        // Card shortcuts belong to the file grid, so they do nothing while
+        // another section is showing.
+        if (currentView !== "files") return;
 
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
             e.preventDefault();

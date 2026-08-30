@@ -104,9 +104,8 @@ function createJob(spec = {}) {
             end:   spec.trim?.end   ?? null,
         },
 
-        // Extra raw filters, and the pipeline this job was built from (if any).
+        // Extra raw filters carried on the job.
         filters:    spec.filters    ?? [],
-        pipelineId: spec.pipelineId ?? null,
 
         status:     spec.status   ?? STATUS.PENDING,
         progress:   spec.progress ?? 0,

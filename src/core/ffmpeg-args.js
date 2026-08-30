@@ -153,7 +153,7 @@ function buildArgs(job, opts = {}) {
         args.push("-movflags", "+faststart");
     }
 
-    // Extra raw filters carried on the job, and anything a pipeline appended.
+    // Extra raw filters carried on the job.
     if (Array.isArray(job.extraArgs) && job.extraArgs.length > 0) {
         args.push(...job.extraArgs.map(String));
     }

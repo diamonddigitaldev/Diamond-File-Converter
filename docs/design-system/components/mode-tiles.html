@@ -64,7 +64,7 @@ tr:last-child td{border-bottom:none}
 <h2>States</h2>
 <div class="tiles">
   <div class="tile selected"><div class="ic">◉</div><div class="t">Manual settings</div><div class="d">Set the format, quality and trim yourself</div></div>
-  <div class="tile locked" title="No pipelines saved yet"><div class="ic">○</div><div class="t">Pipeline</div><div class="d">Apply a saved processing pipeline</div></div>
+  <div class="tile locked" title="Nothing saved yet"><div class="ic">○</div><div class="t">From a template</div><div class="d">Start from something already saved</div></div>
 </div>
 <p class="caption">Selected · locked. Hover the left tile to see the idle-to-hover wash.</p>
 
@@ -91,7 +91,7 @@ tr:last-child td{border-bottom:none}
 <h2>Behaviour</h2>
 <p class="note"><b>One source of truth.</b> A click sets a single state variable, then every tile recomputes its own <code>selected</code> class from it. Do not toggle tiles against each other.</p>
 <p class="note"><b>Strictly one or the other.</b> Re-clicking the active tile does nothing. Craftbox's create-server source tiles are tri-state — clicking the selected one deselects back to "from scratch" — but that only works because it has a meaningful third state. Where there are exactly two modes, deselection would leave the form in no mode at all.</p>
-<p class="note"><b>Fail closed, then unlock.</b> A tile with nothing behind it ships locked and is enabled at runtime once its data exists — Craftbox locks Template until a template is saved; File Converter locks Pipeline until a pipeline is saved. Enforce it in the handler as well as the CSS: <code>pointer-events:none</code> stops a mouse but not a keyboard or a programmatic activation.</p>
+<p class="note"><b>Fail closed, then unlock.</b> A tile with nothing behind it ships locked and is enabled at runtime once its data exists — Craftbox locks Template until a template is saved. Enforce it in the handler as well as the CSS: <code>pointer-events:none</code> stops a mouse but not a keyboard or a programmatic activation.</p>
 <p class="note"><b>Keyboard operable.</b> <code>role="button"</code>, <code>tabindex="0"</code> (<code>-1</code> when locked), <code>aria-pressed</code>, and Enter/Space activation, with a <code>:focus-visible</code> ring. The original pattern has only <code>role="button"</code> and cannot be reached from the keyboard at all — do not copy that part.</p>
 
 <h2>Dependent sections</h2>
