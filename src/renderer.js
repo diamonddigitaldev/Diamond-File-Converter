@@ -484,9 +484,12 @@ function renderSelection() {
     selectAllBox.checked = count > 0 && count === jobs.length;
     selectAllBox.indeterminate = count > 0 && count < jobs.length;
 
+    // With nothing selected the bar exists to say "all N files" and offer one
+    // format — that is the two-click flow and it must stay. The actions that
+    // operate on a selection only appear once there is one.
     $("bulk-remove").classList.toggle("d-none", everything);
     $("bulk-deselect").classList.toggle("d-none", everything);
-    $("bulk-edit-label").textContent = everything ? "Edit all" : "Bulk edit";
+    $("bulk-edit").classList.toggle("d-none", everything);
 
     // Offer only formats every source in scope can actually produce, so a bulk
     // change can never create an invalid job.
@@ -1165,7 +1168,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         $("drop-zone").classList.remove("drag-over");
 
         // Read the paths before any await — dataTransfer does not survive one.
-        const paths = api.getPathsForFiles(e.dataTransfer.files);
+        // The FileList is iterated here rather than in the preload: it cannot
+        // cross the context bridge, but the individual File objects can.
+        const paths = Array.from(e.dataTransfer?.files ?? [])
+            .map(file => api.getPathForFile(file))
+            .filter(Boolean);
 
         // A drop is a request for the Files view, so it takes the same route a
         // rail click does: unsaved editor work is never lost silently, and a

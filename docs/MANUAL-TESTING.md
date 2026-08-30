@@ -674,6 +674,44 @@ Worth doing on a profile that ran alpha.4's first build, if you still have one:
 - [ ] Keyboard: Tab reaches the rail items, each takes a focus ring, Enter
       activates.
 
+### Drag and drop actually works  *(it did not)*
+
+Dropping files on the window has been broken since the 2.0 rewrite and nobody
+caught it, because the drop steps live in the alpha.1 section and that section
+has never been run. Every drop threw before it reached the queue. Use the
+buttons and this looks fine; only dropping is affected.
+
+- [ ] Drag **one file** from Explorer onto the window — a card appears.
+- [ ] Drag **several files at once** — a card appears for each.
+- [ ] Drag a **folder** — its contents are scanned in, subfolders included.
+- [ ] Drag a **mixture** of files and folders together.
+- [ ] Drag a folder containing unsupported files — the skipped count is
+      reported in a toast, not silently dropped.
+- [ ] Drop the **same file twice** — it is not duplicated.
+- [ ] Drop onto the **card grid** once cards exist, and onto the **drop zone**
+      when empty. Both work.
+- [ ] Drop onto the **navigation rail** — it still queues the file rather than
+      doing nothing.
+- [ ] Drop something with no file behind it — an image dragged out of a browser,
+      or selected text. Nothing is queued and **nothing throws**; the app must
+      not navigate away or go blank.
+- [ ] With DevTools open, drop a file and confirm **no console error**.
+
+### The selection bar only offers what applies
+
+- [ ] With cards queued and **nothing selected**: the bar shows the
+      **Select all** checkbox, **"Convert all to"** and its format dropdown.
+      **Bulk edit, Remove and Deselect are all absent.**
+- [ ] The two-click flow still works from that state: pick one format, press
+      Convert. *(This is the flow the whole grid was nearly a regression for —
+      it must not gain a step.)*
+- [ ] Select one card: **Bulk edit**, **Remove** and **Deselect** appear, and
+      the labels change to "1 selected" / "Convert selected to".
+- [ ] Deselect everything again: those three disappear and the labels revert.
+- [ ] Tick **Select all**, then untick it — the buttons come and go with the
+      selection.
+- [ ] The bar itself is gone entirely when there are no cards at all.
+
 ### Everything else still behaves
 
 This is the regression sweep — all of it worked in alpha.3 and must still:

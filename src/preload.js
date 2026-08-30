@@ -62,21 +62,25 @@ contextBridge.exposeInMainWorld("electronAPI", {
     scanPaths: (paths, opts) => ipcRenderer.invoke(CH.FS_SCAN, paths, opts),
 
     /**
-     * Resolve dropped File objects to absolute paths. webUtils exists only in
-     * the main world and the preload, which is why the drop handler has to
-     * come through here rather than staying in the renderer.
+     * Resolve one dropped File to an absolute path. webUtils exists only in the
+     * main world and the preload, which is why a drop has to come through here
+     * rather than being handled entirely in the renderer.
+     *
+     * **One file at a time, deliberately.** This used to take the whole
+     * `FileList` and iterate it here, which threw "files is not iterable" on
+     * every single drop: a FileList is not one of the types the context bridge
+     * can carry, so it arrived as a plain object with no iterator. A File does
+     * cross intact, so the renderer keeps the iteration where the FileList is
+     * still a FileList and calls this per file.
      */
-    getPathsForFiles: (files) => {
-        const out = [];
-        for (const file of files) {
-            try {
-                out.push(webUtils.getPathForFile(file));
-            } catch (_) {
-                // A dragged item with no filesystem path (a browser-sourced
-                // drag, say) is simply not something we can convert.
-            }
+    getPathForFile: (file) => {
+        try {
+            return webUtils.getPathForFile(file);
+        } catch (_) {
+            // A dragged item with no filesystem path (a browser-sourced drag,
+            // say) is simply not something we can convert.
+            return "";
         }
-        return out;
     },
 
     // -- Dialogs --------------------------------------------------------------
