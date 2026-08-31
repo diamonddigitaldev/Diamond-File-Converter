@@ -361,15 +361,49 @@ function countFiles(dirPath) {
     }
 }
 
-/** The last non-empty stderr line, which is where ffmpeg puts the real reason. */
+// ffmpeg's closing verdict, its progress counters, and the line reporting the
+// *consequence* of a failure rather than its cause. "Conversion failed!" is
+// always last, which is why taking the final line reported nothing useful.
+const STDERR_NOISE = [
+    /^conversion failed!?$/i,
+    /^frame=/i,
+    /muxing overhead/i,
+    /nothing was written into output file/i,
+    /last message repeated/i,
+];
+
+// Lines that name a cause. ffmpeg emits these before the cascade of failures
+// they set off, so the first match is the root rather than a symptom.
+const STDERR_CAUSE = /(invalid data|no such file|permission denied|not found|unsupported|cannot |could not |unable to|does not (support|contain)|decode error|error while|error opening|error initializing|too large|out of memory)/i;
+
+/** Strip ffmpeg's "[component @ 0x7f...]" prefix, which means nothing to a user. */
+function withoutComponent(line) {
+    return line.replace(/^\[[^\]]*\]\s*/, "").trim();
+}
+
+/**
+ * Why a run failed, in ffmpeg's own words.
+ *
+ * This used to take the last non-empty stderr line, which is reliably
+ * "Conversion failed!" — ffmpeg's verdict, never its reason. A file the decoder
+ * could not read reported nothing at all about why.
+ */
 function lastMeaningfulLine(stderr) {
     if (!stderr) return null;
-    const lines = stderr.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    return lines.length > 0 ? lines[lines.length - 1] : null;
+
+    const lines = stderr.split(/\r?\n/)
+        .map(l => l.trim())
+        .filter(Boolean)
+        .filter(l => !STDERR_NOISE.some(pattern => pattern.test(withoutComponent(l))));
+    if (lines.length === 0) return null;
+
+    const cause = lines.find(l => STDERR_CAUSE.test(l));
+    return withoutComponent(cause ?? lines[lines.length - 1]);
 }
 
 module.exports = {
     JobRunner,
     parseProgressLines,
+    lastMeaningfulLine,
     defaultConcurrency,
 };

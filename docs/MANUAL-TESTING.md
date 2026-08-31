@@ -9,9 +9,11 @@ sections — the history is useful.
 
 > ### Read the status line on each section
 >
-> **2.0.0-alpha.3 has been run in full and passed.** Earlier sections were
-> deliberately held until the UX direction settled, and one section is marked
-> **WITHDRAWN** because the feature it covers was removed.
+> **2.0.0-alpha.3 has been run in full and passed.** The two alpha.4 sections
+> below have now been run too, and each turned up a real issue — see their
+> status lines. Earlier sections were deliberately held until the UX direction
+> settled, and one section is marked **WITHDRAWN** because the feature it
+> covers was removed.
 >
 > A written checklist is not a passed one. Every section carries its own status
 > line; do not describe any build as tested on the strength of this file
@@ -614,7 +616,16 @@ establishing whether there is a bug at all, not confirming a fix.
 
 ## 2.0.0-alpha.4 — pipelines removed, window minimum raised
 
-> **Status: not started.** Written 2026-08-30.
+> **Status: RUN 2026-08-31, passed.** Run by hand against the live dev build
+> (`npm start`) with a real mixed-media folder. The window minimum, the
+> selection bar's "nothing selected" vs "N selected" states, folder ingest
+> (nested subfolders, unsupported-file reporting, dedup, unreadable-file
+> detection), and every "nothing offers a pipeline" check all matched. One gap:
+> literal OS drag-and-drop from Explorer onto the window could not be driven by
+> this pass (the automation can't drag out of a restricted Explorer window) —
+> everything downstream of ingest was exercised via **Add Folder** instead,
+> which reaches the same code path but isn't a substitute for actually
+> dropping. That one still wants a human's five minutes.
 
 Two changes, both subtractive.
 
@@ -736,7 +747,35 @@ This is the regression sweep — all of it worked in alpha.3 and must still:
 
 ## 2.0.0-alpha.4 — cross-kind conversions
 
-> **Status: not started.** Written 2026-08-30.
+> **Status: RUN 2026-08-31, two issues found.** Run by hand against the live
+> dev build with a real video, audio file, and a spread of still/animated
+> GIF/WebP/PNG sources. Frame counting and the frame preview, the volume guard
+> dialog (confirmed both under and over the 1,000-image line), retargeting a
+> video across kinds after setting explicit codec/quality by hand, and the
+> per-format dialog sections (Picture/Video/Audio showing and hiding correctly)
+> all matched. Two real problems:
+>
+> 1. **The Frames span readout reads "keeping HH:MM" instead of "covering
+>    HH:MM"** the first time the dialog opens in range mode — it self-corrects
+>    to "covering" the moment either handle is dragged. `renderer.js` already
+>    has the right ternary (`framesMode() ? "covering" : "keeping"`); something
+>    about the initial render reads `framesMode()` before the Frames section's
+>    visibility is settled.
+> 2. **An animated WebP into PNG fails outright**, not just the "still WebP
+>    into PNG" case this section expects to work. The bundled ffmpeg's WebP
+>    decoder skips the `ANIM`/`ANMF` chunks that carry the animation and reports
+>    "image data not found" — this looks like a real limitation of this
+>    particular ffmpeg-static build's WebP support, not a bug in this app's job
+>    composition. Separately, the card only ever shows a bare "Conversion
+>    failed!" for this failure, with none of the real ffmpeg reason surfaced —
+>    every other failure path (a corrupt file, for instance) does show the real
+>    reason, so this one path is missing that detail.
+>
+> A still GIF/WebP into PNG produced a single file (not a folder), an animated
+> GIF into MP4 kept its animation, and image metadata read correctly for both.
+> Audio extraction's stream-copy rule (offered only when the source audio
+> already matches) wasn't re-driven by hand here — it's covered by the
+> automated suite (`npm test`, 145/145 passing) rather than this pass.
 
 Converting between *kinds* — a video into audio, a video into stills, a GIF into
 a video — has been offered in the format dropdown since the card grid landed.
@@ -802,8 +841,11 @@ What changed, and so what to poke at:
       as long as the GIF. It must not be a single frozen frame held for five
       seconds.
 - [ ] **A still WebP or GIF to PNG.** One file appears. **Not a folder.**
-- [ ] An animated WebP to PNG still gives you the Frames control and a folder,
-      because that one genuinely does move.
+- [ ] An **animated WebP** to anything is refused before you start: the card
+      reads **unreadable**, and the reason names animated WebP. *(This is a
+      limitation of the bundled FFmpeg 6.1.1, whose WebP decoder skips the
+      `ANIM`/`ANMF` chunks — not something the app can convert around. An
+      earlier version of this checklist wrongly said it should work.)*
 - [ ] **A video to MP3.** Plays, right length, no video stream.
 - [ ] **A video to GIF.** Still animated, still good colours.
 - [ ] **A still image to MP4.** A short clip holding that picture.
@@ -850,3 +892,54 @@ The probe's still-vs-moving test was inverted, so this is worth a look:
 - [ ] Convert several files of mixed kinds at once.
 - [ ] Both themes, and at the 880×600 minimum — **the frame previews and the
       Frames block must fit** without the dialog scrolling sideways.
+
+---
+
+## 2.0.0-alpha.4 — fixes from the cross-kind test pass
+
+> **Status: not started.** Written 2026-08-31.
+
+Two issues came back from testing the frames work. Both are fixed; a third,
+found while fixing them, is fixed too.
+
+### The span readout names what it is doing
+
+- [ ] Queue a video, set it to **PNG**, open **Advanced options**. Without
+      touching anything, the readout under the slider reads **"covering 0:10"**.
+      *(It used to say "keeping" until you dragged a handle — the slider painted
+      before the section knew it was choosing frames.)*
+- [ ] Drag a handle: still "covering".
+- [ ] Switch to **A single frame**: the readout clears — one frame is a position,
+      not a span.
+- [ ] Now change the format to **MP4** in the same dialog. The section is headed
+      **Trim** again and reads **"keeping …"**. *(Found while fixing the above:
+      the stale single-frame choice blanked it, and would also have silently
+      thrown away the trim's end.)*
+- [ ] Set a trim, Apply, convert — the output really is trimmed.
+- [ ] Switch back to PNG in the same dialog: it remembers you had chosen
+      **A single frame**.
+
+### A failed conversion says why
+
+- [ ] Convert something that will fail — an animated WebP is the easy one, or
+      rename a `.txt` to `.mp4`.
+- [ ] The card shows **a real reason**, not "Conversion failed!". For animated
+      WebP it names the unsupported chunk.
+- [ ] The reason has no `[component @ 0x7f…]` prefix on it.
+- [ ] Hover or select the message — it is readable and can be copied.
+- [ ] A batch where one file fails still converts the rest, and only the failed
+      card carries the message.
+
+### Animated WebP is refused up front
+
+- [ ] Drop an **animated WebP**. The card's metadata line reads
+      **"WEBP · unreadable"** as soon as the probe returns — before any format
+      is chosen.
+- [ ] Open Advanced options on it: nothing crashes, and there is no duration to
+      trim.
+- [ ] A **still** WebP is unaffected: it shows its type and converts normally.
+- [ ] An animated **GIF** is unaffected: dimensions shown, converts, keeps its
+      animation.
+- [ ] An **MP3 with embedded cover art** is unaffected — still audio, no
+      resolution badge, converts normally. *(The check looks for a picture
+      stream with no dimensions; cover art has them.)*

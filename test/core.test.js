@@ -10,7 +10,7 @@ const formats = require("../src/core/formats");
 const { createJob, patchJob, validateJob, defaultModeFor, STREAM_MODE, CONFLICT, OUTPUT_ROUTING } = require("../src/core/job");
 const { buildArgs, normaliseBitrate, buildScaleFilter } = require("../src/core/ffmpeg-args");
 const paths = require("../src/core/paths");
-const { parseProgressLines } = require("../src/core/runner");
+const { parseProgressLines, lastMeaningfulLine } = require("../src/core/runner");
 const { scanPaths, commonRoot } = require("../src/core/scan");
 const probe = require("../src/core/probe");
 
@@ -619,4 +619,80 @@ test("args: a frame range seeks and bounds like a trim", () => {
     assert.equal(valueOf(args, "-ss"), "5");
     assert.equal(valueOf(args, "-t"), "3");
     assert.ok(args[args.length - 1].endsWith("frame_%06d.png"));
+});
+
+// ---------------------------------------------------------------------------
+// reporting why a conversion failed
+// ---------------------------------------------------------------------------
+
+test("runner: a failure reports its cause, not ffmpeg's closing verdict", () => {
+    // Verbatim from the bundled build refusing an animated WebP. Taking the
+    // last line — which is what this used to do — yields "Conversion failed!",
+    // so the card said nothing at all about why.
+    const stderr = [
+        "Error marking filters as finished",
+        "Error while filtering: Invalid data found when processing input",
+        "[vist#0:0/webp @ 000002ae13bd53c0] Decode error rate 1 exceeds maximum 0.666667",
+        "[out#0/image2 @ 000002ae13bc3d80] Nothing was written into output file, "
+            + "because at least one of its streams received no packets.",
+        "frame=    0 fps=0.0 q=0.0 Lsize=       0kB time=N/A bitrate=N/A speed=N/A",
+        "Conversion failed!",
+    ].join("\n");
+
+    assert.equal(lastMeaningfulLine(stderr),
+        "Error while filtering: Invalid data found when processing input");
+});
+
+test("runner: the component prefix is stripped from a reason", () => {
+    assert.equal(
+        lastMeaningfulLine("[mp4 @ 0x55f1c8] Could not find tag for codec vp9 in stream #0\nConversion failed!"),
+        "Could not find tag for codec vp9 in stream #0");
+});
+
+test("runner: progress counters and the verdict are never the reason", () => {
+    assert.equal(lastMeaningfulLine("Conversion failed!"), null);
+    assert.equal(lastMeaningfulLine("frame=  102 fps=25 q=28.0 size=  1024kB\nConversion failed!"), null);
+    assert.equal(lastMeaningfulLine(""), null);
+    assert.equal(lastMeaningfulLine(null), null);
+});
+
+test("runner: with nothing that names a cause, the last real line still stands", () => {
+    // Better an unexplained line than no message at all.
+    assert.equal(lastMeaningfulLine("something odd happened\nConversion failed!"), "something odd happened");
+});
+
+test("probe: a picture stream it cannot measure is reported as unreadable", () => {
+    // The bundled ffmpeg (6.1.1) reads no animated WebP and describes one as
+    // 0x0. Catching it here means the card says so before the conversion is
+    // configured, rather than after it fails.
+    const result = probe.normalise({
+        format: { duration: null },
+        streams: [{ codec_type: "video", codec_name: "webp", width: 0, height: 0, avg_frame_rate: "0/0" }],
+    }, "anim.webp");
+
+    assert.equal(result.ok, false);
+    assert.match(result.error, /cannot read this file/i);
+    assert.match(result.error, /animated webp/i);
+});
+
+test("probe: a still image with real dimensions is fine", () => {
+    const result = probe.normalise({
+        format: { duration: null },
+        streams: [{ codec_type: "video", codec_name: "webp", width: 160, height: 120, avg_frame_rate: "0/0" }],
+    }, "photo.webp");
+
+    assert.equal(result.ok, true);
+    assert.equal(result.isStill, true);
+});
+
+test("probe: an audio-only file has no picture stream to measure", () => {
+    // The unreadable check must not fire on something that simply has no video.
+    const result = probe.normalise({
+        format: { duration: 180 },
+        streams: [{ codec_type: "audio", codec_name: "mp3", sample_rate: "44100", channels: 2 }],
+    }, "song.mp3");
+
+    assert.equal(result.ok, true);
+    assert.equal(result.hasVideo, false);
+    assert.equal(result.isStill, false);
 });

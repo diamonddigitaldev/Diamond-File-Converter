@@ -611,6 +611,7 @@ function renderActionBar() {
 let jobModal = null;
 let modalScope = [];        // ids the dialog is editing
 let modalChosenMode = null; // frames vs a single frame, when that is a choice
+let modalFramesMode = false; // whether this conversion picks frames at all
 let previewTimer = null;
 
 const ENCODER_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast",
@@ -683,14 +684,27 @@ function requestFramePreviews() {
     }, FRAME_PREVIEW_DEBOUNCE);
 }
 
-/** Is the dialog choosing frames out of a moving source, rather than trimming? */
+/**
+ * Is the dialog choosing frames out of a moving source, rather than trimming?
+ *
+ * Held as state rather than read back off a CSS class: the slider paints before
+ * the frames choice does, so on the first open the class still described the
+ * previous conversion and the readout said "keeping" until something moved.
+ */
 function framesMode() {
-    return !$("jm-frames-choice").classList.contains("d-none");
+    return modalFramesMode;
 }
 
-/** Is the dialog currently set to pull out one frame rather than a span? */
+/**
+ * Is the dialog currently set to pull out one frame rather than a span?
+ *
+ * Gated on there being frames to choose at all. The choice is deliberately kept
+ * when the target changes, so switching away and back remembers it — but a
+ * video target is a trim, and reading the stale choice there blanked the
+ * readout and silently dropped the trim's end.
+ */
 function isSingleFrame() {
-    return modalChosenMode === "thumbnail";
+    return framesMode() && modalChosenMode === "thumbnail";
 }
 
 /**
@@ -989,6 +1003,8 @@ function syncModalControls() {
     const sample = modalSample();
     const mode = modalMode(target);
     const sections = display.applicableSections(sample?.ext, target, DESCRIPTORS, mode);
+    // Set before anything paints: renderTrim reads it, and runs first.
+    modalFramesMode = !!sections.frames;
 
     // Which sections apply depends on the pair and the mode, not the target
     // alone — frames out of a video are a span, not a trim.

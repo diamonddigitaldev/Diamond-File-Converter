@@ -66,6 +66,18 @@ function normalise(raw, inputPath) {
     // Cover art and other attached stills report as video streams with a
     // single frame. Treating those as "this file has video" would put a
     // resolution badge on an MP3, so they are separated out.
+    // A picture stream ffprobe cannot even measure is one ffmpeg cannot decode.
+    // The bundled build (6.1.1) reads no animated WebP at all and reports it as
+    // 0x0, so say so on the card up front rather than letting the conversion be
+    // configured and then fail with whatever the decoder shouts on its way out.
+    if (videoStreams.length > 0 && videoStreams.every(s => !toNumber(s.width) || !toNumber(s.height))) {
+        return {
+            ok: false,
+            inputPath,
+            error: "FFmpeg cannot read this file. Animated WebP is the usual cause — the bundled build does not support it.",
+        };
+    }
+
     const motionStreams = videoStreams.filter(s => !isAttachedPicture(s));
     const primaryVideo = motionStreams[0] ?? null;
     const primaryAudio = audioStreams[0] ?? null;
