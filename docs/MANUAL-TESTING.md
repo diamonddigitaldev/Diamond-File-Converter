@@ -23,7 +23,7 @@ sections — the history is useful.
 
 ```
 npm install
-npm test          # expect 145 passing, 0 failing
+npm test          # expect 152 passing, 0 failing
 npm start
 ```
 
@@ -892,6 +892,34 @@ The probe's still-vs-moving test was inverted, so this is worth a look:
 - [ ] Convert several files of mixed kinds at once.
 - [ ] Both themes, and at the 880×600 minimum — **the frame previews and the
       Frames block must fit** without the dialog scrolling sideways.
+
+---
+
+## 2.0.0-alpha.4 — Electron 44
+
+> **Status: not started.** Written 2026-08-31.
+
+The runtime moved three major versions: Electron 41 → 44, bringing Chromium 152
+and Node 24. **No application code changed for it.** It was taken only after
+driving the real app against the things a major bump actually threatens, all of
+which passed — but automation cannot judge how it feels, and a runtime change
+can affect anything.
+
+- [ ] The app starts, and **Menu → About / Credits** shows the right version.
+- [ ] Window position and size are still remembered across a restart.
+- [ ] Drag and drop from Explorer still queues files. *(This crosses the context
+      bridge through `webUtils`, which is exactly the sort of API a major bump
+      moves.)*
+- [ ] Frame previews still appear in the Frames section.
+- [ ] Both themes, and a live Windows theme switch while running.
+- [ ] Explorer integration: right-click a media file → the app opens with it
+      queued. Double-click an associated file.
+- [ ] The installer runs, asks for admin, and installs for all users.
+- [ ] **The download is noticeably larger — about 308MB, up from 242MB.** That
+      is Electron 44's own growth, not a packaging mistake. Confirm the
+      installed app still launches and converts.
+- [ ] Convert something end to end from the **installed** build, not just the
+      dev one.
 
 ---
 
