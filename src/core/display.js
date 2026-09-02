@@ -535,10 +535,149 @@
             .sort((a, b) => Number(b.sameKind) - Number(a.sameKind));
     }
 
+    // -- Joining -------------------------------------------------------------
+    //
+    // Whether a set of clips can be stitched together without re-encoding.
+    // Lives here rather than in a module of its own because the Join view has
+    // to say which of the two routes it is about to take *and why*, and the
+    // renderer cannot require() anything.
+
+    /**
+     * ffprobe reports a container as a comma-joined list of everything the
+     * demuxer handles — an .mp4 and a .mov both say
+     * "mov,mp4,m4a,3gp,3g2,mj2". Comparing those with === would call two files
+     * different that concatenate together perfectly, so the test is whether the
+     * lists overlap at all.
+     */
+    function sameContainer(a, b) {
+        if (!a || !b) return false;
+        const left = new Set(String(a).split(","));
+        return String(b).split(",").some(name => left.has(name));
+    }
+
+    /**
+     * Cross-multiplied rather than compared field by field, so 60/2 and 30/1
+     * are recognised as one rate. probe reduces what it parses, but this must
+     * not depend on having been handed reduced values to be right.
+     */
+    function sameRational(a, b) {
+        if (!a || !b) return false;
+        return a.num * b.den === b.num * a.den;
+    }
+
+    /** The fields that must match for a stream copy, in the order to report. */
+    const CLIP_FIELDS = [
+        { key: "container", label: "container",     of: m => m.formatName,        eq: sameContainer },
+        { key: "vcodec",    label: "video codec",   of: m => m.video?.codec },
+        { key: "width",     label: "width",         of: m => m.video?.width },
+        { key: "height",    label: "height",        of: m => m.video?.height },
+        { key: "fps",       label: "frame rate",    of: m => m.video?.fpsExact,   eq: sameRational },
+        { key: "timeBase",  label: "time base",     of: m => m.video?.timeBase },
+        { key: "sar",       label: "pixel shape",   of: m => m.video?.sar },
+        { key: "pixfmt",    label: "pixel format",  of: m => m.video?.pixelFormat },
+        { key: "acodec",    label: "audio codec",   of: m => m.audio?.codec },
+        { key: "rate",      label: "sample rate",   of: m => m.audio?.sampleRate },
+        { key: "channels",  label: "channels",      of: m => m.audio?.channels },
+        { key: "sampfmt",   label: "sample format", of: m => m.audio?.sampleFormat },
+    ];
+
+    /**
+     * Compare probed clips. `blocked` means the set cannot be joined at all;
+     * `compatible` means it can be joined without re-encoding.
+     *
+     * @param {object[]} metas normalised probe output, in clip order
+     */
+    function compareClips(metas) {
+        const clips = metas ?? [];
+        if (clips.length < 2) {
+            return { compatible: true, blocked: null, differences: [] };
+        }
+
+        // A clip ffmpeg could not measure is refused outright rather than being
+        // compared against — probe returns ok:false with no `video` at all, so
+        // every field below would read as undefined and match every other
+        // unreadable clip.
+        const unreadable = clips.findIndex(m => !m || m.ok === false);
+        if (unreadable !== -1) {
+            return { compatible: false, blocked: "unreadable", blockedIndex: unreadable, differences: [] };
+        }
+
+        // Concatenating a silent video onto one with sound, or a bare audio
+        // file onto a video, means synthesising the missing stream for the
+        // length of the clip. That is a different feature.
+        const withVideo = clips.filter(m => m.hasVideo).length;
+        if (withVideo !== 0 && withVideo !== clips.length) {
+            return { compatible: false, blocked: "mixed-kinds", differences: [] };
+        }
+        const withAudio = clips.filter(m => m.hasAudio).length;
+        if (withAudio !== 0 && withAudio !== clips.length) {
+            return { compatible: false, blocked: "mixed-audio", differences: [] };
+        }
+
+        const differences = [];
+        for (const field of CLIP_FIELDS) {
+            const values = clips.map(field.of);
+            if (values.every(v => v == null)) continue;
+            const same = field.eq
+                ? values.every(v => field.eq(v, values[0]))
+                : values.every(v => v === values[0]);
+            if (!same) differences.push({ field: field.key, label: field.label, values });
+        }
+
+        return { compatible: differences.length === 0, blocked: null, differences };
+    }
+
+    const JOIN_BLOCKED = {
+        "unreadable":  "One of these files cannot be read, so it cannot be joined.",
+        "mixed-kinds": "These are a mix of video and audio-only files. Join files of one kind at a time.",
+        "mixed-audio": "Some of these have sound and some do not, which cannot be joined as they are.",
+    };
+
+    /**
+     * What is about to happen, in the app's own words. The whole point of
+     * showing this is that "instant and lossless" and "re-encodes everything"
+     * are wildly different things to press the same button for.
+     */
+    function describeJoinPlan(comparison) {
+        if (comparison.blocked) {
+            return { strategy: "blocked", headline: JOIN_BLOCKED[comparison.blocked], reasons: [] };
+        }
+        if (comparison.compatible) {
+            return {
+                strategy: "demuxer",
+                headline: "These match, so they will be joined without re-encoding — quick, and no quality is lost.",
+                reasons: [],
+            };
+        }
+        return {
+            strategy: "filter",
+            headline: "These do not match, so they will be re-encoded to fit together. It takes longer and the result is not identical to the sources.",
+            reasons: comparison.differences.map(d => d.label),
+        };
+    }
+
+    /**
+     * Containers a set of clips can be joined into. GIF is deliberately absent:
+     * its palette pass and the join both want -filter_complex and the two
+     * cannot simply be stacked, so it is refused rather than half-supported.
+     */
+    function joinTargets(metas, descriptors) {
+        const clips = metas ?? [];
+        const wantsVideo = clips.length === 0 || clips.some(m => m?.hasVideo);
+        return Object.values(descriptors ?? {})
+            .filter(d => d.ext !== "gif")
+            .filter(d => (wantsVideo ? d.kind === "video" : d.kind === "audio"))
+            .map(d => d.ext);
+    }
+
     return {
         STATUS,
         plural,
         countOf,
+        sameContainer,
+        compareClips,
+        describeJoinPlan,
+        joinTargets,
         applicableSections,
         effectiveMode,
         estimateFrames,

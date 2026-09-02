@@ -112,6 +112,16 @@ function normalise(raw, inputPath) {
             fps: parseFrameRate(primaryVideo.avg_frame_rate) ?? parseFrameRate(primaryVideo.r_frame_rate),
             pixelFormat: primaryVideo.pix_fmt ?? null,
             bitrate: toNumber(primaryVideo.bit_rate),
+
+            // The three below exist for joining, where the question is not
+            // "roughly the same?" but "byte-compatible enough to concatenate
+            // without re-encoding?". `fps` cannot answer it: it is rounded to
+            // 3dp, and 30000/1001 and 2997/100 both land on 29.97 while being
+            // genuinely different streams that produce a broken file if
+            // stitched together untouched.
+            fpsExact: parseRational(primaryVideo.avg_frame_rate) ?? parseRational(primaryVideo.r_frame_rate),
+            timeBase: primaryVideo.time_base ?? null,
+            sar: primaryVideo.sample_aspect_ratio ?? null,
         } : null,
 
         audio: primaryAudio ? {
@@ -120,6 +130,7 @@ function normalise(raw, inputPath) {
             channels: toNumber(primaryAudio.channels),
             channelLayout: primaryAudio.channel_layout ?? null,
             bitrate: toNumber(primaryAudio.bit_rate),
+            sampleFormat: primaryAudio.sample_fmt ?? null,
         } : null,
 
         streamCounts: {
@@ -157,6 +168,24 @@ function parseFrameRate(value) {
     return Math.round(fps * 1000) / 1000;
 }
 
+/**
+ * The same rational, kept exact. parseFrameRate answers "what should I show a
+ * person"; this answers "is this the same stream", which rounding cannot.
+ */
+function parseRational(value) {
+    if (typeof value !== "string" || !value.includes("/")) return null;
+    const [num, den] = value.split("/").map(Number);
+    if (!Number.isFinite(num) || !Number.isFinite(den) || den === 0 || num <= 0) return null;
+    // Reduced, so 60/2 and 30/1 compare equal — they describe the same rate.
+    const divisor = gcd(num, den);
+    return { num: num / divisor, den: den / divisor };
+}
+
+function gcd(a, b) {
+    while (b) [a, b] = [b, a % b];
+    return a;
+}
+
 function toNumber(value) {
     if (value == null) return null;
     const n = Number(value);
@@ -169,4 +198,5 @@ module.exports = {
     probe,
     normalise,
     parseFrameRate,
+    parseRational,
 };

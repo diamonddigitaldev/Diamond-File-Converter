@@ -167,6 +167,157 @@ function buildArgs(job, opts = {}) {
     return args;
 }
 
+// -- Joining -----------------------------------------------------------------
+//
+// Two routes, and which one runs is a fact about the clips rather than a
+// setting. Where every clip already agrees on container, codecs, size, frame
+// rate and time base, the concat *demuxer* stitches them with -c copy: no
+// re-encode, no quality loss, near-instant. Where they do not, the concat
+// *filter* re-encodes, and every stream has to be normalised on the way in or
+// the seams tear.
+
+/**
+ * The concat demuxer's playlist file.
+ *
+ * Kept separate from the argv because the demuxer needs this on disk before
+ * ffmpeg starts, and this module does not touch the filesystem — the runner
+ * writes what this returns and passes back the path it wrote it to.
+ *
+ * Trim survives on the copy path through inpoint/outpoint, which snap to the
+ * nearest keyframe exactly as -ss does with -c copy elsewhere here.
+ */
+function buildConcatList(clips) {
+    return (clips ?? []).map((clip) => {
+        // ffmpeg's own escaping for this file: single quotes around the path,
+        // and a quoted apostrophe closes, escapes and reopens.
+        const lines = [`file '${String(clip.inputPath).replace(/'/g, "'\\''")}'`];
+        const { start, end } = clip.trim ?? {};
+        if (start != null && start > 0) lines.push(`inpoint ${formatSeconds(start)}`);
+        if (end != null && end > 0) lines.push(`outpoint ${formatSeconds(end)}`);
+        return lines.join("\n");
+    }).join("\n") + "\n";
+}
+
+/**
+ * @param {object} spec  { strategy, clips[], output: { ext, video, audio } }
+ * @param {object} opts  { outputPath, listPath, progress, overwrite }
+ * @returns {string[]}
+ */
+function buildJoinArgs(spec, opts = {}) {
+    const { outputPath, listPath, progress = true, overwrite = true } = opts;
+    if (!outputPath) throw new Error("buildJoinArgs requires an outputPath.");
+
+    const target = formats.getFormat(spec.output?.ext);
+    if (!target) throw new Error(`Unknown target format: ${spec.output?.ext}`);
+
+    const clips = spec.clips ?? [];
+    if (clips.length < 2) throw new Error("A join needs at least two clips.");
+
+    const args = ["-hide_banner", "-nostdin"];
+    args.push(overwrite ? "-y" : "-n");
+
+    const wantsVideo = clips.some(c => c.hasVideo !== false);
+    const wantsAudio = clips.some(c => c.hasAudio !== false);
+
+    if (spec.strategy === "demuxer") {
+        if (!listPath) throw new Error("A demuxer join requires a listPath.");
+        // -safe 0 because the playlist holds absolute Windows paths, which the
+        // demuxer refuses by default.
+        args.push("-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy");
+    } else {
+        for (const clip of clips) {
+            const { start, end } = clip.trim ?? {};
+            if (start != null && start > 0) args.push("-ss", formatSeconds(start));
+            // -t before -i limits what is read from *this* input, which keeps
+            // the trim out of the filter graph entirely.
+            if (end != null && end > (start ?? 0)) args.push("-t", formatSeconds(end - (start ?? 0)));
+            args.push("-i", clip.inputPath);
+        }
+
+        args.push("-filter_complex", buildConcatChain(clips, spec, { wantsVideo, wantsAudio }));
+        if (wantsVideo) args.push("-map", "[outv]");
+        if (wantsAudio) args.push("-map", "[outa]");
+
+        if (wantsVideo) {
+            const codec = spec.output?.video?.codec ?? target.defaultVideoCodec;
+            if (codec) args.push("-c:v", codec);
+            pushVideoQuality(args, { video: spec.output?.video ?? {} }, codec);
+            if (codec && PRESET_CODECS.has(codec) && spec.output?.video?.preset) {
+                args.push("-preset", spec.output.video.preset);
+            }
+            if (codec && NEEDS_YUV420P.has(codec)) args.push("-pix_fmt", "yuv420p");
+        }
+        if (wantsAudio) {
+            const codec = spec.output?.audio?.codec ?? target.defaultAudioCodec;
+            if (codec) args.push("-c:a", codec);
+            if (spec.output?.audio?.bitrate) args.push("-b:a", normaliseBitrate(spec.output.audio.bitrate));
+        }
+    }
+
+    if (target.ext === "mp4" || target.ext === "mov") args.push("-movflags", "+faststart");
+    if (progress) args.push("-progress", "pipe:1", "-nostats");
+
+    args.push(outputPath);
+    return args;
+}
+
+/**
+ * The concat filter graph.
+ *
+ * One concat instance taking interleaved [v0][a0][v1][a1]… pairs, not one per
+ * stream type — the two-instance v=1:a=0 / v=0:a=1 form belongs to a graph
+ * compiler wiring arbitrary nodes together, and using it here would need an
+ * extra pass to re-interleave what it split. Where a set is audio-only there is
+ * only an audio chain, and that is the one case that reads v=0:a=1.
+ *
+ * The per-clip normalisation is what makes the re-encode path work at all: a
+ * concat filter demands identical width, height, pixel format and sample rate
+ * on every input, and simply produces a torn output if it does not get them.
+ */
+function buildConcatChain(clips, spec, { wantsVideo, wantsAudio }) {
+    const width = spec.output?.video?.width ?? largest(clips, c => c.width);
+    const height = spec.output?.video?.height ?? largest(clips, c => c.height);
+    const fps = spec.output?.video?.fps ?? largest(clips, c => c.fps) ?? DEFAULT_ASSEMBLE_FPS;
+    const rate = spec.output?.audio?.sampleRate ?? largest(clips, c => c.sampleRate) ?? 48000;
+
+    const chains = [];
+    const inputs = [];
+
+    clips.forEach((_clip, i) => {
+        if (wantsVideo) {
+            const steps = [];
+            if (width && height) {
+                // Fit inside the frame and pad, rather than stretching a clip
+                // that does not share the others' shape.
+                steps.push(`scale=${width}:${height}:force_original_aspect_ratio=decrease`);
+                steps.push(`pad=${width}:${height}:-1:-1:color=black`);
+            }
+            steps.push("setsar=1");
+            steps.push(`fps=${fps}`);
+            steps.push("format=yuv420p");
+            chains.push(`[${i}:v]${steps.join(",")}[v${i}]`);
+            inputs.push(`[v${i}]`);
+        }
+        if (wantsAudio) {
+            chains.push(`[${i}:a]aresample=${rate},aformat=sample_fmts=fltp:channel_layouts=stereo[a${i}]`);
+            inputs.push(`[a${i}]`);
+        }
+    });
+
+    const n = clips.length;
+    const v = wantsVideo ? 1 : 0;
+    const a = wantsAudio ? 1 : 0;
+    const outputs = `${wantsVideo ? "[outv]" : ""}${wantsAudio ? "[outa]" : ""}`;
+    chains.push(`${inputs.join("")}concat=n=${n}:v=${v}:a=${a}${outputs}`);
+
+    return chains.join(";");
+}
+
+function largest(clips, pick) {
+    const values = (clips ?? []).map(pick).filter(v => Number.isFinite(v) && v > 0);
+    return values.length > 0 ? Math.max(...values) : null;
+}
+
 /** The video filter chain, in application order. */
 function buildVideoFilters(job, mode) {
     const filters = [];
@@ -218,6 +369,13 @@ function buildScaleFilter(job) {
 /**
  * GIF output split into a palette pass and an application pass. With no
  * preceding filters the chain still needs an explicit [0:v] label.
+ */
+/*
+ * Note for anyone adding GIF as a join target: this chain and the concat chain
+ * both occupy -filter_complex, and the two cannot simply be stacked — the
+ * palette pass would have to consume the concat's output label instead of
+ * [0:v], which is a second graph shape to build, test and explain. GIF is left
+ * out of joinTargets rather than half-supported.
  */
 function buildPaletteChain(videoFilters) {
     const pre = videoFilters.length > 0 ? `${videoFilters.join(",")},` : "";
@@ -292,6 +450,8 @@ function buildProbeArgs(inputPath) {
 
 module.exports = {
     buildArgs,
+    buildJoinArgs,
+    buildConcatList,
     buildProbeArgs,
     buildVideoFilters,
     buildScaleFilter,

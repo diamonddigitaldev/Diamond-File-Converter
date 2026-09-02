@@ -49,6 +49,98 @@ function generateId() {
  * filled from the target format's own capability defaults, so a job created
  * with nothing but an input path and a target extension is already runnable.
  */
+/**
+ * A join: several clips in, one file out.
+ *
+ * Shaped as a job so the runner, paths.js and the whole conflict flow take it
+ * unchanged — everything downstream keys on job.id and job.output, and the only
+ * thing that reads job.inputPath for a join is the alongside/{src} fallback,
+ * neither of which fires because a join always names its own destination.
+ *
+ * The typed output name *is* the name template: applyNameTemplate only touches
+ * {token} patterns and hands anything else straight back, so "My Holiday"
+ * templates to "My Holiday". That is why a join needs no separate naming route,
+ * which is just as well — "alongside which input?" has no answer.
+ */
+function createJoinJob(spec = {}) {
+    const clips = (spec.clips ?? []).map(clip => ({
+        inputPath: clip.inputPath,
+        trim: { start: clip.trim?.start ?? null, end: clip.trim?.end ?? null },
+        duration: clip.duration ?? null,
+        hasVideo: clip.hasVideo ?? true,
+        hasAudio: clip.hasAudio ?? true,
+        width: clip.width ?? null,
+        height: clip.height ?? null,
+        fps: clip.fps ?? null,
+        sampleRate: clip.sampleRate ?? null,
+    }));
+
+    const targetExt = formats.canonicalExt(spec.targetExt ?? spec.output?.ext ?? "") ?? null;
+    const targetFormat = targetExt ? formats.getFormat(targetExt) : null;
+
+    return {
+        id: spec.id ?? generateId(),
+        inputPath: clips[0]?.inputPath ?? null,
+        sourceExt: clips[0] ? formats.canonicalExt(extnameOf(clips[0].inputPath)) : null,
+        inputMeta: null,
+        mode: null,
+
+        join: {
+            strategy: spec.strategy === "demuxer" ? "demuxer" : "filter",
+            clips,
+            output: {
+                ext: targetExt,
+                video: spec.video ?? {},
+                audio: spec.audio ?? {},
+            },
+        },
+
+        output: {
+            routing:      OUTPUT_ROUTING.FIXED,
+            dir:          spec.output?.dir          ?? null,
+            mirrorRoot:   null,
+            nameTemplate: spec.output?.nameTemplate ?? "joined",
+            ext:          targetExt,
+            onConflict:   spec.output?.onConflict   ?? CONFLICT.ASK,
+        },
+
+        video: {}, audio: {}, image: {}, trim: { start: null, end: null }, filters: [],
+        status: STATUS.PENDING,
+        progress: 0,
+        error: null,
+        outputPath: null,
+        _targetFormat: targetFormat ? targetFormat.ext : null,
+    };
+}
+
+/**
+ * Validation for a join. Deliberately not validateJob, which enforces
+ * canConvert(sourceExt, targetExt), mode legality and stream-copy rules — none
+ * of which describe a set of clips, and all of which would reject a perfectly
+ * good join for being the wrong shape.
+ */
+function validateJoin(job) {
+    const errors = [];
+    const clips = job.join?.clips ?? [];
+
+    if (clips.length < 2) errors.push("A join needs at least two files.");
+    if (clips.some(c => !c.inputPath)) errors.push("One of the clips has no file.");
+    if (!job.output?.ext) errors.push("Choose a format for the joined file.");
+    else if (!formats.getFormat(job.output.ext)) errors.push(`Unknown target format: ${job.output.ext}`);
+    if (!job.output?.dir) errors.push("Choose where to save the joined file.");
+    if (!job.output?.nameTemplate) errors.push("Give the joined file a name.");
+
+    for (const clip of clips) {
+        const { start, end } = clip.trim ?? {};
+        if (start != null && end != null && end <= start) {
+            errors.push("A clip ends before it starts.");
+            break;
+        }
+    }
+
+    return { ok: errors.length === 0, errors };
+}
+
 function createJob(spec = {}) {
     const inputPath = spec.inputPath ?? null;
     const sourceExt = spec.sourceExt ?? (inputPath ? formats.canonicalExt(extnameOf(inputPath)) : null);
@@ -259,7 +351,9 @@ module.exports = {
     OUTPUT_ROUTING,
     generateId,
     createJob,
+    createJoinJob,
     patchJob,
     validateJob,
+    validateJoin,
     producesDirectory,
 };

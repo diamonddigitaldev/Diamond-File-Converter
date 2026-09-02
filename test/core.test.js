@@ -7,8 +7,8 @@ const fs = require("fs");
 const path = require("path");
 
 const formats = require("../src/core/formats");
-const { createJob, patchJob, validateJob, defaultModeFor, STREAM_MODE, CONFLICT, OUTPUT_ROUTING } = require("../src/core/job");
-const { buildArgs, normaliseBitrate, buildScaleFilter } = require("../src/core/ffmpeg-args");
+const { createJob, createJoinJob, patchJob, validateJob, validateJoin, defaultModeFor, STREAM_MODE, CONFLICT, OUTPUT_ROUTING } = require("../src/core/job");
+const { buildArgs, buildJoinArgs, buildConcatList, normaliseBitrate, buildScaleFilter } = require("../src/core/ffmpeg-args");
 const paths = require("../src/core/paths");
 const { parseProgressLines, lastMeaningfulLine } = require("../src/core/runner");
 const { scanPaths, commonRoot } = require("../src/core/scan");
@@ -784,4 +784,135 @@ test("probe: an audio-only file has no picture stream to measure", () => {
     assert.equal(result.ok, true);
     assert.equal(result.hasVideo, false);
     assert.equal(result.isStill, false);
+});
+
+// ---------------------------------------------------------------------------
+// Joining
+// ---------------------------------------------------------------------------
+
+test("join: matching clips are stitched without re-encoding", () => {
+    const spec = {
+        strategy: "demuxer",
+        clips: [{ inputPath: "a.mp4", hasVideo: true, hasAudio: true },
+                { inputPath: "b.mp4", hasVideo: true, hasAudio: true }],
+        output: { ext: "mp4" },
+    };
+    const args = buildJoinArgs(spec, { outputPath: "out.mp4", listPath: "list.txt", progress: false });
+
+    assert.ok(args.includes("-f"));
+    assert.equal(valueOf(args, "-f"), "concat");
+    assert.equal(valueOf(args, "-safe"), "0");
+    assert.equal(valueOf(args, "-i"), "list.txt");
+    assert.equal(valueOf(args, "-c"), "copy");
+    assert.equal(args.filter(a => a === "-i").length, 1, "the playlist is the only input");
+    // The whole point of this path is that nothing is decoded, so a filter
+    // graph or a stream map appearing here means it silently re-encoded.
+    assert.ok(!args.includes("-filter_complex"));
+    assert.ok(!args.includes("-map"));
+    assert.equal(args[args.length - 1], "out.mp4");
+});
+
+test("join: a demuxer join without its playlist is refused, not guessed at", () => {
+    const spec = { strategy: "demuxer", clips: [{ inputPath: "a.mp4" }, { inputPath: "b.mp4" }], output: { ext: "mp4" } };
+    assert.throws(() => buildJoinArgs(spec, { outputPath: "out.mp4" }), /listPath/);
+    assert.throws(() => buildJoinArgs(spec, { listPath: "l.txt" }), /outputPath/);
+    assert.throws(
+        () => buildJoinArgs({ strategy: "filter", clips: [{ inputPath: "a.mp4" }], output: { ext: "mp4" } },
+                            { outputPath: "out.mp4" }),
+        /at least two/);
+});
+
+test("join: mismatched clips are concatenated through one filter, not two", () => {
+    const spec = {
+        strategy: "filter",
+        clips: [
+            { inputPath: "a.mp4", hasVideo: true, hasAudio: true, width: 1920, height: 1080, fps: 30, sampleRate: 48000 },
+            { inputPath: "b.mov", hasVideo: true, hasAudio: true, width: 1280, height: 720, fps: 25, sampleRate: 44100 },
+            { inputPath: "c.mkv", hasVideo: true, hasAudio: true, width: 640, height: 480, fps: 30, sampleRate: 48000 },
+        ],
+        output: { ext: "mp4" },
+    };
+    const args = buildJoinArgs(spec, { outputPath: "out.mp4", progress: false });
+    const chain = valueOf(args, "-filter_complex");
+
+    assert.equal(args.filter(a => a === "-i").length, 3);
+    // One concat instance taking interleaved pairs. The two-instance
+    // v=1:a=0 / v=0:a=1 form is graph-compiler vocabulary and would need the
+    // streams re-interleaving afterwards.
+    assert.ok(chain.includes("concat=n=3:v=1:a=1[outv][outa]"), chain);
+    assert.equal(chain.split("concat=").length - 1, 1, "exactly one concat node");
+    assert.ok(chain.includes("[v0][a0][v1][a1][v2][a2]concat="), chain);
+    assert.ok(args.includes("-map") && args.includes("[outv]") && args.includes("[outa]"));
+
+    // Every input normalised, or the concat filter produces a torn output.
+    for (const i of [0, 1, 2]) {
+        assert.ok(chain.includes(`[${i}:v]scale=1920:1080`), `clip ${i} scaled to the largest frame`);
+        assert.ok(chain.includes(`[${i}:a]aresample=48000`), `clip ${i} resampled`);
+    }
+    assert.ok(chain.includes("setsar=1"), "a pixel-shape mismatch tears the seam");
+    assert.ok(chain.includes("fps=30"));
+});
+
+test("join: an audio-only set has no video chain at all", () => {
+    const spec = {
+        strategy: "filter",
+        clips: [{ inputPath: "a.mp3", hasVideo: false, hasAudio: true, sampleRate: 44100 },
+                { inputPath: "b.wav", hasVideo: false, hasAudio: true, sampleRate: 44100 }],
+        output: { ext: "mp3" },
+    };
+    const args = buildJoinArgs(spec, { outputPath: "out.mp3", progress: false });
+    const chain = valueOf(args, "-filter_complex");
+
+    assert.ok(chain.includes("concat=n=2:v=0:a=1[outa]"), chain);
+    assert.ok(!chain.includes("[outv]"));
+    assert.ok(!chain.includes("scale="));
+    assert.ok(args.includes("[outa]"));
+    assert.ok(!args.includes("[outv]"));
+});
+
+test("join: the playlist quotes paths the way ffmpeg reads them", () => {
+    // String.raw throughout: these are Windows paths, and a "\t" that turns
+    // into a tab is exactly the sort of thing this test exists to catch.
+    const list = buildConcatList([
+        { inputPath: String.raw`C:\My Videos\clip one.mp4` },
+        { inputPath: String.raw`C:\it's here\two.mp4` },
+        { inputPath: String.raw`C:\three.mp4`, trim: { start: 5, end: 12 } },
+    ]);
+    const lines = list.trim().split("\n");
+
+    assert.equal(lines[0], String.raw`file 'C:\My Videos\clip one.mp4'`,
+        "a space must not split the path");
+    // ffmpeg's own escaping for this file: close the quote, escape the
+    // apostrophe, reopen. A raw apostrophe would end the path early.
+    assert.equal(lines[1], String.raw`file 'C:\it'\''s here\two.mp4'`);
+    assert.equal(lines[2], String.raw`file 'C:\three.mp4'`);
+    assert.equal(lines[3], "inpoint 5");
+    assert.equal(lines[4], "outpoint 12");
+    // An untrimmed clip carries no points, or every clip would start at 0.
+    assert.ok(!lines[0].includes("inpoint"));
+    assert.ok(list.endsWith("\n"), "the demuxer wants a trailing newline");
+});
+
+test("join: a job is shaped so the ordinary output and conflict path still work", () => {
+    const job = createJoinJob({
+        clips: [{ inputPath: String.raw`C:\a.mp4`, duration: 10 },
+                { inputPath: String.raw`C:\b.mp4`, duration: 5 }],
+        targetExt: "mkv",
+        strategy: "demuxer",
+        output: { dir: String.raw`D:\out`, nameTemplate: "My Holiday" },
+    });
+
+    assert.equal(validateJoin(job).ok, true);
+    assert.equal(job.output.routing, OUTPUT_ROUTING.FIXED);
+    // The typed name IS the template — applyNameTemplate only rewrites
+    // {tokens}, so a join needs no naming route of its own.
+    const resolved = paths.resolveOutputPath(job);
+    assert.equal(path.basename(resolved.outputPath), "My Holiday.mkv");
+    assert.equal(path.dirname(resolved.outputPath), String.raw`D:\out`,
+        "a join always names its own destination; there is no 'alongside which input'");
+
+    assert.equal(validateJoin(createJoinJob({ clips: [{ inputPath: "a.mp4" }], targetExt: "mkv",
+        output: { dir: String.raw`D:\o` } })).ok, false, "one clip is not a join");
+    assert.equal(validateJoin(createJoinJob({ clips: [{ inputPath: "a.mp4" }, { inputPath: "b.mp4" }],
+        targetExt: "mkv" })).ok, false, "a join must know where to save");
 });

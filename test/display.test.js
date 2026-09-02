@@ -632,3 +632,115 @@ test("display: a mode chosen by hand is not second-guessed", () => {
     assert.equal(d.effectiveMode({ ext: "mp4", targetExt: null }, TARGETS, DESCRIPTORS), null);
     assert.equal(d.effectiveMode({ ext: "mp4", targetExt: "nope" }, TARGETS, DESCRIPTORS), null);
 });
+
+// ---------------------------------------------------------------------------
+// Joining
+//
+// The choice between the concat demuxer and the concat filter is a fact about
+// the clips, not a setting. Getting it wrong in the permissive direction
+// produces a file that plays wrongly rather than an error, so these compare
+// the fields ffmpeg actually cares about.
+// ---------------------------------------------------------------------------
+
+function clip(over = {}) {
+    return {
+        ok: true, hasVideo: true, hasAudio: true,
+        formatName: "mov,mp4,m4a,3gp,3g2,mj2",
+        video: { codec: "h264", width: 1920, height: 1080, fpsExact: { num: 30, den: 1 },
+                 timeBase: "1/15360", sar: "1:1", pixelFormat: "yuv420p" },
+        audio: { codec: "aac", sampleRate: 48000, channels: 2, sampleFormat: "fltp" },
+        ...over,
+    };
+}
+
+test("join: identical clips are joined without re-encoding", () => {
+    const result = d.compareClips([clip(), clip()]);
+    assert.equal(result.compatible, true);
+    assert.deepEqual(result.differences, []);
+    assert.equal(d.describeJoinPlan(result).strategy, "demuxer");
+});
+
+test("join: an .mp4 and a .mov are the same container as far as ffmpeg cares", () => {
+    // ffprobe reports every name the demuxer handles, so the two are identical
+    // strings here. Comparing containers with === would still be wrong for the
+    // general case, which is why it is a set intersection.
+    assert.equal(d.sameContainer("mov,mp4,m4a,3gp,3g2,mj2", "mov,mp4,m4a,3gp,3g2,mj2"), true);
+    assert.equal(d.sameContainer("matroska,webm", "mov,mp4,m4a"), false);
+    assert.equal(d.sameContainer("matroska,webm", "webm"), true);
+    assert.equal(d.sameContainer(null, "mp4"), false);
+});
+
+test("join: frame rates that round the same are still different rates", () => {
+    // 30000/1001 and 2997/100 both display as 29.97. Stream-copying them
+    // together produces a file whose timestamps drift, so the exact rational
+    // is what the comparison uses and `fps` is only ever for showing a person.
+    const ntsc = clip({ video: { ...clip().video, fpsExact: { num: 30000, den: 1001 } } });
+    const nearly = clip({ video: { ...clip().video, fpsExact: { num: 2997, den: 100 } } });
+
+    const result = d.compareClips([ntsc, nearly]);
+    assert.equal(result.compatible, false);
+    assert.deepEqual(result.differences.map(x => x.field), ["fps"]);
+    assert.equal(d.describeJoinPlan(result).strategy, "filter");
+
+    // ...but the same rate written two ways is the same rate.
+    const sixtyOverTwo = clip({ video: { ...clip().video, fpsExact: { num: 60, den: 2 } } });
+    assert.equal(d.compareClips([clip(), sixtyOverTwo]).compatible, true);
+});
+
+test("join: a time base difference alone forces a re-encode", () => {
+    const other = clip({ video: { ...clip().video, timeBase: "1/12800" } });
+    const result = d.compareClips([clip(), other]);
+    assert.equal(result.compatible, false);
+    assert.deepEqual(result.differences.map(x => x.field), ["timeBase"]);
+});
+
+test("join: every mismatch is named, so the UI can say why", () => {
+    const other = clip({
+        video: { ...clip().video, width: 1280, height: 720, pixelFormat: "yuv422p" },
+        audio: { ...clip().audio, sampleRate: 44100 },
+    });
+    const plan = d.describeJoinPlan(d.compareClips([clip(), other]));
+    assert.equal(plan.strategy, "filter");
+    assert.deepEqual(plan.reasons, ["width", "height", "pixel format", "sample rate"]);
+    assert.match(plan.headline, /re-encoded/);
+});
+
+test("join: a file ffmpeg cannot read is refused rather than compared", () => {
+    // probe returns { ok: false } with no `video` at all, so every field would
+    // read undefined and match any other unreadable clip.
+    const result = d.compareClips([clip(), { ok: false, error: "cannot read" }]);
+    assert.equal(result.compatible, false);
+    assert.equal(result.blocked, "unreadable");
+    assert.equal(result.blockedIndex, 1);
+    assert.equal(d.describeJoinPlan(result).strategy, "blocked");
+});
+
+test("join: video and audio-only files cannot be joined to each other", () => {
+    const audioOnly = clip({ hasVideo: false, video: null, formatName: "mp3" });
+    assert.equal(d.compareClips([clip(), audioOnly]).blocked, "mixed-kinds");
+
+    // A silent clip onto one with sound would need a track synthesising.
+    const silent = clip({ hasAudio: false, audio: null });
+    assert.equal(d.compareClips([clip(), silent]).blocked, "mixed-audio");
+
+    // Audio-only throughout is a perfectly good join.
+    assert.equal(d.compareClips([audioOnly, audioOnly]).blocked, null);
+});
+
+test("join: GIF is never offered as a destination", () => {
+    // Its palette pass and the concat both want -filter_complex, and the two
+    // do not stack. Refused rather than half-supported.
+    const targets = d.joinTargets([clip(), clip()], formats.FORMATS);
+    assert.ok(!targets.includes("gif"));
+    assert.ok(targets.includes("mp4"));
+
+    const audioOnly = clip({ hasVideo: false, video: null });
+    const audioTargets = d.joinTargets([audioOnly, audioOnly], formats.FORMATS);
+    assert.ok(audioTargets.includes("mp3"));
+    assert.ok(!audioTargets.includes("mp4"), "audio cannot be joined into a video container");
+});
+
+test("join: one clip needs no comparison", () => {
+    assert.equal(d.compareClips([clip()]).compatible, true);
+    assert.equal(d.compareClips([]).compatible, true);
+});

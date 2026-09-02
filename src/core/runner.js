@@ -12,9 +12,10 @@ const { EventEmitter } = require("events");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const os = require("os");
+const path = require("path");
 
 const { STATUS } = require("./job");
-const { buildArgs } = require("./ffmpeg-args");
+const { buildArgs, buildJoinArgs, buildConcatList } = require("./ffmpeg-args");
 const paths = require("./paths");
 
 function defaultConcurrency() {
@@ -214,20 +215,39 @@ class JobRunner extends EventEmitter {
             paths.ensureParentDir(outputPath, isDirectory);
         } catch (err) {
             this._finish(job, { status: STATUS.ERROR, error: `Could not create the output folder: ${err.message}` });
+            this._pump();
             return;
         }
 
         // -- Spawn -------------------------------------------------------------
+        //
+        // A demuxer join needs its playlist on disk before ffmpeg starts.
+        // Writing it here rather than in the argument builder is what keeps that
+        // module a pure function of the job, which is what makes it testable —
+        // it is handed the path and never touches the filesystem itself.
         let args;
+        let tempDir = null;
         try {
-            args = buildArgs(job, { outputPath });
+            if (job.join) {
+                let listPath = null;
+                if (job.join.strategy === "demuxer") {
+                    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "dfc-join-"));
+                    listPath = path.join(tempDir, "list.txt");
+                    fs.writeFileSync(listPath, buildConcatList(job.join.clips), "utf8");
+                }
+                args = buildJoinArgs(job.join, { outputPath, listPath });
+            } else {
+                args = buildArgs(job, { outputPath });
+            }
         } catch (err) {
+            this._cleanupTemp(tempDir);
             this._finish(job, { status: STATUS.ERROR, error: err.message });
+            this._pump();
             return;
         }
 
         const child = this.spawn(this.ffmpegPath, args, { windowsHide: true });
-        const entry = { job, child, outputPath, isDirectory, cancelled: false, stderr: "" };
+        const entry = { job, child, outputPath, isDirectory, cancelled: false, stderr: "", tempDir };
         this.active.set(job.id, entry);
 
         job.status = STATUS.RUNNING;
@@ -254,6 +274,7 @@ class JobRunner extends EventEmitter {
 
         child.on("error", (err) => {
             this.active.delete(job.id);
+            this._cleanupTemp(entry.tempDir);
             this._cleanupPartial(outputPath, isDirectory);
             this._finish(job, { status: STATUS.ERROR, error: `Could not start ffmpeg: ${err.message}` });
             this._pump();
@@ -261,6 +282,7 @@ class JobRunner extends EventEmitter {
 
         child.on("close", (code) => {
             this.active.delete(job.id);
+            this._cleanupTemp(entry.tempDir);
 
             if (entry.cancelled || this._cancelledAll) {
                 this._cleanupPartial(outputPath, isDirectory);
@@ -293,6 +315,20 @@ class JobRunner extends EventEmitter {
         const payload = { jobId: job.id, ...result };
         this.results.set(job.id, payload);
         this.emit("status", payload);
+    }
+
+    /**
+     * The scratch directory holding a demuxer join's playlist. Nothing else
+     * knows this exists, so every path out of _run has to call it or it leaks —
+     * one directory per cancelled join, sitting in the temp folder forever.
+     */
+    _cleanupTemp(tempDir) {
+        if (!tempDir) return;
+        try {
+            fs.rmSync(tempDir, { recursive: true, force: true });
+        } catch (_) {
+            // Named dfc-join-* so it is at least identifiable if it survives.
+        }
     }
 
     _cleanupPartial(outputPath, isDirectory) {
@@ -382,6 +418,21 @@ function parseProgressLines(lines, durationSeconds) {
 }
 
 function durationOf(job) {
+    // A join's progress runs across everything it is stitching together, so the
+    // denominator is the sum of what each clip contributes. Using one clip's
+    // duration would send the bar to 100% at the end of the first one and leave
+    // it there for the rest of the run.
+    if (job.join) {
+        let total = 0;
+        for (const clip of job.join.clips ?? []) {
+            const { start, end } = clip.trim ?? {};
+            const span = (end ?? clip.duration) - (start ?? 0);
+            if (!Number.isFinite(span) || span <= 0) return null;
+            total += span;
+        }
+        return total > 0 ? total : null;
+    }
+
     const meta = job.inputMeta;
     const { start, end } = job.trim ?? {};
 
