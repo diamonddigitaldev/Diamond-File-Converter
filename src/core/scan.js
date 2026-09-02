@@ -25,7 +25,7 @@ const DEFAULT_MAX_FILES = 20000;
  * @param {string[]} [options.exclude]      extensions to drop
  * @param {boolean} [options.followSymlinks]
  * @param {boolean} [options.recursive]     default true
- * @returns {Promise<{files: string[], skipped: object[], truncated: boolean, errors: object[]}>}
+ * @returns {Promise<{files: string[], skipped: object[], truncated: boolean, errors: object[], root: string|null}>}
  *
  * `skipped` carries a reason per file, not just a count — the caller has to be
  * able to say *which* files were dropped and why, and "unsupported" reads very
@@ -108,6 +108,7 @@ async function scanPaths(inputPaths, options = {}) {
         }
     }
 
+    const directories = [];
     for (const inputPath of inputPaths) {
         if (truncated) break;
         let stat;
@@ -117,22 +118,29 @@ async function scanPaths(inputPaths, options = {}) {
             errors.push({ path: inputPath, error: err.message });
             continue;
         }
-        if (stat.isDirectory()) await walk(inputPath, 0);
+        if (stat.isDirectory()) { directories.push(inputPath); await walk(inputPath, 0); }
         else if (stat.isFile()) accept(inputPath);
     }
 
-    return { files, skipped, truncated, errors };
+    // The root a mirrored output should rebuild from.
+    //
+    // Where a directory was handed in, that directory *is* the root — deriving
+    // it from what was found gives the wrong answer in the ordinary case. Point
+    // at E:\Photos holding only E:\Photos\2024\a.jpg and the common root of the
+    // files is E:\Photos\2024, so the mirror silently drops the 2024 level,
+    // which is the very structure the user asked to keep. Only a set of loose
+    // files has no better answer than their shared ancestor.
+    const root = directories.length > 0 ? commonDir(directories) : commonRoot(files);
+
+    return { files, skipped, truncated, errors, root };
 }
 
-/**
- * The common root of a set of paths, used as the mirror root when a folder
- * ingest should rebuild its structure in the destination.
- */
-function commonRoot(paths) {
-    if (!paths || paths.length === 0) return null;
-    if (paths.length === 1) return path.dirname(paths[0]);
+/** The shared leading path of a set of directories, or null if there is none. */
+function commonDir(dirs) {
+    if (!dirs || dirs.length === 0) return null;
+    if (dirs.length === 1) return path.resolve(dirs[0]);
 
-    const split = paths.map(p => path.resolve(path.dirname(p)).split(/[\\/]/));
+    const split = dirs.map(d => path.resolve(d).split(/[\\/]/));
     const first = split[0];
     const shared = [];
 
@@ -142,14 +150,26 @@ function commonRoot(paths) {
         else break;
     }
 
+    // Nothing shared means separate drives, which cannot be mirrored under one
+    // root at all. resolveOutputDir treats a null root as plain fixed output.
     if (shared.length === 0) return null;
     // A drive-letter-only result ("E:") needs its separator back to be a path.
     return shared.length === 1 ? `${shared[0]}${path.sep}` : shared.join(path.sep);
 }
 
+/**
+ * The common root of a set of *files*, used as the mirror root when an ingest
+ * was a loose selection rather than a folder.
+ */
+function commonRoot(paths) {
+    if (!paths || paths.length === 0) return null;
+    return commonDir(paths.map(p => path.dirname(p)));
+}
+
 module.exports = {
     scanPaths,
     commonRoot,
+    commonDir,
     DEFAULT_MAX_DEPTH,
     DEFAULT_MAX_FILES,
 };

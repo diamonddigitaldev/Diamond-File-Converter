@@ -1187,3 +1187,62 @@ two ways could produce two cards.
       toast says **"That file is already in the list."** and **no second card
       appears**.
 - [ ] The card count in the footer matches the number of cards on screen.
+
+---
+
+## 2.0.0-alpha.5 — mirrored output
+
+> **Status: not started.** Written 2026-09-02 alongside the fix.
+
+**"Mirror the source folders" has never worked.** It has been in the Destination
+dropdown since alpha.2. `paths.js` needs `output.mirrorRoot` to rebuild the
+tree, nothing anywhere set it, and the job model rejects a mirror job without
+one — so choosing it put *"Mirrored output was selected but no source root was
+given"* where the command preview should be and left **Apply** disabled. There
+was no way to get past it, in any released build.
+
+The scanner now reports the root it walked and the cards carry it.
+
+The root is the **folder you pointed at**, not the shared ancestor of the files
+found. Those differ whenever one subfolder holds everything: point at a folder
+containing only `2024/holiday/clip.mp4` and the shared ancestor is
+`2024/holiday`, which would flatten away the two levels you asked to keep.
+
+**Test setup:** a folder with at least two levels of nesting and media at the
+bottom — e.g. `Source\2024\holiday\clip.mp4` and `Source\2023\misc\song.mp3`.
+
+### It can be chosen at all
+
+- [ ] Add the **folder** (not the files). Open **Advanced options** on a card.
+- [ ] Set **Destination** to **Mirror the source folders**.
+- [ ] The command preview appears and **Apply is enabled**. *(Before, this
+      showed an error and Apply stayed dead.)*
+- [ ] Pick an output folder with **Browse**, choose a format, press Apply.
+
+### It rebuilds the tree
+
+- [ ] Convert. The output lands at
+      `<chosen>\2024\holiday\clip.<ext>` — the structure under the folder you
+      added, rebuilt under the destination.
+- [ ] The second file lands at `<chosen>\2023\misc\song.<ext>`.
+- [ ] The intermediate folders are created; you do not have to make them first.
+- [ ] **The top level is not lost.** If your folder has only one populated
+      subtree, that subtree's folders must still appear in the output. This is
+      the case that would silently flatten.
+
+### The other destinations still work
+
+- [ ] **Alongside the original** puts the output next to the source, as always.
+- [ ] **A folder I choose** puts everything flat in one folder, no subfolders.
+- [ ] Switching between all three in the dialog updates the command preview each
+      time, and Apply stays enabled for all three.
+
+### When there is nothing to mirror
+
+- [ ] Select files with **Add Files** rather than adding a folder, then open
+      Advanced options. Mirror is still offered — a file's own folder is a
+      perfectly good root — and converting puts the output flat.
+- [ ] *(Only if you have two drives.)* Add files from **C:** and from another
+      drive in one go, select both cards, open **Bulk edit**. Mirror reads
+      **"Mirror the source folders (add a folder to use this)"** and cannot be
+      chosen — there is no common root across drives. Nothing errors.

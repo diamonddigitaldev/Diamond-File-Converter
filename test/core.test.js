@@ -473,6 +473,64 @@ test("scan: common root finds the shared ancestor for mirrored output", () => {
     assert.equal(commonRoot([a, b]), path.join("C:", "media"));
     assert.equal(commonRoot([a]), path.join("C:", "media", "a"));
     assert.equal(commonRoot([]), null);
+
+    // Separate drives have no shared root at all. resolveOutputDir treats null
+    // as plain fixed output rather than throwing, so this must be null and not
+    // something creative.
+    assert.equal(commonRoot([path.join("C:", "one.mp4"), path.join("D:", "two.mp4")]), null);
+
+    // A drive-letter-only result has to come back as a path. "E:" alone is a
+    // drive-relative reference, not the root of the drive.
+    const sameDrive = commonRoot([path.join("E:", "a.mp4"), path.join("E:", "sub", "b.mp4")]);
+    assert.equal(sameDrive, `E:${path.sep}`);
+});
+
+test("scan: a folder ingest mirrors from the folder, not from what it found", async () => {
+    // The root has to be the folder pointed at. Deriving it from the files
+    // found collapses any level that happens to hold everything: point at
+    // <root> containing only <root>/2024/a.mp3 and the shared ancestor of the
+    // files is <root>/2024, so the mirror silently drops the level the user
+    // asked to preserve.
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "dfc-root-"));
+    try {
+        fs.mkdirSync(path.join(root, "2024"), { recursive: true });
+        fs.writeFileSync(path.join(root, "2024", "a.mp3"), "");
+
+        const scanned = await scanPaths([root]);
+        assert.equal(scanned.files.length, 1);
+        assert.equal(scanned.root, path.resolve(root), "the folder pointed at is the root");
+        assert.notEqual(scanned.root, path.join(root, "2024"));
+
+        // Loose files have no folder to speak of, so their shared ancestor is
+        // the only answer available.
+        const loose = await scanPaths([path.join(root, "2024", "a.mp3")]);
+        assert.equal(loose.root, path.join(root, "2024"));
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
+test("scan: mirrored output rebuilds the tree the scan reported", async () => {
+    // scan.js finds the root and paths.js consumes it; this is the seam where
+    // mirroring was broken for three releases, because nothing joined them up.
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "dfc-mirror-"));
+    try {
+        fs.mkdirSync(path.join(root, "a", "b"), { recursive: true });
+        const input = path.join(root, "a", "b", "clip.mov");
+        fs.writeFileSync(input, "");
+
+        const scanned = await scanPaths([root]);
+        const job = createJob({
+            inputPath: scanned.files[0],
+            targetExt: "mp4",
+            output: { routing: OUTPUT_ROUTING.MIRROR, dir: path.join("D:", "out"), mirrorRoot: scanned.root },
+        });
+
+        assert.deepEqual(validateJob(job).errors ?? [], [], "a scanned root must satisfy validation");
+        assert.equal(paths.resolveOutputDir(job), path.join("D:", "out", "a", "b"));
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
 });
 
 // ---------------------------------------------------------------------------

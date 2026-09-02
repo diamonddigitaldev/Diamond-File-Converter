@@ -53,7 +53,7 @@ function generateId() {
  */
 const samePath = (a, b) => a.replace(/\//g, "\\").toLowerCase() === b.replace(/\//g, "\\").toLowerCase();
 
-function addFiles(filePaths) {
+function addFiles(filePaths, mirrorRoot = null) {
     let added = 0;
     let duplicates = 0;
     const rejected = [];
@@ -71,6 +71,11 @@ function addFiles(filePaths) {
             filePath,
             ext,
             kind: entry.type,
+            // Which folder this card was ingested from, for mirrored output.
+            // It belongs to the card rather than to settings, because settings
+            // are written across a whole modal selection in one go while the
+            // root is a property of the ingest that produced each card.
+            mirrorRoot,
             targetExt: null,
             settings: {},
             meta: null,
@@ -123,6 +128,19 @@ function buildSkippedDetail(skipped) {
     return list;
 }
 
+/**
+ * The output settings for one card, with its mirror root attached.
+ *
+ * MIRROR routing has been in the dropdown since alpha.2 and has never once
+ * worked: paths.js needs output.mirrorRoot to rebuild the tree, nothing ever
+ * set it, and validateJob rejects the job without it — so choosing it left
+ * Apply disabled and an error where the command preview should be. The root is
+ * known at ingest; this is the only thing that was missing.
+ */
+function withMirrorRoot(job, output) {
+    return { ...(output ?? job.settings?.output ?? {}), mirrorRoot: job.mirrorRoot ?? null };
+}
+
 const ALL_KINDS = ["audio", "video", "image"];
 
 /** What the folder-options popover currently says. Seeded on startup. */
@@ -156,7 +174,7 @@ async function ingestPaths(inputPaths) {
     if (!inputPaths || inputPaths.length === 0) return;
     try {
         const result = await api.scanPaths(inputPaths, buildScanOptions());
-        const { added, rejected, duplicates } = addFiles(result.files);
+        const { added, rejected, duplicates } = addFiles(result.files, result.root ?? null);
 
         // The scanner's rejections and the format map's are one thing as far as
         // anyone reading this is concerned, so they are reported as one thing.
@@ -1205,6 +1223,18 @@ function syncModalControls() {
     const needsDir = $("jm-routing").value !== "alongside";
     $("jm-outdir").parentElement.parentElement.classList.toggle("d-none", !needsDir);
 
+    // There is nothing to mirror where the cards did not come from a folder, or
+    // came from folders on different drives. Offering it and then failing
+    // validation is how it behaved for three releases; better not to offer it.
+    const mirror = $("jm-routing").querySelector('option[value="mirror"]');
+    const canMirror = modalScope.length > 0
+        && jobs.filter(j => modalScope.includes(j.id)).every(j => j.mirrorRoot);
+    mirror.disabled = !canMirror;
+    mirror.textContent = canMirror
+        ? "Mirror the source folders"
+        : "Mirror the source folders (add a folder to use this)";
+    if (!canMirror && $("jm-routing").value === "mirror") $("jm-routing").value = "alongside";
+
     schedulePreview();
 }
 
@@ -1290,8 +1320,13 @@ function schedulePreview() {
             $("jm-errors").textContent = "";
             return;
         }
+        // The preview needs the mirror root as much as the run does. Without it
+        // choosing "Mirror the source folders" fails validation, the preview
+        // comes back not-ok, and Apply stays disabled with no way forward.
+        const settings = readSettingsFromForm();
         const result = await api.previewJob(
-            { inputPath: sample.filePath, targetExt: target, ...readSettingsFromForm() });
+            { inputPath: sample.filePath, targetExt: target, ...settings,
+              output: withMirrorRoot(sample, settings.output) });
         $("jm-preview").textContent = `ffmpeg ${result.args.join(" ")}`;
         $("jm-errors").textContent = result.ok ? "" : result.errors.join(" ");
         $("jm-apply").disabled = !result.ok;
@@ -1431,7 +1466,8 @@ async function startConversion() {
     // actually run in parallel. v1 awaited them one at a time.
     const results = await Promise.all(runnable.map(async (job) => {
         const result = await api.runJob(
-            { id: job.id, inputPath: job.filePath, targetExt: job.targetExt, ...(job.settings ?? {}) });
+            { id: job.id, inputPath: job.filePath, targetExt: job.targetExt, ...(job.settings ?? {}),
+              output: withMirrorRoot(job) });
         applyResult(job, result);
         return result;
     }));
