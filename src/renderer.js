@@ -40,17 +40,23 @@ function generateId() {
 
 // -- Ingest ------------------------------------------------------------------
 
+/**
+ * @returns {{added: number, rejected: object[], duplicates: number}} — the same
+ * { path, reason } shape the scanner uses, so a caller can merge the two lists
+ * and report them as the one thing a user sees.
+ */
 function addFiles(filePaths) {
     let added = 0;
-    let rejected = 0;
+    let duplicates = 0;
+    const rejected = [];
 
     for (const filePath of filePaths) {
         const raw = p.extname(filePath).slice(1).toLowerCase();
         const ext = FORMATS.aliases[raw] ?? raw;
         const entry = FORMATS.conversionMap[ext];
 
-        if (!entry) { rejected++; continue; }
-        if (jobs.some(j => j.filePath === filePath)) continue;
+        if (!entry) { rejected.push({ path: filePath, reason: "unsupported" }); continue; }
+        if (jobs.some(j => j.filePath === filePath)) { duplicates++; continue; }
 
         jobs.push({
             id: generateId(),
@@ -75,15 +81,38 @@ function addFiles(filePaths) {
         probeNewJobs();
     }
 
-    // v1 discarded unsupported files in silence, which read as the app being
-    // broken. Say so.
-    if (rejected > 0) {
-        toast(
-            `${display.countOf(rejected, "file")} ${display.plural(rejected, "was", "were")} skipped — not a supported format.`,
-            added > 0 ? "warning" : "danger"
-        );
+    // Reporting belongs to whoever called this. There used to be a toast here
+    // as well as one in ingestPaths, so a folder holding one unreadable file
+    // could produce two different sentences about the same thing.
+    return { added, rejected, duplicates };
+}
+
+const SKIP_REASONS = {
+    "unsupported":  "not a supported format",
+    "not-included": "turned off in folder options",
+    "excluded":     "turned off in folder options",
+};
+
+/** The list behind "Show them", built only if the button is actually pressed. */
+function buildSkippedDetail(skipped) {
+    const list = document.createElement("ul");
+    list.className = "toast-detail";
+
+    for (const item of skipped.slice(0, 50)) {
+        const row = document.createElement("li");
+        const name = document.createElement("span");
+        name.className = "toast-detail-name";
+        name.textContent = p.basename(item.path);
+        row.append(name, document.createTextNode(` — ${SKIP_REASONS[item.reason] ?? item.reason}`));
+        list.appendChild(row);
     }
-    return added;
+    if (skipped.length > 50) {
+        const more = document.createElement("li");
+        more.className = "toast-detail-more";
+        more.textContent = `and ${display.countOf(skipped.length - 50, "more file")}`;
+        list.appendChild(more);
+    }
+    return list;
 }
 
 /** Expand folders in the main process, then queue whatever came back. */
@@ -91,21 +120,63 @@ async function ingestPaths(inputPaths) {
     if (!inputPaths || inputPaths.length === 0) return;
     try {
         const result = await api.scanPaths(inputPaths, {});
-        const added = addFiles(result.files);
+        const { added, rejected, duplicates } = addFiles(result.files);
 
-        if (result.truncated) {
-            toast(`Stopped after ${display.countOf(result.files.length, "file")} — the folder is very large.`, "warning");
-        } else if (added > 0 && result.skipped > 0) {
-            toast(`Added ${display.countOf(added, "file")}, skipped ${display.countOf(result.skipped, "unsupported file")}.`, "info");
-        } else if (added === 0 && result.files.length === 0 && result.skipped > 0) {
-            toast("No supported media found in that folder.", "warning");
-        }
+        // The scanner's rejections and the format map's are one thing as far as
+        // anyone reading this is concerned, so they are reported as one thing.
+        const skipped = [...(result.skipped ?? []), ...rejected];
+        reportIngest({ added, skipped, duplicates, truncated: result.truncated, found: result.files.length });
+
         for (const err of result.errors ?? []) {
             toast(`Could not read ${p.basename(err.path)}: ${err.error}`, "danger");
         }
     } catch (_) {
-        addFiles(inputPaths);
+        // The scan itself failed, so folders cannot be expanded. Queue whatever
+        // was handed over as plain files and report on that alone.
+        const fallback = addFiles(inputPaths);
+        reportIngest({
+            added: fallback.added,
+            skipped: fallback.rejected,
+            duplicates: fallback.duplicates,
+            truncated: false,
+            found: inputPaths.length,
+        });
     }
+}
+
+/**
+ * One sentence for one ingest, assembled from clauses rather than chosen from a
+ * chain of branches. The chain used to lose the skipped count whenever a scan
+ * also truncated, and said nothing at all when everything found was already in
+ * the list — which reads exactly like a drop that did not register.
+ */
+function reportIngest({ added, skipped, duplicates, truncated, found }) {
+    const clauses = [];
+    if (added > 0) clauses.push(`Added ${display.countOf(added, "file")}`);
+    if (skipped.length > 0) clauses.push(`skipped ${skipped.length}`);
+    if (duplicates > 0) clauses.push(`${duplicates} already in the list`);
+    if (truncated) clauses.push(`stopped at ${display.countOf(found, "file")} — the folder is very large`);
+
+    if (clauses.length === 0) return;
+
+    let type = "info";
+    if (added === 0) type = skipped.length > 0 || truncated ? "warning" : "info";
+    else if (truncated) type = "warning";
+
+    let message;
+    if (added === 0 && skipped.length === 0 && duplicates > 0) {
+        message = duplicates === 1
+            ? "That file is already in the list."
+            : "Those files are already in the list.";
+    } else if (added === 0 && skipped.length > 0 && duplicates === 0) {
+        message = "No supported media found there.";
+    } else {
+        message = `${clauses.join(", ")}.`;
+    }
+
+    toast(message, type, 4500, skipped.length > 0
+        ? { actionLabel: "Show them", onAction: () => buildSkippedDetail(skipped) }
+        : {});
 }
 
 /**
@@ -1213,8 +1284,20 @@ function applyJobModal() {
 
 const TOAST_ICONS = { info: "info", success: "check_circle", warning: "warning", danger: "error" };
 
-function toast(message, type = "info", timeoutMs = 4500) {
+/**
+ * @param {object} [options]
+ * @param {string}   [options.actionLabel] adds a button beside the message
+ * @param {() => (Node|null)} [options.onAction] builds what the button reveals,
+ *        appended inside this same toast. A toast carrying an action does not
+ *        time out by default — an action nobody can reach is not an action.
+ *
+ * Everything here is set with textContent. A toast reports filenames and
+ * ffmpeg's own words, neither of which this app gets to trust as markup.
+ */
+function toast(message, type = "info", timeoutMs = 4500, options = {}) {
     const host = $("toast-host");
+    const { actionLabel = null, onAction = null } = options;
+    if (actionLabel && timeoutMs === 4500) timeoutMs = 0;
 
     const note = document.createElement("div");
     note.className = `toast-note toast-${type}`;
@@ -1226,6 +1309,31 @@ function toast(message, type = "info", timeoutMs = 4500) {
     const body = document.createElement("span");
     body.className = "toast-body";
     body.textContent = message;
+
+    if (actionLabel && onAction) {
+        const action = document.createElement("button");
+        action.className = "toast-action";
+        action.type = "button";
+        action.textContent = actionLabel;
+
+        // Both the button and whatever it reveals live inside the body. The
+        // toast itself is a flex row of icon | body | dismiss, so anything
+        // appended to it directly becomes a fourth column instead.
+        let detail = null;
+        action.addEventListener("click", () => {
+            if (detail) {
+                detail.remove();
+                detail = null;
+                action.textContent = actionLabel;
+                return;
+            }
+            detail = onAction();
+            if (!detail) return;
+            body.appendChild(detail);
+            action.textContent = "Hide";
+        });
+        body.append(" ", action);
+    }
 
     const close = document.createElement("button");
     close.className = "toast-close material-icons-round";

@@ -704,6 +704,40 @@ body.popup-window span:hover {
 }
 .toast-note .toast-close:hover { opacity: 1; }
 
+/* An action inside the message, for a toast that has more to say than fits in
+   a sentence. Inherits the toast's own colour rather than picking one, because
+   the four toast variants sit on four different backgrounds. */
+.toast-note .toast-action {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+}
+.toast-note .toast-action:hover { opacity: 0.8; }
+
+.toast-detail {
+    max-height: 12rem;
+    overflow-y: auto;
+    margin: 0.4rem 0 0;
+    padding: 0.4rem 0.6rem;
+    list-style: none;
+    font-size: 0.8rem;
+    border-radius: 4px;
+    /* The toast backgrounds are solid brand colours, so a tint of the text
+       colour is the only inset that works on all four of them. */
+    background-color: rgb(0 0 0 / 0.08);
+}
+.toast-detail li { padding: 0.1rem 0; }
+.toast-detail-more { opacity: 0.75; font-style: italic; }
+
+/* Filenames are the reason this list exists, so they are the one thing here
+   worth copying — and body sets user-select: none for everything. */
+.toast-detail-name { user-select: text; font-weight: 600; }
+
 .toast-info    { background-color: var(--bs-info);    border-left-color: var(--bs-info);    color: #000; }
 .toast-success { background-color: var(--bs-success); border-left-color: var(--bs-success); color: #fff; }
 .toast-warning { background-color: var(--bs-warning); border-left-color: var(--bs-warning); color: #000; }

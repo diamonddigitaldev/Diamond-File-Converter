@@ -400,7 +400,7 @@ test("scan: walks recursively and filters by the format graph", async () => {
 
         const all = await scanPaths([root]);
         assert.equal(all.files.length, 3, "v1 would have found only the top-level file");
-        assert.equal(all.skipped, 1, "the .txt is skipped");
+        assert.equal(all.skipped.length, 1, "the .txt is skipped");
 
         const shallow = await scanPaths([root], { recursive: false });
         assert.equal(shallow.files.length, 1);
@@ -422,6 +422,31 @@ test("scan: walks recursively and filters by the format graph", async () => {
     }
 });
 
+test("scan: says which file was skipped and why", async () => {
+    // A count alone cannot tell "this app cannot read that" apart from "you
+    // turned that type off", and those want very different reactions.
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "dfc-scan-why-"));
+    try {
+        fs.writeFileSync(path.join(root, "a.mp3"), "");
+        fs.writeFileSync(path.join(root, "b.png"), "");
+        fs.writeFileSync(path.join(root, "notes.txt"), "");
+
+        const plain = await scanPaths([root]);
+        assert.deepEqual(plain.skipped.map(s => path.basename(s.path)), ["notes.txt"]);
+        assert.equal(plain.skipped[0].reason, "unsupported");
+
+        const onlyAudio = await scanPaths([root], { include: ["mp3"] });
+        const byName = Object.fromEntries(onlyAudio.skipped.map(s => [path.basename(s.path), s.reason]));
+        assert.equal(byName["b.png"], "not-included", "a filtered-out file is not the same as an unreadable one");
+        assert.equal(byName["notes.txt"], "unsupported");
+
+        const noImages = await scanPaths([root], { exclude: ["png"] });
+        assert.equal(noImages.skipped.find(s => path.basename(s.path) === "b.png").reason, "excluded");
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
 test("scan: deduplicates and reports unreadable paths without throwing", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "dfc-scan2-"));
     try {
@@ -431,6 +456,12 @@ test("scan: deduplicates and reports unreadable paths without throwing", async (
         const result = await scanPaths([file, file, path.join(root, "missing.mp4")]);
         assert.equal(result.files.length, 1);
         assert.equal(result.errors.length, 1);
+        assert.deepEqual(result.errors[0].path, path.join(root, "missing.mp4"));
+        assert.equal(typeof result.errors[0].error, "string");
+        // The same file twice is not a skip. Nothing was dropped, so there is
+        // nothing to report, and counting it would put a scary number in a
+        // toast for a drop that did exactly what the user asked.
+        assert.equal(result.skipped.length, 0);
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
     }

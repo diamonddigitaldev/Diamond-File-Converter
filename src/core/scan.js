@@ -25,7 +25,12 @@ const DEFAULT_MAX_FILES = 20000;
  * @param {string[]} [options.exclude]      extensions to drop
  * @param {boolean} [options.followSymlinks]
  * @param {boolean} [options.recursive]     default true
- * @returns {Promise<{files: string[], skipped: number, truncated: boolean, errors: object[]}>}
+ * @returns {Promise<{files: string[], skipped: object[], truncated: boolean, errors: object[]}>}
+ *
+ * `skipped` carries a reason per file, not just a count — the caller has to be
+ * able to say *which* files were dropped and why, and "unsupported" reads very
+ * differently from "you turned that type off". Reason codes only: this module
+ * has no business deciding how any of it is worded.
  */
 async function scanPaths(inputPaths, options = {}) {
     const {
@@ -42,16 +47,19 @@ async function scanPaths(inputPaths, options = {}) {
 
     const files = [];
     const errors = [];
+    const skipped = [];
     const seen = new Set();
-    let skipped = 0;
     let truncated = false;
 
     const accept = (filePath) => {
         const ext = formats.canonicalExt(path.extname(filePath));
-        if (!ext) { skipped++; return; }
-        if (includeSet && !includeSet.has(ext)) { skipped++; return; }
-        if (excludeSet && excludeSet.has(ext)) { skipped++; return; }
+        if (!ext) { skipped.push({ path: filePath, reason: "unsupported" }); return; }
+        if (includeSet && !includeSet.has(ext)) { skipped.push({ path: filePath, reason: "not-included" }); return; }
+        if (excludeSet && excludeSet.has(ext)) { skipped.push({ path: filePath, reason: "excluded" }); return; }
 
+        // A file reached twice is not skipped. Nothing was dropped and there is
+        // nothing to tell anyone — reporting it would be noise wearing the
+        // clothes of thoroughness.
         const key = path.resolve(filePath).toLowerCase();
         if (seen.has(key)) return;
         seen.add(key);

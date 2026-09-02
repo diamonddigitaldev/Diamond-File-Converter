@@ -1041,3 +1041,78 @@ queue would stall — so this is the case that proves it does.
       Advanced options still behave exactly as before, with no prompt.
 - [ ] With no collision at all, no dialog ever appears.
 - [ ] The **Cancel** button on a single running card still cancels just that one.
+
+---
+
+## 2.0.0-alpha.5 — what a folder ingest skipped, and why
+
+> **Status: not started.** Written 2026-09-02 alongside the change.
+
+Unsupported files were dropped with only a count — "skipped 2 unsupported
+files" — which tells you something went missing, but not what, and not whether
+it was the app's doing or yours. The scanner now records a reason per file and
+the toast can list them.
+
+Two reporting bugs went with it. A scan that both truncated *and* skipped
+reported only the truncation, because the branches were an else-if chain. And
+adding files that were all already in the list said **nothing at all**, which
+reads exactly like a drop that never registered.
+
+There were also two different "skipped" toasts — one from the scanner, one from
+the queue's own format check — which could both fire for a single folder and
+word the same thing differently. There is now one.
+
+**Test media:** a folder holding a few media files, at least one nested
+subfolder, two or three `.txt` files, and one file with a media extension that
+is actually junk (rename a `.txt` to `.mp4`).
+
+### The skipped list
+
+- [ ] Drop a folder containing media **and** two or three `.txt` files.
+- [ ] The toast reads **"Added N files, skipped 3."** and carries a **Show
+      them** button.
+- [ ] It does **not** disappear on its own — a toast with an action stays until
+      it is dismissed.
+- [ ] Press **Show them**: a list appears inside the toast, one row per skipped
+      file, each reading *filename — not a supported format*.
+- [ ] The button now reads **Hide**. Press it — the list collapses and the
+      button reads Show them again.
+- [ ] **Select a filename in the list and copy it.** It highlights. *(Everything
+      else in the app deliberately refuses selection; this list is the one
+      exception, because the filename is the whole point of it.)*
+- [ ] The × still dismisses the whole toast.
+- [ ] Drop a folder with **more than 50** unsupported files: the list stops at
+      50 and its last row reads "and N more files".
+
+### The cases that used to say the wrong thing
+
+- [ ] Drop the same folder **twice**. The second time the toast reads **"Those
+      files are already in the list."** *(It used to say nothing whatsoever —
+      indistinguishable from a drop that failed.)*
+- [ ] Drop a single already-queued file: **"That file is already in the list."**
+      — singular.
+- [ ] Drop a folder holding only `.txt` files: **"No supported media found
+      there."**, with Show them still listing them.
+- [ ] Add a folder large enough to truncate **that also contains junk files**.
+      The toast mentions **both** the skip and the stop, in one sentence.
+      *(Truncation used to swallow the skipped count entirely.)*
+
+### One message, not two
+
+- [ ] Put a `.txt` **and** a renamed junk `.mp4` in a folder, and drop it. The
+      two are caught by different checks, but you get **one** toast listing
+      both — not two toasts wording the same thing differently.
+- [ ] Use **Add Files** and pick a `.txt` directly: same single toast, same
+      wording.
+
+### Nothing else about ingest changed
+
+- [ ] A normal folder of supported media: **"Added N files."**, no action
+      button, and it fades on its own after a few seconds.
+- [ ] Nested subfolders are still walked.
+- [ ] An unreadable file still gets its own red "Could not read …" toast.
+- [ ] Drag and drop, **Add Files**, **Add Folder** and **Menu → Open Folder**
+      all behave the same as each other.
+- [ ] Check the toast in **both themes** — the list's inset background and the
+      underlined action button must be readable on all four toast colours
+      (info, success, warning, danger).
