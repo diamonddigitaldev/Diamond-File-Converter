@@ -30,15 +30,20 @@ class JobRunner extends EventEmitter {
      * @param {(job, candidatePath) => Promise<{action: string, outputPath?: string}>} [options.conflictResolver]
      *        Called when a job's conflict policy is "ask". Must resolve to
      *        { action: "write" | "skip" | "cancel", outputPath }.
+     * @param {typeof spawn} [options.spawn] Seam for tests, so the pool can be
+     *        driven without starting ffmpeg. Injected the same way ffmpegPath
+     *        and conflictResolver are.
      */
     constructor(options = {}) {
         super();
         this.ffmpegPath = options.ffmpegPath ?? "ffmpeg";
         this.concurrency = options.concurrency ?? defaultConcurrency();
         this.conflictResolver = options.conflictResolver ?? null;
+        this.spawn = options.spawn ?? spawn;
 
         this.queue = [];              // jobs waiting to start
         this.active = new Map();      // jobId -> { job, child, outputPath, isDirectory }
+        this.reserved = new Set();    // jobIds waiting on a conflict answer
         this.results = new Map();     // jobId -> result
         this.running = false;
         this.paused = false;
@@ -83,7 +88,15 @@ class JobRunner extends EventEmitter {
         this._pump();
     }
 
-    /** Cancel one job, whether it is running or still queued. */
+    /**
+     * Cancel one job, whether it is running or still queued.
+     *
+     * A job parked on a conflict prompt is in neither map, so this returns
+     * false and does nothing for it. That is a known gap rather than an
+     * oversight: the prompt is an OS-modal dialog this process cannot dismiss,
+     * so there is nothing to cancel until the user answers it. cancelAll
+     * handles the batch case by re-checking after the answer arrives.
+     */
     cancel(jobId) {
         const entry = this.active.get(jobId);
         if (entry) {
@@ -109,7 +122,11 @@ class JobRunner extends EventEmitter {
 
         for (const jobId of [...this.active.keys()]) this.cancel(jobId);
 
-        if (this.active.size === 0) this._checkIdle();
+        // A reserved job is sitting on a modal dialog and cannot be killed from
+        // here. _run re-checks _cancelledAll once the user answers and settles
+        // it as cancelled without spawning, so the batch still ends — just not
+        // until the dialog is dealt with.
+        if (this.active.size === 0 && this.reserved.size === 0) this._checkIdle();
     }
 
     get pending() { return this.queue.length; }
@@ -117,7 +134,7 @@ class JobRunner extends EventEmitter {
 
     _pump() {
         if (!this.running || this.paused) return;
-        while (this.active.size < this.concurrency && this.queue.length > 0) {
+        while (this.active.size + this.reserved.size < this.concurrency && this.queue.length > 0) {
             const job = this.queue.shift();
             this._run(job).catch((err) => {
                 this._finish(job, { status: STATUS.ERROR, error: err.message });
@@ -154,13 +171,37 @@ class JobRunner extends EventEmitter {
                     ? paths.getUniqueDirPath(resolved.outputPath)
                     : paths.getUniquePath(resolved.outputPath) };
             } else {
-                const answer = await this.conflictResolver(job, resolved.outputPath);
+                // The job holds a pool slot for as long as the prompt is open.
+                // Without this it is in neither `active` nor `queue`, so the
+                // pool reads as empty: _pump starts every remaining job at once
+                // and _checkIdle calls the whole run finished while the user is
+                // still looking at the first dialog — which is what discarded
+                // "apply to all remaining files" half way through a batch.
+                this.reserved.add(job.id);
+                let answer;
+                try {
+                    answer = await this.conflictResolver(job, resolved.outputPath);
+                } finally {
+                    this.reserved.delete(job.id);
+                }
+
+                // A prompt can stay open for minutes. Everything below re-reads
+                // the world rather than trusting what was true before the await.
+                // Each exit has to pump, because the slot this job was holding
+                // is now free and nothing else will notice.
+                if (this._cancelledAll) {
+                    this._finish(job, { status: STATUS.CANCELLED });
+                    this._pump();
+                    return;
+                }
                 if (!answer || answer.action === "cancel") {
                     this._finish(job, { status: STATUS.CANCELLED });
+                    this._pump();
                     return;
                 }
                 if (answer.action === "skip") {
                     this._finish(job, { status: STATUS.SKIPPED, outputPath: resolved.outputPath });
+                    this._pump();
                     return;
                 }
                 if (answer.outputPath) resolved = { ...resolved, outputPath: answer.outputPath };
@@ -185,7 +226,7 @@ class JobRunner extends EventEmitter {
             return;
         }
 
-        const child = spawn(this.ffmpegPath, args, { windowsHide: true });
+        const child = this.spawn(this.ffmpegPath, args, { windowsHide: true });
         const entry = { job, child, outputPath, isDirectory, cancelled: false, stderr: "" };
         this.active.set(job.id, entry);
 
@@ -265,7 +306,7 @@ class JobRunner extends EventEmitter {
     }
 
     _checkIdle() {
-        if (this.running && this.active.size === 0 && this.queue.length === 0) {
+        if (this.running && this.active.size === 0 && this.reserved.size === 0 && this.queue.length === 0) {
             this.running = false;
             this.emit("idle", { results: [...this.results.values()] });
         }

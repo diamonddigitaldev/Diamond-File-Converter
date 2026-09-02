@@ -957,3 +957,87 @@ found while fixing them, is fixed too.
 - [x] An **MP3 with embedded cover art** is unaffected — still audio, no
       resolution badge, converts normally. *(The check looks for a picture
       stream with no dimensions; cover art has them.)*
+
+---
+
+## 2.0.0-alpha.5 — the conflict prompt and the pool
+
+> **Status: not started.** Written 2026-09-02 alongside the fix.
+
+Three defects on the "If it already exists → **Ask me**" path, all with one
+cause: a job waiting on the prompt was in neither the running set nor the queue,
+so the pool could not see it. It looked idle, it looked empty, and it looked
+like nothing had been cancelled.
+
+**The one that matters is the first**, because it is the same symptom a tester
+reported against alpha.1 and which `4f1d06b` was supposed to have fixed —
+"Apply to all remaining files" being ignored. That fix was real; this is a
+second, independent route to the same behaviour, and it survived because the
+existing checklist case below happens to use the one ordering that works.
+
+`npm test` is 155 passing. The three defects now have behavioural tests in
+`test/runner.test.js` that drive a real `JobRunner`; they were confirmed to fail
+against the old code before the fix went in. Two tests that read `main.js` as
+text were deleted rather than kept — one of them matched the very line causing
+the first defect and read it as proof the code was correct.
+
+### "Apply to all remaining" survives a staggered batch  *(it did not)*
+
+The existing case at **"Apply to all remaining files" actually applies** uses
+six similar files, which all finish probing before you can answer the first
+dialog. That is the ordering that passes. This one is deliberately the other
+ordering.
+
+- [ ] Put **one very large video** and **five small files** in a folder, and
+      convert them all once so every output exists.
+- [ ] Set concurrency to **2 or more** (Menu → it follows the CPU count by
+      default; any machine with 4+ cores is fine).
+- [ ] Queue all six again and press Convert. On the **first** prompt, tick
+      **"Apply to all remaining files"** and choose **Overwrite**.
+- [ ] **Exactly one dialog appears.** Before the fix you would get up to four
+      more, because the run was declared finished while you were still reading
+      the first one, which threw the answer away.
+- [ ] All six convert, and the toast at the end reports six.
+- [ ] Repeat choosing **Save as New** — same thing, one dialog, and every output
+      lands as `name (1).ext`.
+
+### Cancel All while a prompt is open
+
+- [ ] Queue several colliding files, press Convert, and wait for the first
+      prompt.
+- [ ] With the dialog still open, press **Cancel All** behind it. *(You may need
+      to move the dialog; it is modal to the window.)*
+- [ ] Answer the dialog with **Overwrite**.
+- [ ] **Nothing converts.** No file on disk is modified — check the timestamp of
+      the output that was about to be overwritten. Previously ffmpeg ran to
+      completion first and the job was only marked cancelled afterwards, so the
+      file *was* overwritten.
+- [ ] Every card reads Cancelled, and the app returns to idle.
+
+### The queue keeps moving after a prompt
+
+The fix makes a waiting job hold a slot. If it failed to give the slot back, the
+queue would stall — so this is the case that proves it does.
+
+- [ ] Queue **three** colliding files with concurrency set to **1**.
+- [ ] Answer the first prompt with **Cancel** (the button, not Cancel All).
+- [ ] The **second** prompt appears. Answer it **Cancel** too.
+- [ ] The **third** prompt appears. Answer **Overwrite** — it converts.
+- [ ] The app returns to idle with two cancelled and one done. Nothing is left
+      spinning, and the Convert button is no longer lit.
+- [ ] Repeat, answering **Skip** each time instead: same, three cards settle.
+
+### Concurrency still means something
+
+- [ ] Queue **eight** colliding files with concurrency **2**.
+- [ ] Tick "Apply to all remaining" on the first prompt and choose Overwrite.
+- [ ] Watch Task Manager: **at most two `ffmpeg.exe` at a time.** Before the fix
+      all eight started at once, because a job at the prompt held no slot and
+      the pool believed it was empty.
+
+### Nothing else about conflicts changed
+
+- [ ] **Overwrite**, **Save as a new file** and **Skip the file** chosen in
+      Advanced options still behave exactly as before, with no prompt.
+- [ ] With no collision at all, no dialog ever appears.
+- [ ] The **Cancel** button on a single running card still cancels just that one.

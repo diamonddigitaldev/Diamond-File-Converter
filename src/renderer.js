@@ -1157,8 +1157,14 @@ function readSettingsFromForm() {
 
     // Defaults that were never touched are dropped, so the format keeps
     // control of anything the user did not explicitly choose.
+    //
+    // onConflict is deliberately NOT dropped, unlike routing. Dropping a value
+    // only works where something downstream will reinstate the same one, and
+    // main layers the app-wide setting underneath whatever arrives here. Both
+    // are "ask" today so the two behave alike, but the moment a global conflict
+    // preference exists, stripping "ask" would mean a card explicitly set back
+    // to Ask me silently inherits a global Overwrite instead.
     if (settings.output.routing === "alongside") settings.output.routing = null;
-    if (settings.output.onConflict === "ask") settings.output.onConflict = null;
     if (settings.video && settings.video.mode === "encode") settings.video.mode = null;
     if (settings.video && settings.video.fitMode === "contain") settings.video.fitMode = null;
     if (settings.audio && settings.audio.mode === "encode") settings.audio.mode = null;

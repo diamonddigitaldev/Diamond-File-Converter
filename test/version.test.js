@@ -124,20 +124,16 @@ test("conflict: the documented default is to ask, not to rename silently", () =>
     assert.equal(createJob({ inputPath: "a.mp4", targetExt: "mkv" }).output.onConflict, CONFLICT.ASK);
 });
 
-test("conflict: main.js threads the user's setting into the job", () => {
+// A wiring guard, not a behaviour test — it reads main.js as text and can only
+// say the two ends are still tied together. It stays because untying them is
+// the exact bug that shipped in alpha.1, and main has no seam to test through.
+// The behaviour on the other side of this wiring is in test/runner.test.js.
+test("conflict: main.js still threads the user's setting into the job", () => {
     const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
     assert.match(main, /onConflict:\s*settings\.onConflict/,
         "main.js must pass settings.onConflict into createJob, or the prompt is unreachable");
     assert.match(main, /conflictResolver:\s*resolveConflict/,
         "the runner must be given the resolver");
-});
-
-test("conflict: the prompt offers an escape hatch for a whole batch", () => {
-    const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
-    // Without this, a batch of 50 collisions means 50 modal dialogs.
-    assert.match(main, /checkboxLabel:\s*"Apply to all remaining files"/);
-    assert.match(main, /conflictChoiceForBatch\s*=\s*null/,
-        "the batch-wide choice must be reset so it cannot leak into the next run");
 });
 
 test("credits: Escape is handled in the main process, not the page", () => {
@@ -168,22 +164,12 @@ test("credits: only one Credits window can ever be open", () => {
         "the reference must be cleared, or Credits can never be reopened");
 });
 
-test("conflict: the output-exists prompts are serialised", () => {
-    // The concurrency pool brings several jobs to the resolver at once. Each
-    // used to read the batch choice (still null) and open its own dialog
-    // before the first answer came back, so "apply to all remaining files"
-    // had no effect on the prompts already queued behind it.
-    const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
-    assert.match(main, /conflictPromptChain/,
-        "prompts must be chained so only one dialog is open at a time");
-
-    const resolver = main.slice(main.indexOf("async function resolveConflict"),
-                                main.indexOf("async function promptForConflict"));
-    assert.ok(!/showMessageBox/.test(resolver),
-        "resolveConflict must not open the dialog itself; the serialised prompt does");
-    assert.match(main, /async function promptForConflict[\s\S]{0,400}?if \(conflictChoiceForBatch\)/,
-        "the batch choice must be re-read after the previous prompt settles");
-});
+// Prompt serialisation used to be asserted here by matching three identifiers
+// inside main.js as text. It never awaited a promise or observed an ordering,
+// so a reordering that reintroduced the race would still have passed. Dialog
+// ordering needs a real dialog; it is checked by hand instead — see the
+// "Apply to all remaining files" cases in docs/MANUAL-TESTING.md. What the
+// pool does around those prompts is covered properly in test/runner.test.js.
 
 test("theme: an OS theme change is pushed to the windows, not only observed", () => {
     const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
