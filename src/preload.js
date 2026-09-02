@@ -19,6 +19,7 @@ const CH = {
     JOB_RUN:               "job:run",
     JOB_CANCEL:            "job:cancel",
     JOB_PREVIEW:           "job:preview",
+    JOIN_RUN:              "join:run",
     JOB_PROGRESS:          "job:progress",
     JOB_STATUS:            "job:status",
     QUEUE_CANCEL_ALL:      "queue:cancel-all",
@@ -52,6 +53,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     runJob:         (job)   => ipcRenderer.invoke(CH.JOB_RUN, job),
     cancelJob:      (jobId) => ipcRenderer.invoke(CH.JOB_CANCEL, jobId),
     previewJob:     (spec)  => ipcRenderer.invoke(CH.JOB_PREVIEW, spec),
+    runJoin:        (spec)  => ipcRenderer.invoke(CH.JOIN_RUN, spec),
     cancelAll:      ()      => ipcRenderer.invoke(CH.QUEUE_CANCEL_ALL),
     setConcurrency: (n)     => ipcRenderer.invoke(CH.QUEUE_SET_CONCURRENCY, n),
 

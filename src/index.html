@@ -21,13 +21,19 @@
 
     <div class="app-frame">
 
-        <!-- One destination for now. The rail stays because the surface for
-             joining files together will sit beside Files rather than being
-             somewhere you have to back out of. -->
+        <!-- Files and Join are siblings you switch between, not a place you
+             have to back out of. Each keeps its own state while hidden. -->
         <nav id="nav-rail" class="nav-rail" aria-label="Sections">
             <button class="nav-item" data-view="files" type="button" aria-current="page">
                 <span class="material-icons-round nav-icon">grid_view</span>
                 <span class="nav-label">Files</span>
+            </button>
+            <!-- merge_type over merge or call_merge: all three are the same
+                 two-into-one arrow, but this one's fork is asymmetric and stays
+                 legible at the 20px the rail draws it at. -->
+            <button class="nav-item" data-view="join" type="button">
+                <span class="material-icons-round nav-icon">merge_type</span>
+                <span class="nav-label">Join</span>
             </button>
             <button id="nav-collapse" class="nav-collapse" type="button" title="Collapse">
                 <span class="material-icons-round nav-icon">chevron_left</span>
@@ -138,6 +144,56 @@
                 <button id="btn-convert" class="btn btn-primary" disabled>Convert</button>
             </div>
         </footer>
+
+        <!-- Join: an ordered list of clips that become one file. Deliberately a
+             list and not a canvas — the order is the whole model. -->
+        <main id="join-view" class="join-view">
+            <div id="join-empty" class="empty-state">
+                <div id="join-drop" class="drop-zone">
+                    <span class="material-icons-round drop-icon">merge_type</span>
+                    <p class="drop-label mb-1">Drop the files you want joined into one</p>
+                    <p class="drop-hint small mb-2">They are joined in the order you list them.</p>
+                    <button id="btn-join-add" class="btn btn-sm btn-secondary">Select Files</button>
+                </div>
+            </div>
+
+            <div id="join-body" class="join-body d-none">
+                <div class="join-scroll">
+                    <ol id="join-list" class="join-list"></ol>
+                    <button id="btn-join-add-more" class="btn btn-sm btn-secondary join-add-more d-inline-flex align-items-center gap-1">
+                        <span class="material-icons-round" style="font-size:16px">add</span>Add more
+                    </button>
+                </div>
+
+                <aside class="join-side">
+                    <div id="join-plan" class="join-plan" role="status"></div>
+
+                    <label class="form-label" for="join-format">Join into</label>
+                    <select id="join-format" class="form-select form-select-sm"></select>
+
+                    <label class="form-label mt-2" for="join-name">File name</label>
+                    <input id="join-name" class="form-control form-control-sm" value="joined" spellcheck="false">
+
+                    <label class="form-label mt-2" for="join-dir">Save to</label>
+                    <div class="input-group input-group-sm">
+                        <input id="join-dir" class="form-control" readonly placeholder="Choose a folder…">
+                        <button id="btn-join-browse" class="btn btn-outline-secondary" type="button">Browse</button>
+                    </div>
+
+                    <div id="join-errors" class="form-text text-danger"></div>
+
+                    <div class="progress join-progress d-none" style="height:6px">
+                        <div id="join-bar" class="progress-bar" style="width:0%"></div>
+                    </div>
+
+                    <div class="join-actions">
+                        <button id="btn-join-clear" class="btn btn-outline-secondary btn-sm">Clear</button>
+                        <button id="btn-join-cancel" class="btn btn-danger btn-sm d-none">Cancel</button>
+                        <button id="btn-join-run" class="btn btn-primary btn-sm" disabled>Join</button>
+                    </div>
+                </aside>
+            </div>
+        </main>
 
     </div>
     </div>

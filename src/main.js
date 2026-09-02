@@ -6,7 +6,7 @@ const path = require("path");
 
 const { APP_NAME, IPC, WINDOW, LOG, ARGV_BATCH_DEBOUNCE_MS, SETTINGS_DEFAULTS } = require("./constants");
 const formats = require("./core/formats");
-const { createJob, validateJob, defaultModeFor, STATUS } = require("./core/job");
+const { createJob, createJoinJob, validateJob, validateJoin, defaultModeFor, STATUS } = require("./core/job");
 const { JobRunner, defaultConcurrency } = require("./core/runner");
 const { buildArgs } = require("./core/ffmpeg-args");
 const probe = require("./core/probe");
@@ -469,6 +469,30 @@ ipcMain.handle(IPC.JOB_RUN, async (_event, spec) => {
         log(LOG.ERROR, `Conversion failed for ${job.inputPath}: ${result.error}`);
     }
 
+    return result;
+});
+
+ipcMain.handle(IPC.JOIN_RUN, async (_event, spec) => {
+    const settings = store.get("settings") ?? SETTINGS_DEFAULTS;
+
+    // A join always names its own destination, so only the conflict policy is
+    // inherited — routing and the name template describe one input becoming one
+    // output, which is not what this is.
+    const job = createJoinJob({
+        ...spec,
+        output: { onConflict: settings.onConflict, ...spec.output },
+    });
+
+    const validation = validateJoin(job);
+    if (!validation.ok) {
+        log(LOG.ERROR, `Invalid join: ${validation.errors.join(" ")}`);
+        return { jobId: job.id, status: STATUS.ERROR, error: validation.errors[0] };
+    }
+
+    const result = await runJobToCompletion(job);
+    if (result.status === STATUS.ERROR) {
+        log(LOG.ERROR, `Join failed: ${result.error}`);
+    }
     return result;
 });
 

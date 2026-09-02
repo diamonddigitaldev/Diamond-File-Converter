@@ -1578,6 +1578,319 @@ async function showView(name) {
     }
 
     if (name === "files") render();
+    else if (name === "join") renderJoin();
+}
+
+// -- Join --------------------------------------------------------------------
+//
+// An ordered list of clips that becomes one file. The order is the entire
+// model, which is why this is a list and not a canvas.
+
+let joinClips = [];          // { id, filePath, meta, trim: { start, end } }
+let joinRunning = null;      // the id of the job in flight
+
+/** "1:23" or "83" both mean 83 seconds. Blank means "no limit at this end". */
+function parseTime(text) {
+    const value = String(text ?? "").trim();
+    if (!value) return null;
+    if (!value.includes(":")) {
+        const n = Number(value);
+        return Number.isFinite(n) && n >= 0 ? n : null;
+    }
+    const parts = value.split(":").map(Number);
+    if (parts.some(n => !Number.isFinite(n) || n < 0)) return null;
+    return parts.reduce((total, part) => total * 60 + part, 0);
+}
+
+async function addJoinClips(filePaths) {
+    const added = [];
+    for (const filePath of filePaths ?? []) {
+        const raw = p.extname(filePath).slice(1).toLowerCase();
+        const ext = FORMATS.aliases[raw] ?? raw;
+        if (!FORMATS.conversionMap[ext]) continue;
+        // Unlike the queue, the same file twice is legitimate here — repeating
+        // a clip is a real thing to want from a join.
+        const clip = { id: generateId(), filePath, meta: null, trim: { start: null, end: null } };
+        joinClips.push(clip);
+        added.push(clip);
+    }
+    if (added.length === 0) {
+        if ((filePaths ?? []).length > 0) toast("None of those are files this can join.", "warning");
+        return;
+    }
+    renderJoin();
+
+    // Every clip has to be probed before the copy-or-re-encode question can be
+    // answered, so unlike the grid — where metadata only enriches a card that
+    // is already useful — Join genuinely waits on it.
+    await Promise.all(added.map(async (clip) => {
+        clip.meta = await api.probeFile(clip.filePath);
+    }));
+    renderJoin();
+}
+
+function removeJoinClip(id) {
+    joinClips = joinClips.filter(c => c.id !== id);
+    renderJoin();
+}
+
+function moveJoinClip(id, delta) {
+    const i = joinClips.findIndex(c => c.id === id);
+    const j = i + delta;
+    if (i === -1 || j < 0 || j >= joinClips.length) return;
+    [joinClips[i], joinClips[j]] = [joinClips[j], joinClips[i]];
+    renderJoin();
+}
+
+/** What each clip contributes once its trim is applied. */
+function joinClipSpan(clip) {
+    const total = clip.meta?.ok ? clip.meta.duration : null;
+    const start = clip.trim.start ?? 0;
+    const end = clip.trim.end ?? total;
+    if (!Number.isFinite(end)) return null;
+    return end > start ? end - start : null;
+}
+
+function renderJoin() {
+    const hasClips = joinClips.length > 0;
+    $("join-empty").classList.toggle("d-none", hasClips);
+    $("join-body").classList.toggle("d-none", !hasClips);
+    if (!hasClips) {
+        $("join-plan").className = "join-plan";
+        $("join-plan").textContent = "";
+        return;
+    }
+
+    const list = $("join-list");
+    list.innerHTML = "";
+    joinClips.forEach((clip, i) => list.appendChild(buildJoinRow(clip, i)));
+
+    renderJoinFormats();
+    renderJoinPlan();
+    renderJoinActions();
+}
+
+function buildJoinRow(clip, index) {
+    const row = document.createElement("li");
+    row.className = "join-clip";
+
+    const badge = document.createElement("span");
+    badge.className = "join-index";
+    badge.textContent = String(index + 1);
+
+    const main = document.createElement("div");
+    main.className = "join-clip-main";
+    const name = document.createElement("span");
+    name.className = "join-clip-name";
+    name.textContent = p.basename(clip.filePath);
+    name.title = clip.filePath;
+    const meta = document.createElement("span");
+    meta.className = "join-clip-meta";
+    if (!clip.meta) meta.textContent = "Reading…";
+    else if (!clip.meta.ok) { meta.textContent = "unreadable"; meta.classList.add("is-bad"); }
+    else {
+        const span = joinClipSpan(clip);
+        const bits = [display.formatDuration(clip.meta.duration)];
+        if (clip.meta.video) bits.push(`${clip.meta.video.width}×${clip.meta.video.height}`);
+        if (span != null && Math.abs(span - clip.meta.duration) > 0.05) {
+            bits.push(`keeping ${display.formatDuration(span)}`);
+        }
+        meta.textContent = bits.join(" · ");
+    }
+    main.append(name, meta);
+
+    const trim = document.createElement("div");
+    trim.className = "join-trim";
+    trim.append(
+        timeInput(clip, "start", "from"),
+        Object.assign(document.createElement("span"), { className: "join-trim-sep", textContent: "→" }),
+        timeInput(clip, "end", "to"),
+    );
+
+    const move = document.createElement("div");
+    move.className = "join-move";
+    move.append(
+        iconButton("keyboard_arrow_up", "Move up", () => moveJoinClip(clip.id, -1), index === 0),
+        iconButton("keyboard_arrow_down", "Move down", () => moveJoinClip(clip.id, 1), index === joinClips.length - 1),
+    );
+
+    const remove = iconButton("close", "Remove", () => removeJoinClip(clip.id));
+    remove.className = "join-remove";
+
+    row.append(badge, main, trim, move, remove);
+    return row;
+}
+
+function timeInput(clip, which, placeholder) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = placeholder;
+    input.spellcheck = false;
+    input.value = clip.trim[which] != null ? display.formatDuration(clip.trim[which]) : "";
+    input.addEventListener("change", () => {
+        clip.trim[which] = parseTime(input.value);
+        renderJoin();
+    });
+    return input;
+}
+
+function iconButton(icon, title, onClick, disabled = false) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.title = title;
+    button.disabled = disabled;
+    const glyph = document.createElement("span");
+    glyph.className = "material-icons-round";
+    glyph.textContent = icon;
+    button.appendChild(glyph);
+    button.addEventListener("click", onClick);
+    return button;
+}
+
+function joinMetas() {
+    return joinClips.map(c => c.meta).filter(Boolean);
+}
+
+function renderJoinFormats() {
+    const select = $("join-format");
+    const metas = joinMetas();
+    if (metas.length < joinClips.length) return;   // still probing
+
+    const targets = display.joinTargets(metas, DESCRIPTORS);
+    const chosen = select.value;
+    select.innerHTML = "";
+    for (const ext of targets) {
+        const option = document.createElement("option");
+        option.value = ext;
+        option.textContent = DESCRIPTORS[ext]?.label ?? ext.toUpperCase();
+        select.appendChild(option);
+    }
+    if (targets.includes(chosen)) select.value = chosen;
+}
+
+/** The plan, stated rather than implied. */
+function renderJoinPlan() {
+    const box = $("join-plan");
+    const metas = joinMetas();
+
+    if (metas.length < joinClips.length) {
+        box.className = "join-plan";
+        box.textContent = "Reading the files…";
+        return;
+    }
+    if (joinClips.length < 2) {
+        box.className = "join-plan";
+        box.textContent = "Add another file — a join needs at least two.";
+        return;
+    }
+
+    const plan = display.describeJoinPlan(display.compareClips(metas));
+    box.className = `join-plan is-${plan.strategy === "demuxer" ? "copy" : plan.strategy === "filter" ? "encode" : "blocked"}`;
+    box.textContent = "";
+    box.appendChild(Object.assign(document.createElement("div"), { textContent: plan.headline }));
+    if (plan.reasons.length > 0) {
+        box.appendChild(Object.assign(document.createElement("p"), {
+            className: "join-plan-why",
+            textContent: `They differ in: ${plan.reasons.join(", ")}.`,
+        }));
+    }
+}
+
+function joinStrategy() {
+    const metas = joinMetas();
+    if (metas.length < joinClips.length || joinClips.length < 2) return null;
+    const comparison = display.compareClips(metas);
+    if (comparison.blocked) return null;
+    return comparison.compatible ? "demuxer" : "filter";
+}
+
+function renderJoinActions() {
+    const errors = [];
+    const strategy = joinStrategy();
+
+    if (joinClips.length >= 2 && strategy === null && joinMetas().length === joinClips.length) {
+        errors.push("");   // the plan box already says why
+    }
+    if (!$("join-name").value.trim()) errors.push("Give the joined file a name.");
+    if (!$("join-dir").value) errors.push("Choose where to save it.");
+    for (const clip of joinClips) {
+        if (clip.trim.start != null && clip.trim.end != null && clip.trim.end <= clip.trim.start) {
+            errors.push(`${p.basename(clip.filePath)} ends before it starts.`);
+            break;
+        }
+    }
+
+    $("join-errors").textContent = errors.filter(Boolean).join(" ");
+    $("btn-join-run").disabled = Boolean(joinRunning) || strategy === null || errors.length > 0;
+    $("btn-join-run").classList.toggle("d-none", Boolean(joinRunning));
+    $("btn-join-cancel").classList.toggle("d-none", !joinRunning);
+    $("btn-join-clear").disabled = Boolean(joinRunning);
+    document.querySelector(".join-progress").classList.toggle("d-none", !joinRunning);
+}
+
+async function runJoin() {
+    const strategy = joinStrategy();
+    if (!strategy || joinRunning) return;
+
+    const spec = {
+        strategy,
+        clips: joinClips.map(clip => ({
+            inputPath: clip.filePath,
+            trim: clip.trim,
+            duration: clip.meta?.duration ?? null,
+            hasVideo: clip.meta?.hasVideo ?? false,
+            hasAudio: clip.meta?.hasAudio ?? false,
+            width: clip.meta?.video?.width ?? null,
+            height: clip.meta?.video?.height ?? null,
+            fps: clip.meta?.video?.fps ?? null,
+            sampleRate: clip.meta?.audio?.sampleRate ?? null,
+        })),
+        targetExt: $("join-format").value,
+        output: { dir: $("join-dir").value, nameTemplate: $("join-name").value.trim() },
+    };
+
+    joinRunning = generateId();
+    spec.id = joinRunning;
+    $("join-bar").style.width = "0%";
+    renderJoinActions();
+
+    const result = await api.runJoin(spec);
+    joinRunning = null;
+    renderJoinActions();
+
+    if (result.status === "done") {
+        toast(`Joined ${display.countOf(joinClips.length, "file")} into ${p.basename(result.outputPath)}.`, "success");
+    } else if (result.status === "cancelled") {
+        toast("Join cancelled.", "info");
+    } else if (result.status === "skipped") {
+        toast("That file already exists, so the join was skipped.", "warning");
+    } else {
+        toast(result.error || "The join failed.", "danger");
+    }
+}
+
+function setupJoin() {
+    $("btn-join-add").addEventListener("click", browseJoinFiles);
+    $("btn-join-add-more").addEventListener("click", browseJoinFiles);
+    $("btn-join-clear").addEventListener("click", () => { joinClips = []; renderJoin(); });
+    $("btn-join-run").addEventListener("click", runJoin);
+    $("btn-join-cancel").addEventListener("click", () => { if (joinRunning) api.cancelJob(joinRunning); });
+    $("btn-join-browse").addEventListener("click", async () => {
+        const dir = await api.chooseOutput();
+        if (dir) { $("join-dir").value = dir; renderJoinActions(); }
+    });
+    $("join-name").addEventListener("input", renderJoinActions);
+    $("join-format").addEventListener("change", renderJoinActions);
+
+    const zone = $("join-drop");
+    zone.addEventListener("dragenter", () => zone.classList.add("drag-over"));
+    zone.addEventListener("dragleave", () => zone.classList.remove("drag-over"));
+    zone.addEventListener("drop", () => zone.classList.remove("drag-over"));
+
+    async function browseJoinFiles() {
+        const filePaths = await api.browseFiles();
+        if (filePaths) addJoinClips(filePaths);
+    }
 }
 
 function setNavCollapsed(collapsed) {
@@ -1663,6 +1976,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (settings?.scan) scanPrefs = { ...scanPrefs, ...settings.scan };
     setupScanOptions();
+    setupJoin();
 
     for (const item of document.querySelectorAll(".nav-item")) {
         item.addEventListener("click", () => showView(item.dataset.view));
@@ -1712,12 +2026,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             .map(file => api.getPathForFile(file))
             .filter(Boolean);
 
-        // A drop is a request for the Files view, so it takes the same route a
-        // rail click does: unsaved editor work is never lost silently, and a
-        // declined guard cancels the drop rather than ingesting behind it.
-        if (currentView !== "files") {
-            await showView("files");
-            if (currentView !== "files") return;
+        // A drop means "take these", and where they go is whichever view is
+        // showing. Switching to Files under someone who is assembling a join
+        // would be the surprising reading of the same gesture.
+        if (currentView === "join") {
+            addJoinClips(paths);
+            return;
         }
         ingestPaths(paths);
     });
@@ -1844,6 +2158,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 // Progress carries a jobId, so it lands on the right card. v1 pushed a bare
 // integer with no way to tell which file it belonged to.
 api.onJobProgress(({ jobId, percent }) => {
+    // A join is a job too, and it is the only one with no card to land on.
+    if (jobId === joinRunning) {
+        $("join-bar").style.width = `${percent}%`;
+        return;
+    }
     const job = jobs.find(j => j.id === jobId);
     if (!job) return;
     job.progress = percent;

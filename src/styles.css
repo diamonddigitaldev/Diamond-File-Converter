@@ -899,10 +899,119 @@ body.popup-window span:hover {
 
 /* ── View switching ──────────────────────────────────────────────────────── */
 
-/* Only one destination exists today, so nothing is hidden yet. render() owns
-   d-none on the file-grid elements, so when a second section arrives its rules
-   must force-hide rather than compete with it — the grid then keeps its own
-   state and returns to it intact rather than being rebuilt. */
+/* render() and renderSelection() own d-none on the files elements and know
+   nothing about which view is showing, so these must force-hide with
+   !important rather than compete with them. Each view then keeps its own state
+   while hidden and returns to it intact rather than being rebuilt.
+
+   Five elements, not three: #bulk-bar is toggled by renderSelection rather than
+   by render, and .view-files-only is the header's Add Files / Add Folder group,
+   which had no rule anywhere until now. */
+.app-shell[data-view="join"] #empty-state,
+.app-shell[data-view="join"] #grid-scroll,
+.app-shell[data-view="join"] #action-bar,
+.app-shell[data-view="join"] #bulk-bar,
+.app-shell[data-view="join"] .view-files-only {
+    display: none !important;
+}
+
+.app-shell[data-view="files"] #join-view {
+    display: none !important;
+}
+
+/* ── Join ────────────────────────────────────────────────────────────────── */
+
+.join-view { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+
+.join-body { flex: 1 1 auto; min-height: 0; display: flex; gap: 1rem; }
+
+.join-scroll { flex: 1 1 auto; min-width: 0; overflow-y: auto; padding-right: 0.25rem; }
+
+.join-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+
+.join-clip {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 6px;
+    background-color: var(--bs-body-bg);
+}
+
+.join-index {
+    flex-shrink: 0;
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 50%;
+    background-color: var(--bs-border-color);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.join-clip-main { flex: 1 1 auto; min-width: 0; }
+.join-clip-name { display: block; font-size: 0.875rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.join-clip-meta { font-size: 0.75rem; opacity: 0.7; }
+.join-clip-meta.is-bad { color: var(--bs-danger); opacity: 1; }
+
+/* Two time fields rather than a slider. The trim slider in the settings dialog
+   is bound to that dialog's own element ids and its sample job; generalising it
+   for one more caller is a refactor, and duplicating it is worse. */
+.join-trim { display: flex; align-items: center; gap: 0.3rem; flex-shrink: 0; }
+.join-trim input {
+    width: 5rem;
+    font-size: 0.8rem;
+    padding: 0.15rem 0.35rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 4px;
+    background-color: var(--bs-body-bg);
+    color: inherit;
+}
+.join-trim .join-trim-sep { opacity: 0.5; font-size: 0.8rem; }
+
+.join-move { display: flex; flex-direction: column; flex-shrink: 0; }
+.join-move button,
+.join-remove {
+    background: none; border: none; padding: 0; cursor: pointer;
+    color: inherit; opacity: 0.65; line-height: 1;
+}
+.join-move button:hover, .join-remove:hover { opacity: 1; }
+.join-move button:disabled { opacity: 0.2; cursor: default; }
+.join-move .material-icons-round { font-size: 18px; }
+.join-remove .material-icons-round { font-size: 18px; }
+
+.join-add-more { margin-top: 0.75rem; }
+
+.join-side {
+    flex: 0 0 17rem;
+    display: flex;
+    flex-direction: column;
+    padding-left: 1rem;
+    border-left: 1px solid var(--bs-border-color);
+    overflow-y: auto;
+}
+
+/* Copying and re-encoding are wildly different things to press the same button
+   for, so which one is about to happen is stated rather than implied. */
+.join-plan {
+    font-size: 0.8rem;
+    padding: 0.6rem 0.7rem;
+    border-radius: 6px;
+    border-left: 3px solid var(--bs-secondary);
+    background-color: rgb(128 128 128 / 0.1);
+    margin-bottom: 0.9rem;
+}
+.join-plan.is-copy    { border-left-color: var(--bs-success); }
+.join-plan.is-encode  { border-left-color: var(--bs-warning); }
+.join-plan.is-blocked { border-left-color: var(--bs-danger); }
+.join-plan-why { margin: 0.35rem 0 0; opacity: 0.75; }
+
+.join-progress { margin-top: 0.9rem; }
+
+.join-actions { margin-top: auto; padding-top: 0.9rem; display: flex; gap: 0.5rem; justify-content: flex-end; }
 
 /* ── Frame selection ─────────────────────────────────────────────────────── */
 

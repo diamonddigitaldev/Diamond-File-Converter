@@ -1246,3 +1246,112 @@ bottom — e.g. `Source\2024\holiday\clip.mp4` and `Source\2023\misc\song.mp3`.
       drive in one go, select both cards, open **Bulk edit**. Mirror reads
       **"Mirror the source folders (add a folder to use this)"** and cannot be
       chosen — there is no common root across drives. Nothing errors.
+
+---
+
+## 2.0.0-alpha.5 — Join
+
+> **Status: not started.** Written 2026-09-02 alongside the feature.
+
+Joining several files into one is the job this app could not do at all. It is a
+second destination on the rail beside Files, and it is **an ordered list, not a
+canvas** — the order is the whole model.
+
+Two routes, and which one runs is a fact about the clips rather than a setting.
+Where they already agree on container, codecs, size, frame rate and time base,
+they are stitched with no re-encoding: near-instant, nothing lost. Where they do
+not, they are re-encoded to fit. **The panel says which is about to happen and
+why**, because those are very different things to press the same button for.
+
+**Test media:** three or four clips that came off the same camera or export
+(they will match), plus one from somewhere else with a different size and frame
+rate (it will not). An MP3 or two for the audio-only case.
+
+### Getting there and back
+
+- [ ] The rail has **Files** and **Join**. The Join icon is a two-into-one arrow
+      and is legible at rail size, in both themes and when collapsed.
+- [ ] Click Join: the file grid, the footer, the selection bar **and the Add
+      Files / Add Folder buttons in the header** all disappear.
+- [ ] Click Files: the grid comes back **exactly as it was** — same cards, same
+      selection, same chosen formats. Nothing was rebuilt.
+- [ ] Go back to Join: your clip list is still there too.
+- [ ] Queue files in Files, switch to Join, add different files. The two lists
+      are independent and neither disturbs the other.
+- [ ] With Join showing, **drop files on the window**: they are added to the
+      join, and the view does **not** jump to Files.
+- [ ] Ctrl+A, Delete and Escape do nothing while Join is showing — they belong
+      to the card grid.
+
+### Building the list
+
+- [ ] Drop two clips, or use **Select Files**. Each row shows its position, its
+      name, its duration and its dimensions.
+- [ ] **Add the same file twice.** It appears twice. *(Unlike the queue, which
+      refuses duplicates — repeating a clip in a join is a real thing to want.)*
+- [ ] The up and down arrows reorder, and the numbers renumber. The first row's
+      up arrow and the last row's down arrow are disabled.
+- [ ] × removes a row.
+- [ ] **Add more** adds to the list. Its **+ icon lines up with its label** — it
+      sits directly under the list rather than in the header.
+- [ ] **Clear** empties the list and returns to the drop zone.
+
+### It says what it is going to do
+
+- [ ] Add two clips **from the same source**. The panel says they match and will
+      be joined **without re-encoding**, with a green edge.
+- [ ] Add the odd one out. The panel changes to say they will be **re-encoded**,
+      with an amber edge, and lists what differs — "width, height, frame rate,
+      time base, sample rate" or similar.
+- [ ] Remove the odd clip again: it goes back to the no-re-encode message.
+- [ ] With one clip only: "Add another file — a join needs at least two", and
+      **Join** is disabled.
+
+### It refuses what it cannot do
+
+- [ ] Add a **video and an MP3** together: it refuses, saying they are a mix of
+      video and audio-only files. Join stays disabled.
+- [ ] Add two **MP3s** on their own: that is fine, and the format list offers
+      audio containers rather than video ones.
+- [ ] Add an **animated WebP** (which the bundled FFmpeg cannot read): the row
+      reads "unreadable" and the join is refused, naming the problem.
+- [ ] **GIF is never in the "Join into" list**, for any combination. *(Its
+      palette pass and the join want the same ffmpeg mechanism; it is refused
+      rather than half-supported.)*
+
+### Joining
+
+- [ ] Set a name and a folder. **Join** enables only once both are set — before
+      that it says which is missing.
+- [ ] Join two matching clips. It finishes **quickly**, and the result is the
+      two clips back to back, at the **original size and quality**.
+- [ ] Check the duration: it is the sum of both clips.
+- [ ] Join two clips that do **not** match. It takes noticeably longer, the
+      progress bar moves across the **whole** join rather than filling up during
+      the first clip and stopping, and the output plays all the way through with
+      no torn or stretched frames at the seam.
+- [ ] Play the re-encoded result: the smaller clip is **fitted inside the frame
+      and padded**, not stretched out of shape.
+
+### Trimming
+
+- [ ] Type `0:05` in a row's **from** box. The row's line reads "keeping …" with
+      the shorter length.
+- [ ] Accept seconds too: `5` means the same as `0:05`.
+- [ ] Set **to** earlier than **from**: it says that clip ends before it starts
+      and Join is disabled.
+- [ ] Join with trims set: the output contains only the kept parts. On the
+      no-re-encode route the cut may land slightly off where you asked — that is
+      inherent to copying without re-encoding, the same as trimming with "copy
+      without re-encoding" in Advanced options.
+
+### Names, folders and interruptions
+
+- [ ] A name that already exists in that folder raises the usual **Ask me**
+      prompt, with Overwrite and Save as New both working.
+- [ ] **Cancel** during a join stops it, and no half-written file is left behind.
+- [ ] Cancel a join, then run it again: it works.
+- [ ] After any join — finished, cancelled or failed — check
+      `%TEMP%` for leftover **`dfc-join-*`** folders. There should be none.
+- [ ] Start a join, switch to **Files** while it runs, come back: the progress
+      bar is still going and the result still arrives.
