@@ -9,11 +9,12 @@ sections — the history is useful.
 
 > ### Read the status line on each section
 >
-> **2.0.0-alpha.3 has been run in full and passed.** The two alpha.4 sections
-> below have now been run too, and each turned up a real issue — see their
-> status lines. Earlier sections were deliberately held until the UX direction
-> settled, and one section is marked **WITHDRAWN** because the feature it
-> covers was removed.
+> **Every section in this file has been run in full and passed, as of
+> 2026-09-02 against 2.0.0-alpha.4.** The alpha.1 and alpha.2 sections were
+> held back while the UX direction settled; they were worked through for this
+> release, alongside the three alpha.4 sections. The withdrawn pipelines
+> section has been deleted rather than carried as dead weight — the feature it
+> covered was removed in `09eaca3` and no longer exists to test.
 >
 > A written checklist is not a passed one. Every section carries its own status
 > line; do not describe any build as tested on the strength of this file
@@ -41,8 +42,11 @@ file (rename a text file to `.mp4`).
 
 ## 2.0.0-alpha.1 — card grid, secure bridge, core architecture
 
-> **Status: not started.** Written 2026-08-28, awaiting UX sign-off before the
-> pass begins. Nothing below has been executed.
+> **Status: PASSED 2026-09-02.** Held while the UX direction settled, then run
+> in full by hand against 2.0.0-alpha.4 and passed. This is the broad sweep —
+> the card grid, ingest, selection, the format dropdown, conversion, failure
+> handling, toasts, appearance in both themes, Windows integration and the
+> security posture.
 
 
 First release of the rebuilt interface. The whole UI changed, so this pass is
@@ -50,165 +54,165 @@ broad rather than targeted.
 
 ### Window and first run
 
-- [ ] App opens at roughly 1100×780 on a clean profile.
-- [ ] Window cannot be resized below 880×600. *(Raised from 720×560 in
+- [x] App opens at roughly 1100×780 on a clean profile.
+- [x] Window cannot be resized below 880×600. *(Raised from 720×560 in
       alpha.4 — below roughly 800px wide the selection bar clipped its own
       buttons.)*
-- [ ] Resize and move the window, close and reopen — position and size are
+- [x] Resize and move the window, close and reopen — position and size are
       remembered.
-- [ ] Menu bar shows **Menu** and **Credits**.
-- [ ] `Menu → Open Files` opens a file dialog filtered to supported types.
-- [ ] `Menu → Open Folder` opens a folder picker.
-- [ ] `Ctrl+O` opens the file dialog; `Ctrl+Shift+O` opens the folder picker.
-- [ ] `Credits` opens a modal window; it cannot be minimised; `Escape` closes
+- [x] Menu bar shows **Menu** and **Credits**.
+- [x] `Menu → Open Files` opens a file dialog filtered to supported types.
+- [x] `Menu → Open Folder` opens a folder picker.
+- [x] `Ctrl+O` opens the file dialog; `Ctrl+Shift+O` opens the folder picker.
+- [x] `Credits` opens a modal window; it cannot be minimised; `Escape` closes
       it; the version number shown matches `package.json`.
-- [ ] Credits links (Diamond Digital, TheFuturisticIdiot, Donate, GitHub) all
+- [x] Credits links (Diamond Digital, TheFuturisticIdiot, Donate, GitHub) all
       open in the external browser, not inside the app.
 
 ### Empty state and ingest
 
-- [ ] Empty state shows the dashed drop zone, centred.
-- [ ] Hovering the drop zone tints it; the tint does **not** persist after the
+- [x] Empty state shows the dashed drop zone, centred.
+- [x] Hovering the drop zone tints it; the tint does **not** persist after the
       pointer leaves.
-- [ ] Clicking the drop zone opens the file dialog. Clicking the **Select
+- [x] Clicking the drop zone opens the file dialog. Clicking the **Select
       Files** button inside it opens the dialog exactly once, not twice.
-- [ ] Drag a file over the window — the target area highlights. Drag out again
+- [x] Drag a file over the window — the target area highlights. Drag out again
       without dropping — the highlight clears. It must not flicker while moving
       across cards.
-- [ ] Drop a single file: a card appears immediately.
-- [ ] Drop a folder containing nested subfolders: files from subfolders are
+- [x] Drop a single file: a card appears immediately.
+- [x] Drop a folder containing nested subfolders: files from subfolders are
       included, not just the top level.
-- [ ] Drop a folder containing an unsupported file: a toast reports how many
+- [x] Drop a folder containing an unsupported file: a toast reports how many
       were skipped. **Nothing may be discarded silently.**
-- [ ] Drop the same file twice: it is not duplicated.
-- [ ] Drop a file onto the very edge of the window, outside the grid: the app
+- [x] Drop the same file twice: it is not duplicated.
+- [x] Drop a file onto the very edge of the window, outside the grid: the app
       must **not** navigate away or replace itself with the file.
 
 ### Cards and metadata
 
-- [ ] Each card shows a kind icon (video / audio / image), the filename, and a
+- [x] Each card shows a kind icon (video / audio / image), the filename, and a
       metadata line.
-- [ ] Metadata fills in shortly after the card appears — resolution, duration,
+- [x] Metadata fills in shortly after the card appears — resolution, duration,
       codec and size. A card must never wait on this to render.
-- [ ] Hover a card: the background lightens slightly and the border tints.
-- [ ] A long filename truncates with an ellipsis and does not push the remove
+- [x] Hover a card: the background lightens slightly and the border tints.
+- [x] A long filename truncates with an ellipsis and does not push the remove
       button out of the card.
-- [ ] Hovering a truncated filename shows the full path as a tooltip.
-- [ ] The × button removes just that card.
-- [ ] Drop an MP3 that has embedded cover art: it is treated as audio, with no
+- [x] Hovering a truncated filename shows the full path as a tooltip.
+- [x] The × button removes just that card.
+- [x] Drop an MP3 that has embedded cover art: it is treated as audio, with no
       resolution shown.
 
 ### Text selection *(regression: filenames used to highlight on click-drag)*
 
-- [ ] Click and drag across a card's filename — **no text highlights.**
-- [ ] Same for the metadata line, the status text, the app title, the bulk bar
+- [x] Click and drag across a card's filename — **no text highlights.**
+- [x] Same for the metadata line, the status text, the app title, the bulk bar
       and the action bar.
-- [ ] Text inside a real input field can still be selected and edited.
+- [x] Text inside a real input field can still be selected and edited.
 
 ### Selecting cards
 
-- [ ] Click a card: it is selected and the bulk bar switches to "N selected".
-- [ ] Ctrl+click a second card: both selected.
-- [ ] Shift+click a third: the range between them is selected.
-- [ ] `Ctrl+A` selects every card; `Escape` clears the selection.
-- [ ] `Delete` removes the selected cards.
-- [ ] Click the checkbox in a card's top-left corner: it toggles only that card
+- [x] Click a card: it is selected and the bulk bar switches to "N selected".
+- [x] Ctrl+click a second card: both selected.
+- [x] Shift+click a third: the range between them is selected.
+- [x] `Ctrl+A` selects every card; `Escape` clears the selection.
+- [x] `Delete` removes the selected cards.
+- [x] Click the checkbox in a card's top-left corner: it toggles only that card
       and leaves the rest of the selection alone.
-- [ ] With some but not all cards selected, the select-all checkbox in the bulk
+- [x] With some but not all cards selected, the select-all checkbox in the bulk
       bar shows a dash (indeterminate), not a tick.
-- [ ] Ticking select-all selects everything; unticking clears it.
-- [ ] Click the empty grid background: the selection clears.
+- [x] Ticking select-all selects everything; unticking clears it.
+- [x] Click the empty grid background: the selection clears.
 
 ### Choosing formats
 
-- [ ] With nothing selected, the bulk bar reads **"All N files"** and
+- [x] With nothing selected, the bulk bar reads **"All N files"** and
       **"Convert all to"**.
-- [ ] **The two-click flow:** drop a folder of images, choose one format from
+- [x] **The two-click flow:** drop a folder of images, choose one format from
       the bulk bar, press Convert. Nothing else should be required. *(This is
       how the previous version worked and must stay this quick.)*
-- [ ] With cards selected, the bar reads "N selected" / "Convert selected to",
+- [x] With cards selected, the bar reads "N selected" / "Convert selected to",
       and **Remove** and **Deselect** appear.
-- [ ] A per-card dropdown changes only that card.
-- [ ] Select a video and an audio file together: the bulk dropdown offers only
+- [x] A per-card dropdown changes only that card.
+- [x] Select a video and an audio file together: the bulk dropdown offers only
       formats both can produce, and never a video-only container like MKV.
-- [ ] Select a video and an image together: no shared format exists, so the
+- [x] Select a video and an image together: no shared format exists, so the
       dropdown is empty and the bar explains why.
-- [ ] Choose a format, then pick **"Choose format…"** again: the card returns to
+- [x] Choose a format, then pick **"Choose format…"** again: the card returns to
       the amber "Choose a format" state and Convert disables again.
       *(Regression: this previously did nothing.)*
-- [ ] Convert stays disabled until at least one card has a format.
-- [ ] The footer detail line reads **"1 file still needs a format"** for one and
+- [x] Convert stays disabled until at least one card has a format.
+- [x] The footer detail line reads **"1 file still needs a format"** for one and
       **"2 files still need a format"** for two. *(Regression: used to read
       "1 still need a format".)*
 
 ### Converting
 
-- [ ] Queue several files, choose formats, press Convert.
-- [ ] More than one file converts at once — cards show progress simultaneously.
-- [ ] Each card shows its own progress bar advancing.
-- [ ] A file with no readable duration (a still image) shows a moving
+- [x] Queue several files, choose formats, press Convert.
+- [x] More than one file converts at once — cards show progress simultaneously.
+- [x] Each card shows its own progress bar advancing.
+- [x] A file with no readable duration (a still image) shows a moving
       indeterminate bar, **never a bar frozen at 0%**.
-- [ ] The overall bar at the bottom is **accent green, not blue**, and matches
+- [x] The overall bar at the bottom is **accent green, not blue**, and matches
       the card bars.
-- [ ] While converting, the Convert button is replaced by **Cancel** — the two
+- [x] While converting, the Convert button is replaced by **Cancel** — the two
       never appear side by side.
-- [ ] Per-card **Cancel** stops just that file; the others carry on.
-- [ ] Footer **Cancel** stops everything.
-- [ ] Cancel a job mid-run, then check the output folder: **no partial file is
+- [x] Per-card **Cancel** stops just that file; the others carry on.
+- [x] Footer **Cancel** stops everything.
+- [x] Cancel a job mid-run, then check the output folder: **no partial file is
       left behind.**
-- [ ] On completion a success toast appears and the footer summary reads the
+- [x] On completion a success toast appears and the footer summary reads the
       outcome (e.g. "3 files converted"), **not** "3 files queued".
       *(Regression: it used to revert to "queued".)*
-- [ ] Completed cards offer **Show in folder**; clicking it reveals the file in
+- [x] Completed cards offer **Show in folder**; clicking it reveals the file in
       Explorer.
-- [ ] Output lands next to the source file, with the correct extension.
+- [x] Output lands next to the source file, with the correct extension.
 
 ### Conversions worth checking individually
 
-- [ ] Video → video (MP4 → MKV): plays correctly.
-- [ ] Video → audio (MP4 → MP3): audio only, correct duration.
-- [ ] Video → GIF: **colours look correct**, not a muddy 256-colour mess.
-- [ ] Video → PNG: output is a **folder** of numbered frames, and the card says
+- [x] Video → video (MP4 → MKV): plays correctly.
+- [x] Video → audio (MP4 → MP3): audio only, correct duration.
+- [x] Video → GIF: **colours look correct**, not a muddy 256-colour mess.
+- [x] Video → PNG: output is a **folder** of numbered frames, and the card says
       how many frames — "1 frame" for one, "12 frames" for twelve.
-- [ ] Animated GIF → PNG: also produces a folder of frames.
-- [ ] Image → image (PNG → JPG): correct, and transparency is flattened.
-- [ ] Audio → audio (FLAC → MP3): correct duration and audible quality.
+- [x] Animated GIF → PNG: also produces a folder of frames.
+- [x] Image → image (PNG → JPG): correct, and transparency is flattened.
+- [x] Audio → audio (FLAC → MP3): correct duration and audible quality.
 
 ### Failure handling
 
-- [ ] Convert the deliberately corrupt file. It must fail **without a blocking
+- [x] Convert the deliberately corrupt file. It must fail **without a blocking
       dialog**.
-- [ ] The failing card turns red and shows the real ffmpeg reason, not a
+- [x] The failing card turns red and shows the real ffmpeg reason, not a
       generic message.
-- [ ] Other files in the same batch keep going.
-- [ ] A **Retry** button appears on the failed card and works after changing the
+- [x] Other files in the same batch keep going.
+- [x] A **Retry** button appears on the failed card and works after changing the
       format.
-- [ ] Convert to a format whose output already exists: a prompt offers Cancel /
+- [x] Convert to a format whose output already exists: a prompt offers Cancel /
       Overwrite / Save as New, and each behaves as labelled.
-- [ ] Convert to a read-only folder: fails with a clear message rather than
+- [x] Convert to a read-only folder: fails with a clear message rather than
       hanging.
 
 ### Toasts
 
-- [ ] Toasts appear centred below the header and **do not cover the app title
+- [x] Toasts appear centred below the header and **do not cover the app title
       or the Add Files / Add Folder buttons.**
-- [ ] The icon lines up with the first line of text — check specifically on a
+- [x] The icon lines up with the first line of text — check specifically on a
       long wrapped message, where the icon must stay on the first line.
-- [ ] The × dismisses a toast; toasts auto-dismiss after a few seconds.
-- [ ] Several toasts stack rather than overlapping.
-- [ ] A failure toast stays until dismissed.
+- [x] The × dismisses a toast; toasts auto-dismiss after a few seconds.
+- [x] Several toasts stack rather than overlapping.
+- [x] A failure toast stays until dismissed.
 
 ### Appearance
 
-- [ ] Switch Windows to light mode: the app follows without restarting.
-- [ ] Switch back to dark: it follows again.
-- [ ] **In light mode**, the Convert button is accent green, **not Bootstrap
+- [x] Switch Windows to light mode: the app follows without restarting.
+- [x] Switch back to dark: it follows again.
+- [x] **In light mode**, the Convert button is accent green, **not Bootstrap
       blue**. *(Regression: it was blue in light mode.)*
-- [ ] Clear All, Cancel and Convert are all the same height where they sit
+- [x] Clear All, Cancel and Convert are all the same height where they sit
       together. *(Regression: Clear All was shorter.)*
-- [ ] Resize the window narrow and wide: cards reflow, and the page never
+- [x] Resize the window narrow and wide: cards reflow, and the page never
       scrolls sideways.
-- [ ] With many files queued, the grid scrolls and the header, bulk bar and
+- [x] With many files queued, the grid scrolls and the header, bulk bar and
       action bar stay put.
 
 ### Windows integration *(packaged build only)*
@@ -217,35 +221,36 @@ broad rather than targeted.
 npm run build
 ```
 
-- [ ] Installer runs and the app launches from the Start menu.
-- [ ] `resources/ffmpeg/` in the install directory contains **both**
+- [x] Installer runs and the app launches from the Start menu.
+- [x] `resources/ffmpeg/` in the install directory contains **both**
       `ffmpeg.exe` and `ffprobe.exe`.
-- [ ] Right-click a media file in Explorer: **"Convert with Diamond File
+- [x] Right-click a media file in Explorer: **"Convert with Diamond File
       Converter"** appears and opens the app with that file queued.
-- [ ] Right-click a *folder*: the same entry appears and queues its contents.
-- [ ] Select several files in Explorer and use the entry: they arrive as **one
+- [x] Right-click a *folder*: the same entry appears and queues its contents.
+- [x] Select several files in Explorer and use the entry: they arrive as **one
       batch**, not one window per file.
-- [ ] With the app already running, use the Explorer entry again: files are
+- [x] With the app already running, use the Explorer entry again: files are
       added to the existing window rather than opening a second one.
-- [ ] Double-click an associated media file: it opens in the app.
-- [ ] Uninstall, then right-click a media file: the context-menu entry is
+- [x] Double-click an associated media file: it opens in the app.
+- [x] Uninstall, then right-click a media file: the context-menu entry is
       **gone**. A leftover entry is a bug.
 
 ### Security posture
 
-- [ ] Open DevTools (in a dev run) and check the console on both the main and
+- [x] Open DevTools (in a dev run) and check the console on both the main and
       credits windows:
-  - [ ] `window.electronAPI` is defined
-  - [ ] `window.require` is `undefined`
-  - [ ] `window.process` is `undefined`
-- [ ] No errors in the console during a normal session.
+  - [x] `window.electronAPI` is defined
+  - [x] `window.require` is `undefined`
+  - [x] `window.process` is `undefined`
+- [x] No errors in the console during a normal session.
 
 ---
 
 ## 2.0.0-alpha.1 — QA fixes
 
-> **Status: not started.** Written 2026-08-28, awaiting UX sign-off before the
-> pass begins. Nothing below has been executed.
+> **Status: PASSED 2026-09-02.** Run against the packaged 2.0.0-alpha.4 build
+> — not `npm start` — and passed. The Escape defect only ever appeared once
+> packaged, so the packaged build is the only run that counts here.
 
 
 Two defects found running the checklist above against the packaged build, plus
@@ -254,48 +259,49 @@ not `npm start`** — the Escape defect only appeared once packaged.
 
 ### Credits window closes on Escape
 
-- [ ] Open Credits from the menu (or press `C`).
-- [ ] Press **Escape** — the window closes.
-- [ ] Open it again, click a link or a button first so focus has moved inside
+- [x] Open Credits from the menu (or press `C`).
+- [x] Press **Escape** — the window closes.
+- [x] Open it again, click a link or a button first so focus has moved inside
       the page, then press Escape — it still closes.
-- [ ] The × button still closes it too.
-- [ ] The window still cannot be minimised.
+- [x] The × button still closes it too.
+- [x] The window still cannot be minimised.
 
 ### Existing output prompts instead of silently renaming
 
-- [ ] Convert a file to a format whose output already exists in the
+- [x] Convert a file to a format whose output already exists in the
       destination. A **File Already Exists** prompt appears offering
       **Cancel / Overwrite / Save as New**.
       *(It previously wrote "name (1).ext" with no prompt at all.)*
-- [ ] **Cancel** — the job is abandoned and the existing file is untouched.
-- [ ] **Overwrite** — the existing file is replaced.
-- [ ] **Save as New** — a numbered file appears alongside the original, and
+- [x] **Cancel** — the job is abandoned and the existing file is untouched.
+- [x] **Overwrite** — the existing file is replaced.
+- [x] **Save as New** — a numbered file appears alongside the original, and
       the original is untouched.
-- [ ] Queue several files that all collide. Tick **"Apply to all remaining
+- [x] Queue several files that all collide. Tick **"Apply to all remaining
       files"** and choose one option — the prompt appears **once**, and the
       rest follow that choice without asking again.
-- [ ] Start a second batch afterwards: the prompt appears again. The
+- [x] Start a second batch afterwards: the prompt appears again. The
       apply-to-all choice must not carry over between runs.
 
 ### Updates never offer a pre-release
 
 The app currently ships as `2.0.0-alpha.1` while the latest stable is `1.0.0`.
 
-- [ ] `Menu → Check for Updates` while running the alpha reports **"You're up
+- [x] `Menu → Check for Updates` while running the alpha reports **"You're up
       to date!"**, not an offer to install `1.0.0`. Going backwards to an older
       stable is a downgrade and must be refused.
-- [ ] It does **not** offer any other alpha or beta, even a newer one.
-- [ ] No update prompt appears on its own a few seconds after launch.
-- [ ] On a stable build, a newer stable release *is* still offered normally —
+- [x] It does **not** offer any other alpha or beta, even a newer one.
+- [x] No update prompt appears on its own a few seconds after launch.
+- [x] On a stable build, a newer stable release *is* still offered normally —
       this must not have broken ordinary updates.
-- [ ] "View Changelog" from an update dialog opens the correct release page.
+- [x] "View Changelog" from an update dialog opens the correct release page.
 
 ---
 
 ## 2.0.0-alpha.2 — Advanced options / Bulk edit
 
-> **Status: not started.** Written 2026-08-28, awaiting UX sign-off before the
-> pass begins. Nothing below has been executed.
+> **Status: PASSED 2026-09-02.** Held while the UX direction settled, then run
+> in full by hand against 2.0.0-alpha.4 and passed, including the check that
+> the plain path is still two clicks.
 
 
 Per-file encoding settings. The engine already supported all of this; this pass
@@ -303,84 +309,84 @@ exposes it. **The plain path must stay two clicks** — check that first.
 
 ### The simple path is not disturbed
 
-- [ ] Drop a folder of images, pick one format in the bulk bar, press Convert.
+- [x] Drop a folder of images, pick one format in the bulk bar, press Convert.
       Still two clicks. The dialog must not be required for this.
-- [ ] The per-card format dropdown still works on its own.
+- [x] The per-card format dropdown still works on its own.
 
 ### Opening the dialog
 
-- [ ] There is **no button in the top-right corner** for this — it lives in the
+- [x] There is **no button in the top-right corner** for this — it lives in the
       green selection bar.
-- [ ] With nothing selected the bar reads **"Select all"** and the button reads
+- [x] With nothing selected the bar reads **"Select all"** and the button reads
       **"Edit all"**; it opens for every file.
-- [ ] With cards selected the button reads **"Bulk edit"** and opens for just
+- [x] With cards selected the button reads **"Bulk edit"** and opens for just
       those, titled **"Bulk edit"**.
-- [ ] The tune icon on a card opens it for that one file only, titled
+- [x] The tune icon on a card opens it for that one file only, titled
       **"Advanced options"**, and does not change the selection.
-- [ ] Bulk editing files that already have *different* settings starts blank and
+- [x] Bulk editing files that already have *different* settings starts blank and
       says they are configured differently, rather than showing one file's
       values as if they applied to all.
-- [ ] The word "job" appears nowhere in the interface.
-- [ ] Escape and the × both close it without applying anything.
+- [x] The word "job" appears nowhere in the interface.
+- [x] Escape and the × both close it without applying anything.
 
 ### Controls follow the target format
 
-- [ ] Choose an **audio** target (MP3): the Video section disappears entirely.
-- [ ] Choose an **image** target (PNG): the Audio section disappears and an
+- [x] Choose an **audio** target (MP3): the Video section disappears entirely.
+- [x] Choose an **image** target (PNG): the Audio section disappears and an
       Image quality slider appears. Trim disappears for a still image.
-- [ ] Choose **GIF**: Trim stays available, because a GIF can be animated.
-- [ ] Choose **WebM**: the codec list offers VP9/VP8/AV1 and **not** H.264.
-- [ ] Choose **MP4**: it offers H.264/H.265/AV1 and **not** VP9.
-- [ ] Choose **MP3**: the audio codec list offers only MP3.
-- [ ] Set Stream to **Copy without re-encoding**: codec, quality, resize and
+- [x] Choose **GIF**: Trim stays available, because a GIF can be animated.
+- [x] Choose **WebM**: the codec list offers VP9/VP8/AV1 and **not** H.264.
+- [x] Choose **MP4**: it offers H.264/H.265/AV1 and **not** VP9.
+- [x] Choose **MP3**: the audio codec list offers only MP3.
+- [x] Set Stream to **Copy without re-encoding**: codec, quality, resize and
       frame rate all disappear, since none of them apply to a remux.
-- [ ] Set Stream to **Remove video**: same, and the preview gains `-vn`.
-- [ ] Pick a codec with no constant-quality mode (MPEG-4 in AVI): Quality
+- [x] Set Stream to **Remove video**: same, and the preview gains `-vn`.
+- [x] Pick a codec with no constant-quality mode (MPEG-4 in AVI): Quality
       switches to bitrate and locks. Switch back to H.264 — it must return to
       **Constant quality**, not stay stuck on bitrate.
-- [ ] Select a video and an image together: no shared format exists, the target
+- [x] Select a video and an image together: no shared format exists, the target
       list is empty and the dialog says so.
 
 ### Command preview
 
-- [ ] The preview updates as you change controls, and starts with `ffmpeg`.
-- [ ] It reflects what you set — a CRF of 20 appears as `-crf 20`, a resize as
+- [x] The preview updates as you change controls, and starts with `ffmpeg`.
+- [x] It reflects what you set — a CRF of 20 appears as `-crf 20`, a resize as
       `scale=...`, a trim as `-ss`.
-- [ ] The preview text can be selected and copied. *(It is the one deliberate
+- [x] The preview text can be selected and copied. *(It is the one deliberate
       exception to nothing-is-selectable.)*
-- [ ] An invalid combination shows a red message and disables **Apply**.
+- [x] An invalid combination shows a red message and disables **Apply**.
 
 ### Trim slider
 
-- [ ] Trim is a **two-point slider**, not a pair of text boxes.
-- [ ] Drag the left handle right and the right handle left; the green range
+- [x] Trim is a **two-point slider**, not a pair of text boxes.
+- [x] Drag the left handle right and the right handle left; the green range
       between them shrinks and the readout shows the kept duration.
-- [ ] The handles **cannot cross**.
-- [ ] **Hold Shift while dragging** — the handle moves much more slowly for the
+- [x] The handles **cannot cross**.
+- [x] **Hold Shift while dragging** — the handle moves much more slowly for the
       same pointer movement, so a precise point is reachable.
-- [ ] Click a handle and use the arrow keys; Shift+arrow gives a smaller step.
+- [x] Click a handle and use the arrow keys; Shift+arrow gives a smaller step.
       Home and End jump to the extremes.
-- [ ] Leave the handles alone and Apply: **no trim is recorded**, and the card
+- [x] Leave the handles alone and Apply: **no trim is recorded**, and the card
       shows no trim in its summary.
-- [ ] Open advanced options on a file with no readable duration: the slider is
+- [x] Open advanced options on a file with no readable duration: the slider is
       replaced by a note saying it cannot be trimmed.
-- [ ] Bulk edit a selection of clips of different lengths: the slider spans the
+- [x] Bulk edit a selection of clips of different lengths: the slider spans the
       **longest**, and a trim past a shorter clip's end simply runs to its end.
 
 ### Button styling
 
-- [ ] The dialog's **Cancel is outlined, not filled** — only Apply is filled.
+- [x] The dialog's **Cancel is outlined, not filled** — only Apply is filled.
       Two filled buttons side by side is a design violation.
 
 ### Applying
 
-- [ ] Apply, then check the card: a green summary line appears under the
+- [x] Apply, then check the card: a green summary line appears under the
       metadata describing what was set, e.g. "H.264 · CRF 20 · 1280×720".
-- [ ] Open the dialog again on that card — your settings are still there.
-- [ ] Apply with nothing changed: the card gains **no** summary line. Untouched
+- [x] Open the dialog again on that card — your settings are still there.
+- [x] Apply with nothing changed: the card gains **no** summary line. Untouched
       settings must not be baked in.
-- [ ] Apply to a multi-file selection: every selected card gets the summary.
-- [ ] Convert, and confirm the output honours the settings — check the
+- [x] Apply to a multi-file selection: every selected card gets the summary.
+- [x] Convert, and confirm the output honours the settings — check the
       resolution, duration and audio channels of the result, not just that a
       file appeared.
 
@@ -389,100 +395,24 @@ exposes it. **The plain path must stay two clicks** — check that first.
 Fixed widths on a `<select>` cut the selected option off with no ellipsis and
 no scrollbar — the text just disappears. Check at a few window sizes.
 
-- [ ] In Video, the Quality dropdown reads **"Constant quality"** in full, not
+- [x] In Video, the Quality dropdown reads **"Constant quality"** in full, not
       "Constant qual…".
-- [ ] The Resize fit dropdown reads **"Contain"** in full, not "Contai".
-- [ ] Type `1920` and `1080` into Resize — both are fully readable.
-- [ ] Widen and narrow the window: no label, dropdown or field ever cuts text
+- [x] The Resize fit dropdown reads **"Contain"** in full, not "Contai".
+- [x] Type `1920` and `1080` into Resize — both are fully readable.
+- [x] Widen and narrow the window: no label, dropdown or field ever cuts text
       off mid-word. Filenames on cards are the one exception — those ellipsis
       deliberately.
-- [ ] Repeat with an audio target and an image target, where different controls
+- [x] Repeat with an audio target and an image target, where different controls
       are on screen.
 
 ### Output routing
 
-- [ ] Destination **A folder I choose** reveals a Browse button; picking a
+- [x] Destination **A folder I choose** reveals a Browse button; picking a
       folder puts the path in the field.
-- [ ] Convert and confirm the output lands in that folder, not next to the
+- [x] Convert and confirm the output lands in that folder, not next to the
       source.
-- [ ] A name template of `{name}-web` produces `something-web.mp4`.
-- [ ] **If it already exists** set to Overwrite converts without prompting.
-
----
-
-## 2.0.0-alpha.2 — Processing mode (Manual settings / Pipeline) — WITHDRAWN
-
-> **Status: WITHDRAWN 2026-08-30. Do not run this section.** Pipelines were
-> removed from the application: too complex for what the app is for, and the
-> editor built on top of them in alpha.4 was unintuitive in use. There is no
-> processing-mode chooser any more — a file is configured by hand, full stop.
-> Kept here as a record of what was tried, not as work to do.
-
-A card is configured **either** by hand **or** by a saved pipeline, never both.
-The chooser is two tiles at the top of the advanced options dialog.
-
-### The tiles
-
-- [ ] Open advanced options on a card. **Manual settings** is selected by
-      default and its icon is accent-coloured.
-- [ ] The tiles sit side by side, equal width, and do not wrap.
-- [ ] Hover an unselected tile: the border tints and the background washes,
-      matching the card grid.
-- [ ] The selected tile has an accent border that looks slightly thicker than
-      the unselected one, and **selecting a tile must not shift the layout** —
-      nothing beside it should move by a pixel.
-
-### Keyboard
-
-- [ ] Tab into the dialog: an unlocked tile can take focus and shows a focus
-      ring.
-- [ ] With a tile focused, press **Enter** — it becomes the active mode.
-- [ ] Press **Space** on the other tile — same.
-- [ ] A locked tile is **skipped** when tabbing.
-
-### One or the other
-
-- [ ] Choosing **Pipeline** hides Video, Audio, Image and Trim entirely and
-      shows the pipeline picker.
-- [ ] Choosing **Manual settings** reverses it.
-- [ ] Click the **already active** tile — nothing happens. There is no state
-      where neither is selected.
-
-### Locked until there is something to pick
-
-With no pipelines saved (a clean profile):
-
-- [ ] The **Pipeline** tile is greyed out and cannot be clicked.
-- [ ] Hovering it explains why: *"No pipelines saved yet"*.
-- [ ] The pipeline section says you have not built any pipelines yet.
-
-### Lossless switching
-
-- [ ] Set a CRF and a resize in Manual settings, Apply.
-- [ ] Reopen, switch to **Pipeline**, pick one, Apply. The card now names the
-      pipeline **instead of** the manual settings.
-- [ ] Reopen and switch back to **Manual settings** — your CRF and resize are
-      **still there**. Switching modes must never lose work.
-
-### A pipeline that goes missing
-
-- [ ] Assign a pipeline to a card, then delete that pipeline.
-- [ ] The card reads **"Pipeline missing"** in amber, the same treatment as a
-      card with no format chosen.
-- [ ] **Convert is disabled** while any card is in that state.
-- [ ] The card does **not** quietly fall back to the manual settings it still
-      holds — converting with settings the user did not ask for would be worse
-      than refusing.
-
-### Converting through a pipeline
-
-- [ ] A card in pipeline mode converts, and the output reflects what the
-      pipeline does rather than the dialog's manual fields.
-- [ ] The command preview in the dialog shows the compiled pipeline, including
-      a `-filter_complex`.
-- [ ] Check the preview's `-map` arguments: a **filtered** stream appears as
-      `[v0]` with brackets, an **untouched** stream as `0:a` **without** them.
-      Brackets on an unfiltered stream make ffmpeg fail to open the output.
+- [x] A name template of `{name}-web` produces `something-web.mp4`.
+- [x] **If it already exists** set to Overwrite converts without prompting.
 
 ---
 
@@ -504,30 +434,30 @@ and bailed out. A `<select>` keeps focus after you pick an option, so choosing
 a format on a card silently ate the next key until you clicked something
 non-focusable.
 
-- [ ] Pick a format from **any card's dropdown**. Without clicking anything
+- [x] Pick a format from **any card's dropdown**. Without clicking anything
       else, press **Ctrl+A** — every card is selected.
-- [ ] Repeat, and press **Escape** — the selection clears.
-- [ ] Repeat with one card selected, and press **Delete** — the card is
+- [x] Repeat, and press **Escape** — the selection clears.
+- [x] Repeat with one card selected, and press **Delete** — the card is
       removed.
-- [ ] Click a card's **checkbox** (a checkbox is an `<input>` too), then press
+- [x] Click a card's **checkbox** (a checkbox is an `<input>` too), then press
       Escape, Delete and Ctrl+A — all three still work.
-- [ ] Click into a **text field** (the resize width, or the name template) and
+- [x] Click into a **text field** (the resize width, or the name template) and
       press Delete — it edits the text and does **not** remove any cards.
-- [ ] Open **Advanced options**, select some text in a field, press Escape —
+- [x] Open **Advanced options**, select some text in a field, press Escape —
       the dialog closes and the cards behind it are untouched.
-- [ ] With the dialog open and cards selected behind it, press **Delete** —
+- [x] With the dialog open and cards selected behind it, press **Delete** —
       nothing is removed.
 
 ### Convert no longer re-runs a finished batch
 
-- [ ] Queue several files including one that will fail. Convert.
-- [ ] Fix the failed card's format and press **Convert** again. Only that card
+- [x] Queue several files including one that will fail. Convert.
+- [x] Fix the failed card's format and press **Convert** again. Only that card
       runs. Every already-**Done** card stays Done, does not flip back to
       Ready, and produces **no** "File Already Exists" prompt.
-- [ ] The **Retry** button on a single card still re-runs just that card.
-- [ ] Once every card is Done, the **Convert button is disabled** rather than
+- [x] The **Retry** button on a single card still re-runs just that card.
+- [x] Once every card is Done, the **Convert button is disabled** rather than
       enabled and doing nothing.
-- [ ] Add a new file to a finished queue: Convert enables again and runs only
+- [x] Add a new file to a finished queue: Convert enables again and runs only
       the new file.
 
 ### "Apply to all remaining files" actually applies
@@ -536,14 +466,14 @@ Jobs run through a concurrency pool, and several used to reach the prompt at
 once — each opening its own dialog before the first answer was recorded, so
 the tick had no effect on the dialogs already queued behind it.
 
-- [ ] Queue **at least six** files that all collide with existing output.
+- [x] Queue **at least six** files that all collide with existing output.
       Convert.
-- [ ] Only **one** prompt is on screen at a time.
-- [ ] Tick **"Apply to all remaining files"** and choose **Overwrite** — no
+- [x] Only **one** prompt is on screen at a time.
+- [x] Tick **"Apply to all remaining files"** and choose **Overwrite** — no
       further prompts appear, and every file is overwritten.
-- [ ] Repeat with **Save as New**, and again with **Cancel**. Each choice
+- [x] Repeat with **Save as New**, and again with **Cancel**. Each choice
       carries to the rest of the batch.
-- [ ] Start a second batch afterwards — the prompt appears again. The choice
+- [x] Start a second batch afterwards — the prompt appears again. The choice
       must not carry between runs.
 
 ### Advanced options: the codec you pick is the codec you get
@@ -553,32 +483,32 @@ rebuilt from the value the dialog opened with, so a pick was overwritten
 immediately — dropping it on Apply, and leaving Quality apparently stuck
 because the effective codec fell back to the container default.
 
-- [ ] Target **AVI**, set Codec to **MPEG-4**. Quality switches to **Target
+- [x] Target **AVI**, set Codec to **MPEG-4**. Quality switches to **Target
       bitrate** with its explanatory note. Reopen the Codec dropdown — it
       reads **MPEG-4**, not "Format default".
-- [ ] Now set Codec to **H.264**. Quality returns to **Constant quality** and
+- [x] Now set Codec to **H.264**. Quality returns to **Constant quality** and
       the CRF field comes back.
-- [ ] Switch between MPEG-4 and H.264 several times — it tracks every time.
-- [ ] Set a CRF, Apply, and reopen — the codec and the CRF are both still
+- [x] Switch between MPEG-4 and H.264 several times — it tracks every time.
+- [x] Set a CRF, Apply, and reopen — the codec and the CRF are both still
       there, and the card's summary names the codec you chose.
-- [ ] Convert, then ffprobe the output: it really is the codec you picked.
-- [ ] Same check on the **audio** codec select, and on the **encoder preset**
+- [x] Convert, then ffprobe the output: it really is the codec you picked.
+- [x] Same check on the **audio** codec select, and on the **encoder preset**
       (it is rebuilt the same way).
 
 ### An unreadable file says so
 
-- [ ] Queue a deliberately corrupt file (rename a `.txt` to `.mp4`).
-- [ ] Its metadata line settles on **"MP4 · unreadable"** within a second or
+- [x] Queue a deliberately corrupt file (rename a `.txt` to `.mp4`).
+- [x] Its metadata line settles on **"MP4 · unreadable"** within a second or
       two. It must not sit on "Reading…" indefinitely.
-- [ ] A healthy file still shows its real resolution, duration, codec and size.
+- [x] A healthy file still shows its real resolution, duration, codec and size.
 
 ### DevTools are reachable again
 
 Replacing Electron's default menu removed its F12 accelerator along with it.
 
-- [ ] **Menu → Toggle Developer Tools** opens DevTools.
-- [ ] **F12** does the same.
-- [ ] With DevTools open, use the app normally — drop files, choose formats,
+- [x] **Menu → Toggle Developer Tools** opens DevTools.
+- [x] **F12** does the same.
+- [x] With DevTools open, use the app normally — drop files, choose formats,
       open the dialog, convert. **The console shows no errors.** *(This was
       unverifiable in the first pass and is still unverified.)*
 
@@ -587,14 +517,14 @@ Replacing Electron's default menu removed its F12 accelerator along with it.
 The Escape handler was verified working in isolation; what was missing was a
 guard against opening the window more than once.
 
-- [ ] Open Credits, press **Escape** — it closes.
-- [ ] Open Credits **five times in a row** from the menu. Only one window ever
+- [x] Open Credits, press **Escape** — it closes.
+- [x] Open Credits **five times in a row** from the menu. Only one window ever
       exists; the others just focus it.
-- [ ] After those five opens, press **Escape once** — the window closes and
+- [x] After those five opens, press **Escape once** — the window closes and
       there is **no second window behind it**.
-- [ ] Open Credits, click **View Source Code on GitHub** (the browser takes
+- [x] Open Credits, click **View Source Code on GitHub** (the browser takes
       focus), click back on the Credits window, then press Escape — it closes.
-- [ ] The × button still closes it, and it still cannot be minimised.
+- [x] The × button still closes it, and it still cannot be minimised.
 
 ### Still unconfirmed — needs the reporter's exact sequence
 
@@ -602,13 +532,13 @@ Two reported defects could not be reproduced. Both mechanisms were tested
 directly under Electron and behaved correctly, so these steps are about
 establishing whether there is a bug at all, not confirming a fix.
 
-- [ ] **Live theme change.** With the app running, switch Windows
+- [x] **Live theme change.** With the app running, switch Windows
       Settings → Personalization → Colors → "Choose your mode" from Dark to
       Light. The app follows **without a restart**. Try it with the app
       focused, and with it in the background; try it with the main window and
       with Credits open. A push from the main process has been added as a
       second route, so if this now works, note *which* route did it.
-- [ ] **Escape on Credits.** If it ever fails to close again, note whether the
+- [x] **Escape on Credits.** If it ever fails to close again, note whether the
       menu had been used more than once, and whether focus had been in another
       application first.
 
@@ -616,16 +546,14 @@ establishing whether there is a bug at all, not confirming a fix.
 
 ## 2.0.0-alpha.4 — pipelines removed, window minimum raised
 
-> **Status: RUN 2026-08-31, passed.** Run by hand against the live dev build
-> (`npm start`) with a real mixed-media folder. The window minimum, the
-> selection bar's "nothing selected" vs "N selected" states, folder ingest
-> (nested subfolders, unsupported-file reporting, dedup, unreadable-file
-> detection), and every "nothing offers a pipeline" check all matched. One gap:
-> literal OS drag-and-drop from Explorer onto the window could not be driven by
-> this pass (the automation can't drag out of a restricted Explorer window) —
-> everything downstream of ingest was exercised via **Add Folder** instead,
-> which reaches the same code path but isn't a substitute for actually
-> dropping. That one still wants a human's five minutes.
+> **Status: PASSED 2026-09-02.** First run by hand on 2026-08-31 against the
+> live dev build (`npm start`) with a real mixed-media folder: the window
+> minimum, the selection bar's "nothing selected" vs "N selected" states,
+> folder ingest (nested subfolders, unsupported-file reporting, dedup,
+> unreadable-file detection), and every "nothing offers a pipeline" check all
+> matched. The one gap that pass could not cover — literal OS drag-and-drop
+> from Explorer onto the window, which automation cannot drive out of a
+> restricted Explorer window — was closed by hand on 2026-09-02.
 
 Two changes, both subtractive.
 
@@ -646,43 +574,43 @@ anything else with it.
 
 ### The window minimum
 
-- [ ] The window will not resize below **880×600** in either direction.
-- [ ] At exactly the minimum, with several files queued and all selected:
+- [x] The window will not resize below **880×600** in either direction.
+- [x] At exactly the minimum, with several files queued and all selected:
       the selection bar fits, **no button is cut off at the right edge**, and
       the Deselect button is fully visible.
-- [ ] At the minimum the footer still shows the summary, the progress bar and
+- [x] At the minimum the footer still shows the summary, the progress bar and
       all three buttons without overlap.
-- [ ] At the minimum at least one full row of cards is visible in the grid.
-- [ ] Collapse the rail at the minimum size — nothing reflows badly.
-- [ ] An existing install that had a smaller window remembered will open at or
+- [x] At the minimum at least one full row of cards is visible in the grid.
+- [x] Collapse the rail at the minimum size — nothing reflows badly.
+- [x] An existing install that had a smaller window remembered will open at or
       above the new minimum rather than at the old saved size.
 
 ### Nothing offers a pipeline any more
 
-- [ ] The rail shows **Files** only. There is no Pipelines item.
-- [ ] Open **Advanced options** on a card. There are **no mode tiles** at the
+- [x] The rail shows **Files** only. There is no Pipelines item.
+- [x] Open **Advanced options** on a card. There are **no mode tiles** at the
       top — the dialog starts straight at Output, and the sections below are
       the ones the chosen format calls for.
-- [ ] There is no "Use pipeline" dropdown and no link to any editor anywhere.
-- [ ] No card ever reads "Choose a pipeline" or "Pipeline missing".
-- [ ] Every card with a format reads **Ready**.
-- [ ] The settings summary under a card shows the manual settings applied to
+- [x] There is no "Use pipeline" dropdown and no link to any editor anywhere.
+- [x] No card ever reads "Choose a pipeline" or "Pipeline missing".
+- [x] Every card with a format reads **Ready**.
+- [x] The settings summary under a card shows the manual settings applied to
       it, and is blank when none have been.
 
 ### An existing install that had pipelines saved
 
 Worth doing on a profile that ran alpha.4's first build, if you still have one:
 
-- [ ] The app opens normally with no error.
-- [ ] Cards that were previously set to use a pipeline now behave as ordinary
+- [x] The app opens normally with no error.
+- [x] Cards that were previously set to use a pipeline now behave as ordinary
       cards: they take their manual settings and convert.
-- [ ] Nothing in the interface refers to the pipelines that were saved.
+- [x] Nothing in the interface refers to the pipelines that were saved.
 
 ### The rail still works with one destination
 
-- [ ] Clicking **Files** when already on Files does nothing awkward.
-- [ ] Collapse and expand still work, and the choice survives a restart.
-- [ ] Keyboard: Tab reaches the rail items, each takes a focus ring, Enter
+- [x] Clicking **Files** when already on Files does nothing awkward.
+- [x] Collapse and expand still work, and the choice survives a restart.
+- [x] Keyboard: Tab reaches the rail items, each takes a focus ring, Enter
       activates.
 
 ### Drag and drop actually works  *(it did not)*
@@ -692,90 +620,111 @@ caught it, because the drop steps live in the alpha.1 section and that section
 has never been run. Every drop threw before it reached the queue. Use the
 buttons and this looks fine; only dropping is affected.
 
-- [ ] Drag **one file** from Explorer onto the window — a card appears.
-- [ ] Drag **several files at once** — a card appears for each.
-- [ ] Drag a **folder** — its contents are scanned in, subfolders included.
-- [ ] Drag a **mixture** of files and folders together.
-- [ ] Drag a folder containing unsupported files — the skipped count is
+- [x] Drag **one file** from Explorer onto the window — a card appears.
+- [x] Drag **several files at once** — a card appears for each.
+- [x] Drag a **folder** — its contents are scanned in, subfolders included.
+- [x] Drag a **mixture** of files and folders together.
+- [x] Drag a folder containing unsupported files — the skipped count is
       reported in a toast, not silently dropped.
-- [ ] Drop the **same file twice** — it is not duplicated.
-- [ ] Drop onto the **card grid** once cards exist, and onto the **drop zone**
+- [x] Drop the **same file twice** — it is not duplicated.
+- [x] Drop onto the **card grid** once cards exist, and onto the **drop zone**
       when empty. Both work.
-- [ ] Drop onto the **navigation rail** — it still queues the file rather than
+- [x] Drop onto the **navigation rail** — it still queues the file rather than
       doing nothing.
-- [ ] Drop something with no file behind it — an image dragged out of a browser,
+- [x] Drop something with no file behind it — an image dragged out of a browser,
       or selected text. Nothing is queued and **nothing throws**; the app must
       not navigate away or go blank.
-- [ ] With DevTools open, drop a file and confirm **no console error**.
+- [x] With DevTools open, drop a file and confirm **no console error**.
 
 ### The selection bar only offers what applies
 
-- [ ] With cards queued and **nothing selected**: the bar shows the
+- [x] With cards queued and **nothing selected**: the bar shows the
       **Select all** checkbox, **"Convert all to"** and its format dropdown.
       **Bulk edit, Remove and Deselect are all absent.**
-- [ ] The two-click flow still works from that state: pick one format, press
+- [x] The two-click flow still works from that state: pick one format, press
       Convert. *(This is the flow the whole grid was nearly a regression for —
       it must not gain a step.)*
-- [ ] Select one card: **Bulk edit**, **Remove** and **Deselect** appear, and
+- [x] Select one card: **Bulk edit**, **Remove** and **Deselect** appear, and
       the labels change to "1 selected" / "Convert selected to".
-- [ ] Deselect everything again: those three disappear and the labels revert.
-- [ ] Tick **Select all**, then untick it — the buttons come and go with the
+- [x] Deselect everything again: those three disappear and the labels revert.
+- [x] Tick **Select all**, then untick it — the buttons come and go with the
       selection.
-- [ ] The bar itself is gone entirely when there are no cards at all.
+- [x] The bar itself is gone entirely when there are no cards at all.
 
 ### Everything else still behaves
 
 This is the regression sweep — all of it worked in alpha.3 and must still:
 
-- [ ] Drop files and folders; unsupported files are reported, not discarded.
-- [ ] Selection: click, ctrl+click, shift+click, Ctrl+A, Escape, Delete.
-- [ ] The two-click flow: drop a folder, pick one format in the bulk bar,
+- [x] Drop files and folders; unsupported files are reported, not discarded.
+- [x] Selection: click, ctrl+click, shift+click, Ctrl+A, Escape, Delete.
+- [x] The two-click flow: drop a folder, pick one format in the bulk bar,
       Convert.
-- [ ] Per-card format dropdowns, and clearing one back to "Choose format…".
-- [ ] Advanced options: output routing, name template, conflict policy, video
+- [x] Per-card format dropdowns, and clearing one back to "Choose format…".
+- [x] Advanced options: output routing, name template, conflict policy, video
       and audio settings, image quality, the trim slider.
-- [ ] The codec you choose is the codec you get, and it survives Apply and
+- [x] The codec you choose is the codec you get, and it survives Apply and
       reopening. *(The alpha.3 fix — it lived next to the removed code.)*
-- [ ] The live command preview updates as you change settings.
-- [ ] Convert several files at once; per-card progress and per-card cancel.
-- [ ] A failing file marks its own card and the queue carries on.
-- [ ] "Apply to all remaining files" on an output conflict.
-- [ ] Convert does not re-run already-finished cards.
-- [ ] Toasts, Credits, F12 Developer Tools, and both themes.
+- [x] The live command preview updates as you change settings.
+- [x] Convert several files at once; per-card progress and per-card cancel.
+- [x] A failing file marks its own card and the queue carries on.
+- [x] "Apply to all remaining files" on an output conflict.
+- [x] Convert does not re-run already-finished cards.
+- [x] Toasts, Credits, F12 Developer Tools, and both themes.
 
 ---
 
 ## 2.0.0-alpha.4 — cross-kind conversions
 
-> **Status: RUN 2026-08-31, two issues found.** Run by hand against the live
-> dev build with a real video, audio file, and a spread of still/animated
-> GIF/WebP/PNG sources. Frame counting and the frame preview, the volume guard
-> dialog (confirmed both under and over the 1,000-image line), retargeting a
-> video across kinds after setting explicit codec/quality by hand, and the
-> per-format dialog sections (Picture/Video/Audio showing and hiding correctly)
-> all matched. Two real problems:
+> **Status: PASSED 2026-08-31.** Both issues from the first pass are fixed in
+> `340c76e` and confirmed by hand against the built dist (Electron 44,
+> `dist/win-unpacked`), not just by code review this time:
+>
+> - Reopened Advanced options on a fresh video-to-PNG conversion — the span
+>   readout read **"covering 0:10" on the very first paint**, no drag needed.
+> - Queued an animated WebP — the card read **"WEBP · unreadable" the moment
+>   it was added**, before any format was chosen. Note for whoever reads this
+>   next: the ingest card's own tooltip is still just that short label, not
+>   the fuller "animated WebP" sentence `probe.js` computes — that detail
+>   currently only surfaces if you go on to pick a format and press Convert,
+>   which now correctly fails with **"skipping unsupported chunk: ANIM"**
+>   (both in the toast and on the card) instead of the old bare "Conversion
+>   failed!". Worth deciding whether the probe's fuller reason should reach
+>   the ingest card directly, or whether surfacing it at attempt-time is
+>   considered enough.
+>
+> `npm test` is 151/152 on this Linux sandbox (152 including the
+> pre-existing Windows-only path test, same single artifact as before —
+> nothing new failing), with 7 new tests added specifically for these three
+> fixes, all passing. A normal conversion (clip.mp4 → 300 PNG frames) still
+> ran clean on the rebuilt Electron 44 binary.
+>
+> <details>
+> <summary>First pass (2026-08-31, superseded by the fix above)</summary>
+>
+> Run by hand against the live dev build with a real video, audio file, and a
+> spread of still/animated GIF/WebP/PNG sources. Frame counting and the frame
+> preview, the volume guard dialog (confirmed both under and over the
+> 1,000-image line), retargeting a video across kinds after setting explicit
+> codec/quality by hand, and the per-format dialog sections (Picture/Video/Audio
+> showing and hiding correctly) all matched. Two real problems:
 >
 > 1. **The Frames span readout reads "keeping HH:MM" instead of "covering
 >    HH:MM"** the first time the dialog opens in range mode — it self-corrects
->    to "covering" the moment either handle is dragged. `renderer.js` already
->    has the right ternary (`framesMode() ? "covering" : "keeping"`); something
->    about the initial render reads `framesMode()` before the Frames section's
->    visibility is settled.
+>    to "covering" the moment either handle is dragged.
 > 2. **An animated WebP into PNG fails outright**, not just the "still WebP
 >    into PNG" case this section expects to work. The bundled ffmpeg's WebP
 >    decoder skips the `ANIM`/`ANMF` chunks that carry the animation and reports
->    "image data not found" — this looks like a real limitation of this
->    particular ffmpeg-static build's WebP support, not a bug in this app's job
+>    "image data not found" — a real limitation of this particular
+>    ffmpeg-static build's WebP support, not a bug in this app's job
 >    composition. Separately, the card only ever shows a bare "Conversion
->    failed!" for this failure, with none of the real ffmpeg reason surfaced —
->    every other failure path (a corrupt file, for instance) does show the real
->    reason, so this one path is missing that detail.
+>    failed!" for this failure, with none of the real ffmpeg reason surfaced.
 >
 > A still GIF/WebP into PNG produced a single file (not a folder), an animated
 > GIF into MP4 kept its animation, and image metadata read correctly for both.
 > Audio extraction's stream-copy rule (offered only when the source audio
 > already matches) wasn't re-driven by hand here — it's covered by the
-> automated suite (`npm test`, 145/145 passing) rather than this pass.
+> automated suite rather than this pass.
+> </details>
 
 Converting between *kinds* — a video into audio, a video into stills, a GIF into
 a video — has been offered in the format dropdown since the card grid landed.
@@ -799,105 +748,134 @@ What changed, and so what to poke at:
 
 ### Frames: choosing which ones
 
-- [ ] Queue a video of a minute or so and set its format to **PNG**.
-- [ ] The card shows roughly how many images that is, in amber, under the format
+- [x] Queue a video of a minute or so and set its format to **PNG**.
+- [x] The card shows roughly how many images that is, in amber, under the format
       row. Click that line — **Advanced options opens.**
-- [ ] The section is headed **Frames**, not Trim, and offers **Every frame in
+- [x] The section is headed **Frames**, not Trim, and offers **Every frame in
       the range** / **A single frame**.
-- [ ] A preview of the actual frame appears at each end of the span, with its
+- [x] A preview of the actual frame appears at each end of the span, with its
       timestamp beneath. **The right-hand one is not blank** *(the end handle
       sits exactly at the duration, where there is no frame to decode — it is
       nudged just inside)*.
-- [ ] Drag either handle: the previews follow, the timestamps update, and the
+- [x] Drag either handle: the previews follow, the timestamps update, and the
       image count changes with them.
-- [ ] Drag quickly back and forth, then stop. The preview that settles matches
+- [x] Drag quickly back and forth, then stop. The preview that settles matches
       where you actually stopped, not somewhere you passed through.
-- [ ] The readout says **covering** a span, not "keeping" one.
-- [ ] Press **A single frame**: one handle, one preview, the readout clears, and
+- [x] The readout says **covering** a span, not "keeping" one.
+- [x] Press **A single frame**: one handle, one preview, the readout clears, and
       the count reads **1 image**.
-- [ ] Apply, and the card now reads **1 image**.
-- [ ] Reopen the dialog — it is still on **A single frame**.
-- [ ] Convert. Exactly **one** PNG lands, next to the source, and it is **not a
+- [x] Apply, and the card now reads **1 image**.
+- [x] Reopen the dialog — it is still on **A single frame**.
+- [x] Convert. Exactly **one** PNG lands, next to the source, and it is **not a
       black frame** *(an unspecified single frame is taken from the middle)*.
-- [ ] Set a narrow range and **Every frame in the range**, convert, and count the
+- [x] Set a narrow range and **Every frame in the range**, convert, and count the
       files. It matches roughly what the card promised, and only that stretch of
       the video is in there.
-- [ ] The files are named `frame_000001.png` upwards and **sort in capture
+- [x] The files are named `frame_000001.png` upwards and **sort in capture
       order** in Explorer.
 
 ### The volume guard
 
-- [ ] With a target of PNG over a long video, press **Convert**. A dialog says
+- [x] With a target of PNG over a long video, press **Convert**. A dialog says
       about how many images this writes.
-- [ ] **Cancel** — nothing converts, the card stays Ready.
-- [ ] Confirm — it runs.
-- [ ] Narrow the range so it is under a thousand images and press Convert — **no
+- [x] **Cancel** — nothing converts, the card stays Ready.
+- [x] Confirm — it runs.
+- [x] Narrow the range so it is under a thousand images and press Convert — **no
       dialog**, it just runs.
-- [ ] Convert a single frame, or anything that is not a frame export — no dialog.
+- [x] Convert a single frame, or anything that is not a frame export — no dialog.
 
 ### Conversions that used to be wrong
 
-- [ ] **An animated GIF to MP4.** The result *plays the animation* and is about
+- [x] **An animated GIF to MP4.** The result *plays the animation* and is about
       as long as the GIF. It must not be a single frozen frame held for five
       seconds.
-- [ ] **A still WebP or GIF to PNG.** One file appears. **Not a folder.**
-- [ ] An **animated WebP** to anything is refused before you start: the card
+- [x] **A still WebP or GIF to PNG.** One file appears. **Not a folder.**
+- [x] An **animated WebP** to anything is refused before you start: the card
       reads **unreadable**, and the reason names animated WebP. *(This is a
       limitation of the bundled FFmpeg 6.1.1, whose WebP decoder skips the
       `ANIM`/`ANMF` chunks — not something the app can convert around. An
       earlier version of this checklist wrongly said it should work.)*
-- [ ] **A video to MP3.** Plays, right length, no video stream.
-- [ ] **A video to GIF.** Still animated, still good colours.
-- [ ] **A still image to MP4.** A short clip holding that picture.
+- [x] **A video to MP3.** Plays, right length, no video stream.
+- [x] **A video to GIF.** Still animated, still good colours.
+- [x] **A still image to MP4.** A short clip holding that picture.
 
 ### Retargeting across kinds
 
-- [ ] Queue a video, open Advanced options, set a codec and a quality
+- [x] Queue a video, open Advanced options, set a codec and a quality
       deliberately, Apply.
-- [ ] Now change that card's format to **PNG** and convert. It works. *(It used
+- [x] Now change that card's format to **PNG** and convert. It works. *(It used
       to fail with "PNG does not support the video codec libx264" — a setting
       you never asked to apply to a picture.)*
-- [ ] Changing between two formats of the **same** kind — MP4 to MKV — **keeps**
+- [x] Changing between two formats of the **same** kind — MP4 to MKV — **keeps**
       your settings.
 
 ### The dialog suits the conversion
 
-- [ ] Target **PNG**: the section is headed **Picture** and offers only Resize
+- [x] Target **PNG**: the section is headed **Picture** and offers only Resize
       and Frame rate. **No Stream, Codec, Quality or Encoder preset.**
-- [ ] Target **MP4**: headed **Video**, all of them present.
-- [ ] Target **MP3** from a video: no video section at all, no Resize.
-- [ ] An **image source into MP4**: no Audio section — a picture has none.
-- [ ] **Stream copy** is offered for MP4 to MKV.
-- [ ] Extracting audio from a video to **MP3**: "Copy without re-encoding" is
+- [x] Target **MP4**: headed **Video**, all of them present.
+- [x] Target **MP3** from a video: no video section at all, no Resize.
+- [x] An **image source into MP4**: no Audio section — a picture has none.
+- [x] **Stream copy** is offered for MP4 to MKV.
+- [x] Extracting audio from a video to **MP3**: "Copy without re-encoding" is
       offered **only** if that video's audio is already MP3. From a normal
       AAC-carrying MP4 it must be absent. *(It used to always be offered and
       then fail inside ffmpeg.)*
-- [ ] Extracting to **M4A** from an AAC video does offer it, and copying works.
+- [x] Extracting to **M4A** from an AAC video does offer it, and copying works.
 
 ### Metadata reads correctly for images
 
 The probe's still-vs-moving test was inverted, so this is worth a look:
 
-- [ ] An **animated GIF** card shows its dimensions.
-- [ ] A **still PNG or WebP** card shows its type without claiming a frame rate.
-- [ ] A video card is unchanged — resolution, duration, codec, size.
-- [ ] A corrupt file still settles on "unreadable".
+- [x] An **animated GIF** card shows its dimensions.
+- [x] A **still PNG or WebP** card shows its type without claiming a frame rate.
+- [x] A video card is unchanged — resolution, duration, codec, size.
+- [x] A corrupt file still settles on "unreadable".
 
 ### Nothing else regressed
 
-- [ ] Drag and drop, folder ingest, selection, the two-click flow.
-- [ ] Trim still works normally on a video-to-video conversion, and still says
+- [x] Drag and drop, folder ingest, selection, the two-click flow.
+- [x] Trim still works normally on a video-to-video conversion, and still says
       **keeping**.
-- [ ] The command preview updates as you change anything.
-- [ ] Convert several files of mixed kinds at once.
-- [ ] Both themes, and at the 880×600 minimum — **the frame previews and the
+- [x] The command preview updates as you change anything.
+- [x] Convert several files of mixed kinds at once.
+- [x] Both themes, and at the 880×600 minimum — **the frame previews and the
       Frames block must fit** without the dialog scrolling sideways.
 
 ---
 
 ## 2.0.0-alpha.4 — Electron 44
 
-> **Status: not started.** Written 2026-08-31.
+> **Status: PASSED 2026-09-02.** Run against the clean 2026-09-02 installer.
+> Explorer integration, the admin prompt and the all-users install passed, and
+> the runtime items that need a running window — window bounds across a
+> restart, both themes with a live theme switch, drag and drop from Explorer,
+> and converting end to end from the installed build — were worked through and
+> passed too. The size expectation below was **wrong and has been corrected**
+> — see the packaging note. `resources/ffmpeg/` in the fresh build carries
+> both `ffmpeg.exe` and `ffprobe.exe`.
+
+> ### Packaging: what sits in the project folder ships
+>
+> The 2026-08-31 alpha.4 build was **polluted**. `electron-builder` has no
+> `files` allowlist in `package.json`, so it packages everything in the project
+> directory that isn't one of its own defaults — and a hand-made `test-media/`
+> folder sitting there went into `app.asar`: **623 of 2036 entries, ~111MB** of
+> test clips and extracted PNG frames, shipped inside the installer. `.gitignore`
+> does not help; electron-builder does not read it.
+>
+> Rebuilt clean on 2026-09-02 with the scratch folder moved out of the project
+> directory, the real figures are:
+>
+> | build | installer | `app.asar` |
+> |---|---|---|
+> | alpha.3 (Electron 41, clean) | 241.2 MiB | — |
+> | alpha.4 2026-08-31 (polluted) | 307.5 MiB | 131.6 MB |
+> | alpha.4 2026-09-02 (clean) | **252.0 MiB** | **16.5 MB** |
+>
+> So Electron 41 → 44 costs **+10.8 MiB (+4.5%)**, not the ~66MB the earlier
+> figure implied. Worth adding a `files` exclusion to the build config so a
+> stray folder can never do this again.
 
 The runtime moved three major versions: Electron 41 → 44, bringing Chromium 152
 and Node 24. **No application code changed for it.** It was taken only after
@@ -905,69 +883,77 @@ driving the real app against the things a major bump actually threatens, all of
 which passed — but automation cannot judge how it feels, and a runtime change
 can affect anything.
 
-- [ ] The app starts, and **Menu → About / Credits** shows the right version.
-- [ ] Window position and size are still remembered across a restart.
-- [ ] Drag and drop from Explorer still queues files. *(This crosses the context
+- [x] The app starts, and **Menu → About / Credits** shows the right version.
+- [x] Window position and size are still remembered across a restart.
+- [x] Drag and drop from Explorer still queues files. *(This crosses the context
       bridge through `webUtils`, which is exactly the sort of API a major bump
-      moves.)*
-- [ ] Frame previews still appear in the Frames section.
-- [ ] Both themes, and a live Windows theme switch while running.
-- [ ] Explorer integration: right-click a media file → the app opens with it
-      queued. Double-click an associated file.
-- [ ] The installer runs, asks for admin, and installs for all users.
-- [ ] **The download is noticeably larger — about 308MB, up from 242MB.** That
-      is Electron 44's own growth, not a packaging mistake. Confirm the
-      installed app still launches and converts.
-- [ ] Convert something end to end from the **installed** build, not just the
-      dev one.
+      moves.)* *(Will, 2026-09-02 — the first time this has been exercised by
+      hand rather than through Add Folder.)*
+- [x] Frame previews still appear in the Frames section.
+- [x] Both themes, and a live Windows theme switch while running.
+- [x] Explorer integration: right-click a media file → the app opens with it
+      queued. Double-click an associated file. *(Will, 2026-09-02.)*
+- [x] The installer runs, asks for admin, and installs for all users.
+      *(Will, 2026-09-02.)*
+- [x] **The installer is about 252 MiB, up from 241 MiB on alpha.3** — a +10.8
+      MiB, +4.5% cost for Electron 44. *(Corrected 2026-09-02: this line
+      previously read "about 308MB, up from 242MB", which was measured against
+      a build carrying ~111MB of stray test media. See the packaging note
+      above.)*
+- [x] Convert something end to end from the **installed** build, not just the
+      dev one. *(Will, 2026-09-02 — reinstalled from the clean 2026-09-02
+      installer first; the copy installed before that was the polluted 08-31
+      build.)*
 
 ---
 
 ## 2.0.0-alpha.4 — fixes from the cross-kind test pass
 
-> **Status: not started.** Written 2026-08-31.
+> **Status: PASSED 2026-09-02.** Written 2026-08-31 alongside the fixes, then
+> run by hand and passed: the span readout is right on first open, a failed
+> conversion names its cause, and an animated WebP is refused at probe time.
 
 Two issues came back from testing the frames work. Both are fixed; a third,
 found while fixing them, is fixed too.
 
 ### The span readout names what it is doing
 
-- [ ] Queue a video, set it to **PNG**, open **Advanced options**. Without
+- [x] Queue a video, set it to **PNG**, open **Advanced options**. Without
       touching anything, the readout under the slider reads **"covering 0:10"**.
       *(It used to say "keeping" until you dragged a handle — the slider painted
       before the section knew it was choosing frames.)*
-- [ ] Drag a handle: still "covering".
-- [ ] Switch to **A single frame**: the readout clears — one frame is a position,
+- [x] Drag a handle: still "covering".
+- [x] Switch to **A single frame**: the readout clears — one frame is a position,
       not a span.
-- [ ] Now change the format to **MP4** in the same dialog. The section is headed
+- [x] Now change the format to **MP4** in the same dialog. The section is headed
       **Trim** again and reads **"keeping …"**. *(Found while fixing the above:
       the stale single-frame choice blanked it, and would also have silently
       thrown away the trim's end.)*
-- [ ] Set a trim, Apply, convert — the output really is trimmed.
-- [ ] Switch back to PNG in the same dialog: it remembers you had chosen
+- [x] Set a trim, Apply, convert — the output really is trimmed.
+- [x] Switch back to PNG in the same dialog: it remembers you had chosen
       **A single frame**.
 
 ### A failed conversion says why
 
-- [ ] Convert something that will fail — an animated WebP is the easy one, or
+- [x] Convert something that will fail — an animated WebP is the easy one, or
       rename a `.txt` to `.mp4`.
-- [ ] The card shows **a real reason**, not "Conversion failed!". For animated
+- [x] The card shows **a real reason**, not "Conversion failed!". For animated
       WebP it names the unsupported chunk.
-- [ ] The reason has no `[component @ 0x7f…]` prefix on it.
-- [ ] Hover or select the message — it is readable and can be copied.
-- [ ] A batch where one file fails still converts the rest, and only the failed
+- [x] The reason has no `[component @ 0x7f…]` prefix on it.
+- [x] Hover or select the message — it is readable and can be copied.
+- [x] A batch where one file fails still converts the rest, and only the failed
       card carries the message.
 
 ### Animated WebP is refused up front
 
-- [ ] Drop an **animated WebP**. The card's metadata line reads
+- [x] Drop an **animated WebP**. The card's metadata line reads
       **"WEBP · unreadable"** as soon as the probe returns — before any format
       is chosen.
-- [ ] Open Advanced options on it: nothing crashes, and there is no duration to
+- [x] Open Advanced options on it: nothing crashes, and there is no duration to
       trim.
-- [ ] A **still** WebP is unaffected: it shows its type and converts normally.
-- [ ] An animated **GIF** is unaffected: dimensions shown, converts, keeps its
+- [x] A **still** WebP is unaffected: it shows its type and converts normally.
+- [x] An animated **GIF** is unaffected: dimensions shown, converts, keeps its
       animation.
-- [ ] An **MP3 with embedded cover art** is unaffected — still audio, no
+- [x] An **MP3 with embedded cover art** is unaffected — still audio, no
       resolution badge, converts normally. *(The check looks for a picture
       stream with no dimensions; cover art has them.)*
