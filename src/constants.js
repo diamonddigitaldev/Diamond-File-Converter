@@ -78,6 +78,14 @@ const SETTINGS_DEFAULTS = {
     nameTemplate:    "{name}",
     lastTargetByKind: {},
     navCollapsed:    false,
+    // Folder ingest. maxDepth and maxFiles are deliberately not here: they are
+    // safety rails rather than preferences, and the toast that fires when one
+    // bites explains itself at the moment it matters.
+    scan: {
+        recursive:      true,
+        kinds:          ["audio", "video", "image"],
+        followSymlinks: false,
+    },
 };
 
 module.exports = {

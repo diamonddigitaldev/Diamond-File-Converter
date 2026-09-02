@@ -43,9 +43,49 @@
                 <button id="btn-add-files" class="btn btn-sm btn-secondary d-inline-flex align-items-center gap-1">
                     <span class="material-icons-round" style="font-size:16px">note_add</span>Add Files
                 </button>
-                <button id="btn-add-folder" class="btn btn-sm btn-secondary d-inline-flex align-items-center gap-1">
-                    <span class="material-icons-round" style="font-size:16px">create_new_folder</span>Add Folder
-                </button>
+                <!-- Add Folder still opens the picker on one click. The options
+                     get their own trigger beside it rather than turning the
+                     button into a menu — adding a folder is the two-click path
+                     and it must not grow a step. -->
+                <div class="scan-options">
+                    <button id="btn-add-folder" class="btn btn-sm btn-secondary d-inline-flex align-items-center gap-1">
+                        <span class="material-icons-round" style="font-size:16px">create_new_folder</span>Add Folder
+                    </button>
+                    <button id="btn-scan-options" class="btn btn-sm btn-secondary scan-options-toggle"
+                            title="Folder options" aria-haspopup="true" aria-expanded="false">
+                        <span class="material-icons-round" style="font-size:16px">expand_more</span>
+                    </button>
+
+                    <div id="scan-popover" class="scan-popover d-none" role="dialog" aria-label="Folder options">
+                        <p class="scan-popover-title">Folder options</p>
+
+                        <label class="scan-opt">
+                            <input type="checkbox" id="scan-recursive" class="form-check-input">
+                            <span>Include subfolders</span>
+                        </label>
+
+                        <p class="scan-popover-label">Only add</p>
+                        <label class="scan-opt">
+                            <input type="checkbox" id="scan-kind-audio" class="form-check-input" data-kind="audio">
+                            <span>Audio</span>
+                        </label>
+                        <label class="scan-opt">
+                            <input type="checkbox" id="scan-kind-video" class="form-check-input" data-kind="video">
+                            <span>Video</span>
+                        </label>
+                        <label class="scan-opt">
+                            <input type="checkbox" id="scan-kind-image" class="form-check-input" data-kind="image">
+                            <span>Images</span>
+                        </label>
+
+                        <label class="scan-opt">
+                            <input type="checkbox" id="scan-symlinks" class="form-check-input">
+                            <span>Follow shortcuts</span>
+                        </label>
+
+                        <p class="scan-popover-note">Applies to the next folder you add or drop.</p>
+                    </div>
+                </div>
             </div>
         </header>
 

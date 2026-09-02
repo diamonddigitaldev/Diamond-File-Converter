@@ -45,6 +45,14 @@ function generateId() {
  * { path, reason } shape the scanner uses, so a caller can merge the two lists
  * and report them as the one thing a user sees.
  */
+/**
+ * Two spellings of one Windows path are the same file: the separators can go
+ * either way and the case is not significant. The scanner has always keyed its
+ * own dedupe that way; this compared the raw strings, so a file already queued
+ * from a folder walk could be queued a second time by being added directly.
+ */
+const samePath = (a, b) => a.replace(/\//g, "\\").toLowerCase() === b.replace(/\//g, "\\").toLowerCase();
+
 function addFiles(filePaths) {
     let added = 0;
     let duplicates = 0;
@@ -56,7 +64,7 @@ function addFiles(filePaths) {
         const entry = FORMATS.conversionMap[ext];
 
         if (!entry) { rejected.push({ path: filePath, reason: "unsupported" }); continue; }
-        if (jobs.some(j => j.filePath === filePath)) { duplicates++; continue; }
+        if (jobs.some(j => samePath(j.filePath, filePath))) { duplicates++; continue; }
 
         jobs.push({
             id: generateId(),
@@ -115,11 +123,39 @@ function buildSkippedDetail(skipped) {
     return list;
 }
 
+const ALL_KINDS = ["audio", "video", "image"];
+
+/** What the folder-options popover currently says. Seeded on startup. */
+let scanPrefs = { recursive: true, kinds: [...ALL_KINDS], followSymlinks: false };
+
+/**
+ * The popover's three checkboxes translated into what the scanner takes.
+ *
+ * These apply to every ingest route, not only the Add Folder button. A plain
+ * drop can contain folders too, and having the settings cover one folder route
+ * but not the other would be baffling. It does mean a dropped .jpg is skipped
+ * while Images is unticked — which is only acceptable because the toast now
+ * names that as the reason rather than dropping it in silence.
+ */
+function buildScanOptions() {
+    const kinds = scanPrefs.kinds ?? ALL_KINDS;
+    const everything = ALL_KINDS.every(k => kinds.includes(k));
+    return {
+        recursive: scanPrefs.recursive !== false,
+        followSymlinks: scanPrefs.followSymlinks === true,
+        // No filter at all is cheaper than a filter that admits everything, and
+        // it keeps "not-included" out of the skip reasons when nothing is off.
+        include: everything ? null : Object.entries(DESCRIPTORS)
+            .filter(([, d]) => kinds.includes(d.kind))
+            .map(([ext]) => ext),
+    };
+}
+
 /** Expand folders in the main process, then queue whatever came back. */
 async function ingestPaths(inputPaths) {
     if (!inputPaths || inputPaths.length === 0) return;
     try {
-        const result = await api.scanPaths(inputPaths, {});
+        const result = await api.scanPaths(inputPaths, buildScanOptions());
         const { added, rejected, duplicates } = addFiles(result.files);
 
         // The scanner's rejections and the format map's are one thing as far as
@@ -1513,6 +1549,71 @@ function setNavCollapsed(collapsed) {
     $("nav-collapse").title = collapsed ? "Expand" : "Collapse";
 }
 
+// -- Folder options ----------------------------------------------------------
+
+/**
+ * Three checkboxes, saved as they are changed. No save button, and no dialog:
+ * these are preferences about the next ingest, so they sit on the control that
+ * starts one. The scanner also supports a depth limit and a file cap, which are
+ * deliberately not offered — they are safety rails, and the toast that fires
+ * when one bites explains itself better than a number in a popover would.
+ */
+function setupScanOptions() {
+    const popover = $("scan-popover");
+    const toggle = $("btn-scan-options");
+    const kindBoxes = [...popover.querySelectorAll("[data-kind]")];
+
+    function load() {
+        $("scan-recursive").checked = scanPrefs.recursive !== false;
+        $("scan-symlinks").checked = scanPrefs.followSymlinks === true;
+        const kinds = scanPrefs.kinds ?? ALL_KINDS;
+        for (const box of kindBoxes) box.checked = kinds.includes(box.dataset.kind);
+    }
+
+    async function save() {
+        const kinds = kindBoxes.filter(b => b.checked).map(b => b.dataset.kind);
+        scanPrefs = {
+            recursive: $("scan-recursive").checked,
+            followSymlinks: $("scan-symlinks").checked,
+            kinds,
+        };
+        await api.setSettings({ ...(await api.getSettings()), scan: scanPrefs });
+    }
+
+    function setOpen(open) {
+        popover.classList.toggle("d-none", !open);
+        toggle.setAttribute("aria-expanded", String(open));
+    }
+    const isOpen = () => !popover.classList.contains("d-none");
+
+    toggle.addEventListener("click", (e) => {
+        e.stopPropagation();
+        setOpen(!isOpen());
+    });
+    popover.addEventListener("click", (e) => e.stopPropagation());
+    document.addEventListener("click", () => { if (isOpen()) setOpen(false); });
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && isOpen()) { setOpen(false); e.stopPropagation(); }
+    }, true);
+
+    for (const box of kindBoxes) {
+        box.addEventListener("change", () => {
+            // Turning everything off would skip every file in the folder and
+            // then explain why, which is technically honest and useless. The
+            // last one on stays on.
+            if (!kindBoxes.some(b => b.checked)) {
+                box.checked = true;
+                return;
+            }
+            save();
+        });
+    }
+    $("scan-recursive").addEventListener("change", save);
+    $("scan-symlinks").addEventListener("change", save);
+
+    load();
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     FORMATS = await api.getFormats();
     TARGETS = FORMATS.targetsByExt;
@@ -1523,6 +1624,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     // annoying to have to do so again every launch.
     const settings = await api.getSettings();
     setNavCollapsed(settings?.navCollapsed === true);
+
+    if (settings?.scan) scanPrefs = { ...scanPrefs, ...settings.scan };
+    setupScanOptions();
 
     for (const item of document.querySelectorAll(".nav-item")) {
         item.addEventListener("click", () => showView(item.dataset.view));

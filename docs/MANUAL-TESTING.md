@@ -1116,3 +1116,74 @@ is actually junk (rename a `.txt` to `.mp4`).
 - [ ] Check the toast in **both themes** — the list's inset background and the
       underlined action button must be readable on all four toast colours
       (info, success, warning, danger).
+
+---
+
+## 2.0.0-alpha.5 — folder options
+
+> **Status: not started.** Written 2026-09-02 alongside the change.
+
+The scanner has always supported a recursion switch, extension filters and a
+symlink switch. None of it was reachable — `ingestPaths` passed an empty options
+object. Three of them are now on a popover beside Add Folder.
+
+The depth limit and the file cap are deliberately **not** offered. They are
+safety rails rather than preferences, and the toast that fires when one bites
+explains itself better at that moment than a number in a popover would.
+
+**Add Folder itself must still open the folder picker on a single click.** The
+options have their own caret. If adding a folder ever costs two clicks, this is
+wrong however good it looks.
+
+### The popover
+
+- [ ] The caret sits flush against **Add Folder** and the pair reads as one
+      control, in **both themes**.
+- [ ] Click **Add Folder** — the folder picker opens immediately. No menu, no
+      extra step.
+- [ ] Click the **caret** — the popover opens. Add Folder does not.
+- [ ] It is fully on screen, not clipped by the window edge, at the **880px
+      minimum width** as well as maximised.
+- [ ] Click anywhere outside it — it closes. Click inside it — it stays open.
+- [ ] Press **Escape** — it closes. *(Escape must not also clear the card
+      selection behind it.)*
+- [ ] There is no Save button, and none is wanted.
+
+### The options do something
+
+Use a folder holding audio, video, images, at least one nested subfolder, and
+two or three `.txt` files.
+
+- [ ] All three types ticked, **Include subfolders** on: everything supported is
+      added, including from the nested folder.
+- [ ] Untick **Images**, drop the folder again: images are **not** added, and
+      the toast's **Show them** list gives their reason as **"turned off in
+      folder options"** — not "not a supported format". The two are different
+      and must read differently.
+- [ ] Untick **Include subfolders**: only the top level is added.
+- [ ] Untick two of the three types, then try to untick the **last** one. It
+      refuses and stays ticked. *(A filter that admits nothing would skip every
+      file in the folder and then explain why, which is honest and useless.)*
+- [ ] The options apply to a **dropped** folder too, not only the button — a
+      drop can contain folders, and having the setting cover one route but not
+      the other would be baffling.
+- [ ] With Images off, dropping a **single .jpg** skips it and says why. Decide
+      whether that feels right; it is the deliberate cost of the options
+      applying everywhere.
+
+### They are remembered
+
+- [ ] Change the options, close the app, reopen it: the popover shows what you
+      left it at.
+- [ ] The first launch after installing has all three types ticked, subfolders
+      on, shortcuts off.
+
+### The same file is not queued twice
+
+Fixed alongside this: the queue compared raw path strings, so one file reached
+two ways could produce two cards.
+
+- [ ] Add a folder, then drag **one file from inside it** onto the window. The
+      toast says **"That file is already in the list."** and **no second card
+      appears**.
+- [ ] The card count in the footer matches the number of cards on screen.
