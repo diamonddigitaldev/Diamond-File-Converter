@@ -136,6 +136,79 @@ test("conflict: main.js still threads the user's setting into the job", () => {
         "the runner must be given the resolver");
 });
 
+// ---------------------------------------------------------------------------
+// The other half of the same defect, found by QA on alpha.5 and reproduced by
+// driving the running app. The card's own conflict choice was being defeated by
+// a settings key v1 wrote and 2.0 has no screen for: an install carrying
+// onConflict "unique" renamed every collision silently, whatever the card said
+// and however many times the prompt was asked for.
+// ---------------------------------------------------------------------------
+
+test("settings: the keys 2.0 cannot reach are pruned, and nothing else is", () => {
+    const { pruneLegacySettings } = require("../src/constants");
+
+    const { settings, removed } = pruneLegacySettings({
+        outputRouting: "alongside",
+        outputDir: null,
+        nameTemplate: "{name}",
+        onConflict: "unique",
+        navCollapsed: true,
+        concurrency: 3,
+        scan: { recursive: false },
+    });
+
+    assert.deepEqual(settings, { navCollapsed: true, concurrency: 3, scan: { recursive: false } });
+    assert.deepEqual(removed.sort(), ["nameTemplate", "onConflict", "outputDir", "outputRouting"]);
+});
+
+test("settings: pruning survives an empty or missing object", () => {
+    const { pruneLegacySettings } = require("../src/constants");
+
+    assert.deepEqual(pruneLegacySettings(undefined), { settings: {}, removed: [] });
+    assert.deepEqual(pruneLegacySettings(null), { settings: {}, removed: [] });
+    assert.deepEqual(pruneLegacySettings({}), { settings: {}, removed: [] });
+});
+
+test("settings: the input is not mutated", () => {
+    const { pruneLegacySettings } = require("../src/constants");
+
+    const original = { onConflict: "unique", navCollapsed: true };
+    pruneLegacySettings(original);
+    assert.deepEqual(original, { onConflict: "unique", navCollapsed: true });
+});
+
+// The real-world shape this had to survive: electron-store's `defaults` replace
+// the whole `settings` key the moment anything writes to it, and the renderer
+// only ever writes `scan` and `navCollapsed`. Reading the key raw then hands
+// back an object missing everything else, while `?? SETTINGS_DEFAULTS` never
+// fires because the object it guards is present. Merging is the fix, and this
+// pins the direction of the merge — persisted values must win over defaults.
+test("settings: defaults fill the gaps a partial saved object leaves", () => {
+    const { SETTINGS_DEFAULTS } = require("../src/constants");
+
+    const persisted = { navCollapsed: true, scan: { recursive: false } };
+    const merged = { ...SETTINGS_DEFAULTS, ...persisted };
+
+    assert.equal(merged.onConflict, "ask", "a missing conflict policy must fall back to ask");
+    assert.equal(merged.outputRouting, "alongside");
+    assert.equal(merged.navCollapsed, true, "what was saved must win over the default");
+    assert.deepEqual(merged.scan, { recursive: false });
+});
+
+// A wiring guard like the one above it. The migration is what makes the merge
+// mean anything on an install that already carries a v1 value, and it must stay
+// version-guarded — an unconditional prune would eat whatever a preferences
+// screen writes, on the very next launch.
+test("settings: main.js still runs the migration, once, before the window", () => {
+    const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
+    assert.match(main, /migrateStore\(\);\s*probe\.setFfprobePath/,
+        "migrateStore must run before the window is created");
+    assert.match(main, /store\.get\("settingsSchema"\) === SETTINGS_SCHEMA_VERSION/,
+        "the migration must be guarded by the schema version, or it runs every launch");
+    assert.match(main, /\{ \.\.\.SETTINGS_DEFAULTS, \.\.\.\(store\.get\("settings"\) \?\? \{\}\) \}/,
+        "settings must be read with the defaults merged underneath");
+});
+
 test("credits: Escape is handled in the main process, not the page", () => {
     const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
     assert.match(main, /before-input-event/,
@@ -191,4 +264,57 @@ test("menu: replacing the default menu must not take DevTools with it", () => {
     assert.match(main, /role:\s*"toggleDevTools"/, "DevTools must be reachable");
     assert.ok(!/devTools:\s*false/.test(main),
         "devTools is not meant to be disabled; the loss was an accident of the custom menu");
+});
+
+// ---------------------------------------------------------------------------
+// The three defects QA found on alpha.5 that were not the settings bug above.
+// All three are guarded here rather than in a unit test because all three are
+// wiring in main.js: what the menu registers, what the preview is handed, and
+// what the prompt offers.
+// ---------------------------------------------------------------------------
+
+test("menu: an accelerator with no modifier steals every keystroke of that letter", () => {
+    // Electron registers menu accelerators globally, whatever holds focus, so a
+    // bare "C" opened Credits on every "c" typed into any text field in the app
+    // — found by QA typing into the Name template box. Function keys are the
+    // legitimate exception: F12 is a shortcut, not a character anyone types.
+    //
+    // Written as a scan rather than a check for the one binding, because the
+    // same mistake is sitting in two sibling apps and would come back here the
+    // moment a menu item is added without thinking about focus.
+    const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
+
+    const bare = [...main.matchAll(/accelerator:\s*"([^"]+)"/g)]
+        .map(m => m[1])
+        .filter(a => !a.includes("+") && !/^F\d{1,2}$/.test(a));
+
+    assert.deepEqual(bare, [],
+        `an accelerator needs a modifier or a function key; found: ${bare.join(", ")}`);
+});
+
+test("preview: the command shown resolves a real destination, not a placeholder", () => {
+    // The box exists to promise that what it shows is what will be executed,
+    // and the output path — the argument a user is most likely to be checking —
+    // was the one part of it that was stubbed.
+    const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
+
+    assert.ok(!/outputPath:\s*"<output>"/.test(main),
+        "the preview must not stub the output path");
+    assert.match(main, /paths\.resolveOutputPath\(job\)/,
+        "the preview must resolve the destination with the same code the run uses");
+});
+
+test("conflict: the prompt carries the abort, because nothing behind it can be clicked", () => {
+    // The dialog is window-modal: while it is open Windows blocks every click
+    // on the app behind it, so the footer's own "Cancel All" was unreachable.
+    // Position was never the problem, which is why dragging the dialog clear
+    // changed nothing. The only surface that can take the answer is the dialog.
+    const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
+
+    assert.match(main, /buttons:\s*\["Cancel All", "Skip This File", "Overwrite", "Save as New"\]/,
+        "the prompt must offer a whole-run abort as well as a per-file answer");
+    assert.match(main, /if \(runner\) runner\.cancelAll\(\);/,
+        "Cancel All must actually reach the runner");
+    assert.match(main, /if \(choice === "skip"\) return \{ action: "skip" \};/,
+        "Skip must settle the card as Skipped, which the runner already knows how to do");
 });

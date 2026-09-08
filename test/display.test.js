@@ -527,6 +527,25 @@ test("dialog: settings summary describes only what was changed", () => {
     assert.equal(d.summariseSettings({ output: { nameTemplate: "{name}" } }), null, "the default is not a change");
 });
 
+// Found by QA on alpha.5. Setting only "If it already exists" and pressing
+// Apply persisted correctly and reopened correctly, but produced no summary
+// line — so a setting that had genuinely stuck looked like it had not, which
+// is the same complaint the Apply-order bug produced for a different reason.
+test("dialog: the summary describes a conflict policy, which is a change like any other", () => {
+    assert.equal(d.summariseSettings({ output: { onConflict: "skip" } }), "skip existing");
+    assert.equal(d.summariseSettings({ output: { onConflict: "overwrite" } }), "overwrite");
+    assert.equal(d.summariseSettings({ output: { onConflict: "unique" } }), "save as new");
+
+    assert.equal(d.summariseSettings({ output: { onConflict: "ask" } }), null,
+        "ask is the default and must stay silent, like alongside and {name}");
+
+    // It joins the rest rather than replacing it.
+    assert.equal(
+        d.summariseSettings({ video: { mode: "copy" }, output: { onConflict: "skip" } }),
+        "copy video · skip existing"
+    );
+});
+
 test("dialog: compacting drops blanks so format defaults still apply", () => {
     const compacted = d.compactSettings({
         video: { codec: "libx264", crf: null, bitrate: "", preset: "slow" },

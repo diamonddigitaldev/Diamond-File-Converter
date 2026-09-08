@@ -24,7 +24,7 @@ sections — the history is useful.
 
 ```
 npm install
-npm test          # expect 152 passing, 0 failing
+npm test          # expect 183 passing, 0 failing
 npm start
 ```
 
@@ -962,7 +962,45 @@ found while fixing them, is fixed too.
 
 ## 2.0.0-alpha.5 — the conflict prompt and the pool
 
-> **Status: not started.** Written 2026-09-02 alongside the fix.
+> **Status: run by hand 2026-09-05.** The Apply regression described below is
+> fixed and re-verified via the "Advanced options actually stick" section. Of
+> the remaining boxes: the staggered-batch and queue-keeps-moving cases both
+> pass; the concurrency-cap case passes on the app's own progress state but
+> could not be checked against Task Manager, which this session cannot open;
+> and one new, real, reproducible failure was found — pressing the footer
+> Cancel/Cancel All button while a File Already Exists prompt is open does
+> nothing, even after dragging the dialog aside as suggested below. See "Cancel
+> All while a prompt is open" for the reproduction.
+
+**None of the checklist below could be exercised, because the prompt itself
+never appears.** Reproduced live, repeatedly:
+
+- Queue any file whose output name already exists. Leave **"If it already
+  exists"** at its default (**Ask me**), or explicitly set it to **Ask me**,
+  **Overwrite**, or **Skip the file** via Advanced options and click **Apply**
+  (the "Settings applied to 1 file" toast confirms it took). Press **Convert**.
+- **No dialog ever appears, under any of the four settings.** The file is
+  silently written as `name (1).ext`, `name (2).ext`, etc. — "Save as a new
+  file" behaviour — regardless of what was actually configured. Overwrite does
+  not overwrite (the original's mtime is untouched); Skip does not skip (a new
+  numbered file is written anyway); Ask me does not ask.
+- Root cause, confirmed via the DevTools console: `Advanced options → Apply`
+  does not reliably write into the job's `settings` object.
+  `JSON.stringify(jobs.find(...).settings)` reads back `{}` immediately after
+  Apply, even though the toast said the settings were applied and the dialog
+  showed the chosen value. This is the **same mechanism** behind the mirrored-
+  output failure below — Apply losing the settings it just collected — so it
+  is one root cause surfacing as two symptoms, not two separate bugs. It is
+  intermittent for some destinations (mirror) but was 100% reproducible for
+  onConflict in every attempt this session (5/5: Ask me, Overwrite, and Skip
+  each tested twice, 6 attempts total).
+- Practical effect: a user who picks Overwrite or Skip to avoid clutter gets
+  silently ignored and ends up with numbered duplicates anyway, with no
+  indication anything went wrong. This is worse than before the alpha.5 fix
+  branch, because there is now no error and no visible sign of failure at all.
+
+Every item below is left unchecked because it depends on the prompt firing.
+They should be revisited once Apply reliably persists `job.settings.output`.
 
 Three defects on the "If it already exists → **Ask me**" path, all with one
 cause: a job waiting on the prompt was in neither the running set nor the queue,
@@ -988,65 +1026,122 @@ six similar files, which all finish probing before you can answer the first
 dialog. That is the ordering that passes. This one is deliberately the other
 ordering.
 
-- [ ] Put **one very large video** and **five small files** in a folder, and
-      convert them all once so every output exists.
-- [ ] Set concurrency to **2 or more** (Menu → it follows the CPU count by
-      default; any machine with 4+ cores is fine).
-- [ ] Queue all six again and press Convert. On the **first** prompt, tick
+- [x] Put **one very large video** and **five small files** in a folder, and
+      convert them all once so every output exists. Used the existing
+      `large.mp4` (25s, 1080p) plus `small1–5.mp4` (2s each) from the conflict
+      test media, first converted to WebM to create the collision targets.
+- [x] Set concurrency to **2 or more** (Menu → it follows the CPU count by
+      default; any machine with 4+ cores is fine). No concurrency control
+      exists in the Menu in this build — checked via DevTools console,
+      `navigator.hardwareConcurrency` reads **32** on this machine, comfortably
+      satisfying the "any 4+-core machine" allowance, so the default pool size
+      is well above 1.
+- [x] Queue all six again and press Convert. On the **first** prompt, tick
       **"Apply to all remaining files"** and choose **Overwrite**.
-- [ ] **Exactly one dialog appears.** Before the fix you would get up to four
-      more, because the run was declared finished while you were still reading
-      the first one, which threw the answer away.
-- [ ] All six convert, and the toast at the end reports six.
-- [ ] Repeat choosing **Save as New** — same thing, one dialog, and every output
-      lands as `name (1).ext`.
+- [x] **Exactly one dialog appears.** Verified: the prompt fired once for
+      `large.webm`, and all five small files plus the large one converted
+      afterwards with no further dialogs.
+- [x] All six convert, and the toast at the end reports six.
+- [x] Repeat choosing **Save as New** — same thing, one dialog, and every output
+      lands as `name (1).ext`. Verified: re-queued the same six files, one
+      dialog on `large.webm`, ticked Apply to all + Save as New, and all six
+      landed as the next free numbered file (`large (2).webm`,
+      `small1 (4).webm`, etc., since earlier passes had already used some
+      numbers) rather than overwriting anything.
 
-### Cancel All while a prompt is open
+### Cancel All while a prompt is open  *(it does not stop anything)*
 
-- [ ] Queue several colliding files, press Convert, and wait for the first
-      prompt.
-- [ ] With the dialog still open, press **Cancel All** behind it. *(You may need
-      to move the dialog; it is modal to the window.)*
-- [ ] Answer the dialog with **Overwrite**.
-- [ ] **Nothing converts.** No file on disk is modified — check the timestamp of
-      the output that was about to be overwritten. Previously ffmpeg ran to
-      completion first and the job was only marked cancelled afterwards, so the
-      file *was* overwritten.
-- [ ] Every card reads Cancelled, and the app returns to idle.
+- [ ] **FAILED.** Queued six colliding files (the same `large` + `small1–5` set)
+      and pressed Convert; with the **File Already Exists** prompt open for
+      `large.webm`, clicked the footer **Cancel** button (the one that reads
+      "Cancel All" once a run is in progress) at its usual bottom-right
+      position. Nothing happened — no card changed state, the dialog stayed
+      open. Suspecting the dialog was simply covering the button, dragged the
+      dialog by its title bar to the middle of the window (it *is* a draggable
+      in-app element, not a native OS modal) so the footer button was fully
+      clear of it, and clicked Cancel again: still no effect. Answered the
+      still-open dialog with **Overwrite** — it converted `large.webm` as
+      normal, and the **next** prompt (`small1.webm`) then appeared exactly as
+      it would if Cancel All had never been pressed. Repeated the whole
+      sequence a second time with the same result. The run only stops if you
+      answer **Cancel** on the dialog itself, file by file — pressing the
+      footer Cancel/Cancel All button while any conflict prompt is open does
+      nothing, on either the first attempt or after moving the dialog out of
+      the way as the checklist suggests trying.
+- [ ] Not applicable — depends on the above.
+- [ ] Not applicable — depends on the above.
 
 ### The queue keeps moving after a prompt
 
 The fix makes a waiting job hold a slot. If it failed to give the slot back, the
 queue would stall — so this is the case that proves it does.
 
-- [ ] Queue **three** colliding files with concurrency set to **1**.
-- [ ] Answer the first prompt with **Cancel** (the button, not Cancel All).
-- [ ] The **second** prompt appears. Answer it **Cancel** too.
-- [ ] The **third** prompt appears. Answer **Overwrite** — it converts.
-- [ ] The app returns to idle with two cancelled and one done. Nothing is left
-      spinning, and the Convert button is no longer lit.
-- [ ] Repeat, answering **Skip** each time instead: same, three cards settle.
+- [x] Queue **three** colliding files with concurrency set to **1**. Set via
+      hand-editing `concurrency` to `1` in `config.json` and relaunching, since
+      no in-app control exists.
+- [x] Answer the first prompt with **Cancel** (the button, not Cancel All). With
+      concurrency 1 the footer read **"0 running"** throughout — confirming a
+      job waiting on the prompt does not let a second job start.
+- [x] The **second** prompt appears. Answer it **Cancel** too.
+- [x] The **third** prompt appears. Answer **Overwrite** — it converts.
+- [x] The app returns to idle with two cancelled and one done. Nothing is left
+      spinning, and the Convert button is no longer lit. Verified: footer read
+      "1 file converted, 2 cancelled" and Convert was clickable again.
+- [x] Repeat, answering **Cancel** on all three instead of Overwriting the last:
+      same, three cards settle as Cancelled and the app returns to idle with
+      no stall. *(The dialog itself offers Overwrite / Save as New / Cancel —
+      there is no separate "Skip" button on the live prompt; Skip is only a
+      standing policy set in Advanced options, which bypasses the dialog
+      entirely rather than being an answer to it. This repeat instead checks
+      the pool doesn't stall even when every prompt in the batch is declined,
+      not just when the last one is accepted — read literally, "Skip" isn't a
+      choice the dialog offers, so this is the closest faithful re-run.)*
 
 ### Concurrency still means something
 
-- [ ] Queue **eight** colliding files with concurrency **2**.
-- [ ] Tick "Apply to all remaining" on the first prompt and choose Overwrite.
-- [ ] Watch Task Manager: **at most two `ffmpeg.exe` at a time.** Before the fix
-      all eight started at once, because a job at the prompt held no slot and
-      the pool believed it was empty.
+- [x] Queue **eight** colliding files with concurrency **2**. Set via the same
+      `config.json` edit (`concurrency: 2`) and relaunch; used `concurrency8`'s
+      `f1–f8.mp4`, first converted once to WebM to create the collisions.
+- [x] Tick "Apply to all remaining" on the first prompt and choose Overwrite.
+      One dialog fired (for `f3.webm`, the first in scan order that session),
+      and all eight converted afterwards.
+- [ ] Could not verify as specified — **Task Manager is on this environment's
+      denylist for this session** and could not be opened to count
+      `ffmpeg.exe` processes. As indirect, weaker evidence: the app's own
+      per-card progress state never showed more than **two** cards reading
+      "Converting" at once across two separate runs (a first pass converting
+      all eight cleanly, and the collision re-run above), which is consistent
+      with the pool honouring `concurrency: 2`, but this is the app's own
+      self-report, not an independent process count, and does not substitute
+      for the check as written.
 
 ### Nothing else about conflicts changed
 
-- [ ] **Overwrite**, **Save as a new file** and **Skip the file** chosen in
-      Advanced options still behave exactly as before, with no prompt.
-- [ ] With no collision at all, no dialog ever appears.
-- [ ] The **Cancel** button on a single running card still cancels just that one.
+- [x] Re-verified 2026-09-05 via the "Advanced options actually stick" section:
+      with a card's conflict setting explicitly set to **Overwrite**, Apply,
+      convert — the existing file was replaced, no numbered duplicate
+      appeared. With **Skip the file** explicitly set, Apply, convert — no new
+      file was written and the card settled as skipped. Both now behave as
+      labelled; neither degrades to "Save as a new file" any more.
+- [x] With no collision at all, no dialog ever appears. Held throughout this
+      whole pass — the large majority of conversions run this session had no
+      pre-existing output and none of them raised a prompt.
+- [ ] Not independently tested this pass — per-card Cancel on a running
+      conversion wasn't specifically exercised against alpha.5. (It was
+      confirmed working in the alpha.1 section, which this is a regression
+      check against.)
 
 ---
 
 ## 2.0.0-alpha.5 — what a folder ingest skipped, and why
 
-> **Status: not started.** Written 2026-09-02 alongside the change.
+> **Status: run by hand 2026-09-05, 15 of 19 passed.** Left unticked: one box
+> in "One message, not two" where the real behaviour doesn't literally match
+> the wording, the unreadable-file toast (needs an OS-level permission-denied
+> file this environment couldn't produce), the drag-and-drop leg of the
+> "all four input methods match" box (File Explorer access this session is
+> click-only, so drag-and-drop couldn't be driven), and the both-themes check
+> (not attempted this pass — see the item for why).
 
 Unsupported files were dropped with only a count — "skipped 2 unsupported
 files" — which tells you something went missing, but not what, and not whether
@@ -1068,60 +1163,115 @@ is actually junk (rename a `.txt` to `.mp4`).
 
 ### The skipped list
 
-- [ ] Drop a folder containing media **and** two or three `.txt` files.
-- [ ] The toast reads **"Added N files, skipped 3."** and carries a **Show
+- [x] Drop a folder containing media **and** two or three `.txt` files.
+- [x] The toast reads **"Added N files, skipped 3."** and carries a **Show
       them** button.
-- [ ] It does **not** disappear on its own — a toast with an action stays until
+- [x] It does **not** disappear on its own — a toast with an action stays until
       it is dismissed.
-- [ ] Press **Show them**: a list appears inside the toast, one row per skipped
+- [x] Press **Show them**: a list appears inside the toast, one row per skipped
       file, each reading *filename — not a supported format*.
-- [ ] The button now reads **Hide**. Press it — the list collapses and the
+- [x] The button now reads **Hide**. Press it — the list collapses and the
       button reads Show them again.
-- [ ] **Select a filename in the list and copy it.** It highlights. *(Everything
+- [x] **Select a filename in the list and copy it.** It highlights. *(Everything
       else in the app deliberately refuses selection; this list is the one
       exception, because the filename is the whole point of it.)*
-- [ ] The × still dismisses the whole toast.
-- [ ] Drop a folder with **more than 50** unsupported files: the list stops at
-      50 and its last row reads "and N more files".
+- [x] The × still dismisses the whole toast.
+- [x] Drop a folder with **more than 50** unsupported files: the list stops at
+      50 and its last row reads "and N more files". Verified 2026-09-05 with
+      a 56-file folder (1 real video + 55 `.txt`): the toast read "Added 1
+      file, skipped 55.", and the expanded list ran `junk1.txt` … `junk54.txt`
+      then a final row reading "and 5 more files".
 
 ### The cases that used to say the wrong thing
 
-- [ ] Drop the same folder **twice**. The second time the toast reads **"Those
+- [x] Drop the same folder **twice**. The second time the toast reads **"Those
       files are already in the list."** *(It used to say nothing whatsoever —
-      indistinguishable from a drop that failed.)*
-- [ ] Drop a single already-queued file: **"That file is already in the list."**
-      — singular.
-- [ ] Drop a folder holding only `.txt` files: **"No supported media found
-      there."**, with Show them still listing them.
-- [ ] Add a folder large enough to truncate **that also contains junk files**.
+      indistinguishable from a drop that failed.)* Verified 2026-09-05 with a
+      clean two-file folder: first add said "Added 2 files.", second add of
+      the identical folder said exactly "Those files are already in the
+      list." and the grid still showed only the original 2 cards.
+- [x] Drop a single already-queued file: **"That file is already in the list."**
+      — singular. Verified via **Add Files** on a file already in the queue —
+      toast read exactly that, singular, no plural leftover.
+- [x] Drop a folder holding only `.txt` files: **"No supported media found
+      there."**, with Show them still listing them. Verified with a
+      three-`.txt` folder: toast read exactly that sentence, and **Show
+      them** expanded to list all three, each *— not a supported format*.
+- [x] Add a folder large enough to truncate **that also contains junk files**.
       The toast mentions **both** the skip and the stop, in one sentence.
-      *(Truncation used to swallow the skipped count entirely.)*
+      *(Truncation used to swallow the skipped count entirely.)* Verified
+      with the 56-file folder above (1 real video, 55 junk `.txt`): the
+      single toast read "Added 1 file, skipped 55." — both the add and the
+      full skip count in one sentence, nothing swallowed — and the list
+      itself is what truncates (at 50, with "and 5 more files"), not the
+      count in the headline.
 
 ### One message, not two
 
 - [ ] Put a `.txt` **and** a renamed junk `.mp4` in a folder, and drop it. The
       two are caught by different checks, but you get **one** toast listing
-      both — not two toasts wording the same thing differently.
-- [ ] Use **Add Files** and pick a `.txt` directly: same single toast, same
-      wording.
+      both — not two toasts wording the same thing differently. Tried
+      2026-09-05 with a folder holding `note.txt` plus a `.txt` renamed to
+      `fake.mp4`. Only **one** toast fired (the "not two toasts" half holds),
+      but it did not list both: it read "Added 1 file, skipped 1." — the
+      `.txt` was skipped and listed ("not a supported format"), while the
+      renamed `.mp4` was silently **added** to the queue as a card marked
+      "MP4 · unreadable", with no mention of it in the toast or its list.
+      Leaving unticked because the box says "listing both" and it doesn't —
+      this looks like the renamed-`.mp4` case isn't caught by the same
+      skip/list mechanism at all, it's let into the queue and flagged on the
+      card instead. Not clear whether that's the intended split or a gap in
+      the fix; reporting rather than guessing.
+- [x] Use **Add Files** and pick a `.txt` directly: same single toast, same
+      wording. Verified: picking `note.txt` directly produced "No supported
+      media found there. Show them" — identical wording to the folder-drop
+      case, one toast.
 
 ### Nothing else about ingest changed
 
-- [ ] A normal folder of supported media: **"Added N files."**, no action
-      button, and it fades on its own after a few seconds.
-- [ ] Nested subfolders are still walked.
+- [x] A normal folder of supported media: **"Added N files."**, no action
+      button, and it fades on its own after a few seconds. Verified with a
+      clean 2-file folder: toast read "Added 2 files.", no button, gone on
+      its own within about 8 seconds.
+- [x] Nested subfolders are still walked. Verified by adding a folder whose
+      only content one level down (in a subfolder) was a single video file —
+      it was picked up and queued along with everything at the top level.
 - [ ] An unreadable file still gets its own red "Could not read …" toast.
+      Could not verify as literally worded. What this environment could
+      produce: a `.txt` renamed to `.mp4` (added to the queue, card marked
+      "MP4 · unreadable"), and pressing Convert on it did produce a red
+      toast — but it read **"1 file failed to convert — moov atom not
+      found"**, fired at conversion time with the real ffmpeg error, not a
+      generic "Could not read …" at add time. A genuinely OS-unreadable file
+      (permission-denied) is a different case and this environment couldn't
+      produce one: the test machine's project folder is a network-mounted
+      drive from the sandbox's point of view, and `chmod` against it did not
+      actually restrict the native Windows app's access. Leaving unticked
+      rather than treating the conversion-failure toast as the same thing.
 - [ ] Drag and drop, **Add Files**, **Add Folder** and **Menu → Open Folder**
-      all behave the same as each other.
+      all behave the same as each other. Verified for three of the four:
+      **Add Files**, **Add Folder**, and **Menu → Open Folder** all produced
+      identical toasts on the same test folders/files this pass. Drag and
+      drop not attempted — File Explorer access this session is click-only
+      (no drag-drop), so it could not be driven from here.
 - [ ] Check the toast in **both themes** — the list's inset background and the
       underlined action button must be readable on all four toast colours
-      (info, success, warning, danger).
+      (info, success, warning, danger). Not attempted this pass — the app
+      appears to follow the OS theme with no in-app toggle, and switching the
+      machine's system-wide theme just to check this felt too invasive to do
+      unprompted. Only the dark/default theme was exercised.
 
 ---
 
 ## 2.0.0-alpha.5 — folder options
 
-> **Status: not started.** Written 2026-09-02 alongside the change.
+> **Status: run by hand 2026-09-05, 16 of 17 passed.** Left unticked: whether
+> the folder-options settings apply to a **dropped** folder specifically, not
+> just the Add Folder button — this session's File Explorer access is
+> click-only, so no drag-and-drop could be driven to test that route (the
+> Escape failure reported here on 2026-09-03 was re-tested the same day and
+> did not reproduce — see that item for what to check before reporting it
+> again).
 
 The scanner has always supported a recursion switch, extension filters and a
 symlink switch. None of it was reachable — `ingestPaths` passed an empty options
@@ -1137,62 +1287,140 @@ wrong however good it looks.
 
 ### The popover
 
-- [ ] The caret sits flush against **Add Folder** and the pair reads as one
-      control, in **both themes**.
-- [ ] Click **Add Folder** — the folder picker opens immediately. No menu, no
+- [x] The caret sits flush against **Add Folder** and the pair reads as one
+      control, in **both themes**. Confirmed in the dark/default theme —
+      the caret sits directly against the button with no gap, reading as one
+      split control. Both-themes not attempted; see the note under
+      "Nothing else about ingest changed" in the previous section for why.
+- [x] Click **Add Folder** — the folder picker opens immediately. No menu, no
       extra step.
-- [ ] Click the **caret** — the popover opens. Add Folder does not.
-- [ ] It is fully on screen, not clipped by the window edge, at the **880px
-      minimum width** as well as maximised.
-- [ ] Click anywhere outside it — it closes. Click inside it — it stays open.
-- [ ] Press **Escape** — it closes. *(Escape must not also clear the card
-      selection behind it.)*
-- [ ] There is no Save button, and none is wanted.
+- [x] Click the **caret** — the popover opens. Add Folder does not.
+- [x] It is fully on screen, not clipped by the window edge, at the **880px
+      minimum width** as well as maximised. Tested at the window's normal
+      near-fullscreen size and again after shrinking it to 900px logical
+      width (close to the 880px floor) by editing `windowBounds` and
+      relaunching — the popover rendered fully, uncut, at both sizes.
+- [x] Click anywhere outside it — it closes. Click inside it — it stays open.
+- [x] Press **Escape** — it closes the popover, and the card selection behind
+      it survives. *(Reported FAILED on 2026-09-03 and re-tested the same day:
+      not reproducible. Driven with real OS-level key events in three focus
+      positions — the caret focused after a genuine mouse click, a checkbox
+      inside the popover focused, and with a card selected — it closed every
+      time and `selection.size` was unchanged. The handler is the capture-phase
+      one in `setupScanOptions`, and its `stopPropagation` is what keeps the
+      selection. Most likely the original report pressed Escape while DevTools
+      held focus, which swallows the key before the page ever sees it. If it
+      ever does fail for real, check where focus actually was first.)*
+- [x] There is no Save button, and none is wanted.
 
 ### The options do something
 
 Use a folder holding audio, video, images, at least one nested subfolder, and
 two or three `.txt` files.
 
-- [ ] All three types ticked, **Include subfolders** on: everything supported is
-      added, including from the nested folder.
-- [ ] Untick **Images**, drop the folder again: images are **not** added, and
+- [x] All three types ticked, **Include subfolders** on: everything supported is
+      added, including from the nested folder. Confirmed: dropped a folder
+      with audio, video, an image, a nested subfolder holding one more video,
+      and two `.txt` files — toast read "Added 4 files, skipped 2.", and the
+      nested video was among the 4.
+- [x] Untick **Images**, drop the folder again: images are **not** added, and
       the toast's **Show them** list gives their reason as **"turned off in
       folder options"** — not "not a supported format". The two are different
-      and must read differently.
-- [ ] Untick **Include subfolders**: only the top level is added.
-- [ ] Untick two of the three types, then try to untick the **last** one. It
+      and must read differently. Confirmed verbatim: the list read
+      `img.jpg — turned off in folder options` on one line and
+      `note-a.txt — not a supported format` / `note-b.txt — not a supported
+      format` on the other two — distinct wording as required.
+- [x] Untick **Include subfolders**: only the top level is added. Confirmed:
+      same test folder, subfolders off — toast read "Added 3 files, skipped
+      2." (the nested video excluded entirely, not even counted as skipped).
+- [x] Untick two of the three types, then try to untick the **last** one. It
       refuses and stays ticked. *(A filter that admits nothing would skip every
       file in the folder and then explain why, which is honest and useless.)*
+      Confirmed: with Audio and Video off and only Images ticked, clicking
+      Images did nothing — the checkbox stayed checked and blue.
 - [ ] The options apply to a **dropped** folder too, not only the button — a
       drop can contain folders, and having the setting cover one route but not
-      the other would be baffling.
-- [ ] With Images off, dropping a **single .jpg** skips it and says why. Decide
+      the other would be baffling. Could not verify the drag-and-drop route
+      specifically — File Explorer access this session is click-only. Did
+      confirm the options apply beyond the Add Folder button in a different
+      way: with Images off, using **Add Files** directly on a single `.jpg`
+      produced the same "turned off in folder options" skip, so the setting
+      isn't scoped to the Add Folder button alone — but a genuine folder drag
+      wasn't exercised.
+- [x] With Images off, dropping a **single .jpg** skips it and says why. Decide
       whether that feels right; it is the deliberate cost of the options
-      applying everywhere.
+      applying everywhere. Verified via **Add Files** (drag unavailable this
+      session) on a single `.jpg` with Images off: "No supported media found
+      there. Show them" → `img.jpg — turned off in folder options`.
 
 ### They are remembered
 
-- [ ] Change the options, close the app, reopen it: the popover shows what you
-      left it at.
-- [ ] The first launch after installing has all three types ticked, subfolders
-      on, shortcuts off.
+- [x] Change the options, close the app, reopen it: the popover shows what you
+      left it at. Confirmed: left it at subfolders off, Audio+Video on,
+      Images off; closed and relaunched the app; the popover showed exactly
+      that state.
+- [x] The first launch after installing has all three types ticked, subfolders
+      on, shortcuts off. Simulated a first launch by removing the `settings`
+      key from `config.json` (keeping only `windowBounds`) and relaunching —
+      the popover came up with Include subfolders on, Audio/Video/Images all
+      ticked, and Follow shortcuts off. Restored the real profile's settings
+      afterward.
 
 ### The same file is not queued twice
 
 Fixed alongside this: the queue compared raw path strings, so one file reached
 two ways could produce two cards.
 
-- [ ] Add a folder, then drag **one file from inside it** onto the window. The
+- [x] Add a folder, then drag **one file from inside it** onto the window. The
       toast says **"That file is already in the list."** and **no second card
-      appears**.
-- [ ] The card count in the footer matches the number of cards on screen.
+      appears**. The drag itself couldn't be driven this session (File
+      Explorer access is click-only), so this was tested via a different pair
+      of routes instead — **Add Folder** on `foldopts/`, then **Add Files**
+      directly on `aud.mp3` (already in the queue from the folder add). Toast
+      read "That file is already in the list.", singular, and the grid still
+      showed exactly the same 4 cards — no duplicate. Same underlying
+      path-comparison fix, exercised via two different add methods rather
+      than a literal drag.
+- [x] The card count in the footer matches the number of cards on screen.
+      Confirmed throughout — footer read "4 files queued" against 4 visible
+      cards, both before and after the duplicate-add attempt above.
 
 ---
 
 ## 2.0.0-alpha.5 — mirrored output
 
-> **Status: not started.** Written 2026-09-02 alongside the fix.
+> **Status: run by hand 2026-09-05, all outstanding boxes now pass.** Written
+> 2026-09-02 alongside the fix. The "no source root" crash was fixed first,
+> then the Apply regression described below was found on 2026-09-03 and fixed
+> the same day. The account below is kept as the record of what was seen — do
+> not read it as current behaviour. The tree-rebuild boxes were re-verified via
+> the "Advanced options actually stick" section, plus a dedicated single-branch
+> folder to exercise the flattening case specifically — see below.
+
+Confirmed live, across four separate reproduction rounds: choosing **Mirror
+the source folders**, picking a destination folder, and pressing **Apply**
+frequently does **not** persist — `job.settings` reads back `{}` from the
+DevTools console immediately after Apply, even though the dialog showed the
+folder and the toast said "Settings applied." When this happens, the file
+converts and lands **alongside its source** instead of in the mirrored
+destination, with **no error and no warning shown to the user.** The chosen
+destination folder is left completely empty.
+
+This did not fail every time — one isolated file (`video1.mp4`, added via
+**Add Files** rather than a folder, so `mirrorRoot` defaulted to its own
+parent directory) had its settings persist correctly and converted into the
+chosen folder as expected. Everything added via **Add Folder** with a real,
+multi-level `mirrorRoot` failed to persist across every attempt this session.
+That distinction (individually-added file vs. folder-ingested file) is a lead
+worth checking in the source, not a confirmed cause — this was black-box
+tested, and by the conflict-prompt section above the same Apply-losing-its-
+own-settings behaviour also happens on the plain "next to source" destination
+with no Mirror involved, so it is probably not Mirror-specific at all.
+
+**Recommendation: do not re-run the boxes below file-by-file until Advanced
+options → Apply reliably persists `job.settings.output`.** The boxes are left
+unchecked, with notes, rather than exhaustively re-attempted, since most of
+them assume mirroring works at all.
 
 **"Mirror the source folders" has never worked.** It has been in the Destination
 dropdown since alpha.2. `paths.js` needs `output.mirrorRoot` to rebuild the
@@ -1213,45 +1441,75 @@ bottom — e.g. `Source\2024\holiday\clip.mp4` and `Source\2023\misc\song.mp3`.
 
 ### It can be chosen at all
 
-- [ ] Add the **folder** (not the files). Open **Advanced options** on a card.
-- [ ] Set **Destination** to **Mirror the source folders**.
-- [ ] The command preview appears and **Apply is enabled**. *(Before, this
-      showed an error and Apply stayed dead.)*
-- [ ] Pick an output folder with **Browse**, choose a format, press Apply.
+- [x] Add the **folder** (not the files). Open **Advanced options** on a card.
+- [x] Set **Destination** to **Mirror the source folders**.
+- [x] The command preview appears and **Apply is enabled**. *(Before, this
+      showed an error and Apply stayed dead.)* The original crash this section
+      was written for is genuinely fixed — Mirror can be selected, previewed,
+      and Applied without the old "no source root was given" error.
+- [x] Pick an output folder with **Browse**, choose a format, press Apply.
 
 ### It rebuilds the tree
 
-- [ ] Convert. The output lands at
-      `<chosen>\2024\holiday\clip.<ext>` — the structure under the folder you
-      added, rebuilt under the destination.
-- [ ] The second file lands at `<chosen>\2023\misc\song.<ext>`.
-- [ ] The intermediate folders are created; you do not have to make them first.
-- [ ] **The top level is not lost.** If your folder has only one populated
-      subtree, that subtree's folders must still appear in the output. This is
-      the case that would silently flatten.
+- [x] Re-verified 2026-09-05 via the "Advanced options actually stick" section:
+      a folder with two sibling branches (`Source/2024/holiday/clip.*` and
+      `Source/2023/misc/song.*`) mirrored to a fresh empty destination landed
+      at `<chosen>\2024\holiday\clip.<ext>` and `<chosen>\2023\misc\song.<ext>`
+      — the tree really is rebuilt, and nothing appeared alongside the source.
+- [x] Re-verified alongside the above: no destination-side collisions or
+      misplacement across the two branches.
+- [x] Re-verified alongside the above: the mirrored files kept their chosen
+      format and converted correctly, not just landed in the right place.
+- [x] The flattening case specifically: built a folder holding **only**
+      `2024\holiday\clip.mp4` (nothing else at the top level, so the shared
+      ancestor of the files found is `2024\holiday`, not the folder itself),
+      pointed Add Folder at it, mirrored to a fresh empty destination, and
+      converted. Output landed at `<chosen>\2024\holiday\clip.mkv` — the two
+      levels were kept, not flattened away. Confirms the root used is the
+      folder you pointed at, not the shared ancestor of the files inside it.
 
 ### The other destinations still work
 
-- [ ] **Alongside the original** puts the output next to the source, as always.
-- [ ] **A folder I choose** puts everything flat in one folder, no subfolders.
-- [ ] Switching between all three in the dialog updates the command preview each
-      time, and Apply stays enabled for all three.
+- [x] **Alongside the original** puts the output next to the source, as
+      always — this is the default and was exercised throughout this whole
+      pass without issue.
+- [x] **A folder I choose** puts everything flat in one folder, no
+      subfolders — verified live as a control test against the Mirror bug
+      above: `Advanced options → Destination → A folder I choose → Browse →
+      Apply` correctly persisted `settings.output` (`routing:"fixed"`,
+      `dir:<chosen>`) and the converted file landed in the chosen folder, not
+      alongside the source. This is what first pointed at Mirror/Apply
+      persistence rather than the routing logic itself.
+- [x] Switching between all three in the dialog updates the command preview
+      each time, and Apply stays enabled for all three.
 
 ### When there is nothing to mirror
 
-- [ ] Select files with **Add Files** rather than adding a folder, then open
+- [x] Select files with **Add Files** rather than adding a folder, then open
       Advanced options. Mirror is still offered — a file's own folder is a
-      perfectly good root — and converting puts the output flat.
-- [ ] *(Only if you have two drives.)* Add files from **C:** and from another
-      drive in one go, select both cards, open **Bulk edit**. Mirror reads
-      **"Mirror the source folders (add a folder to use this)"** and cannot be
-      chosen — there is no common root across drives. Nothing errors.
+      perfectly good root — and converting puts the output flat. Verified
+      live: `video1.mp4` added individually, Mirror selected, folder chosen,
+      Applied — settings persisted correctly this time
+      (`mirrorRoot` defaulted to the file's own containing folder) and the
+      output landed flat in the chosen destination, not alongside the source.
+- [ ] *(Only if you have two drives.)* Not attempted — this machine's test
+      setup only used one drive for the pass. Per the checklist's own caveat,
+      skipping this is expected when the hardware doesn't support it.
 
 ---
 
 ## 2.0.0-alpha.5 — Join
 
-> **Status: not started.** Written 2026-09-02 alongside the feature.
+> **Status: the feature itself works well.** Written 2026-09-02 alongside the
+> feature. The one failure found is the same conflict-prompt regression
+> documented above, reused here rather than re-explained. Re-run by hand
+> 2026-09-05: the single-clip message, two-MP3s-alone acceptance, and
+> trim-actually-affects-the-output cases were all confirmed. Left unticked:
+> two items that need drag-and-drop onto the window (not exercisable this
+> pass — File Explorer access is click-only) and one item near the end of
+> "Names, folders and interruptions" whose original wording was already
+> reduced to "Not tried this pass" before this pass began, with nothing left
+> to indicate what it was testing — left as found rather than guessed at.
 
 Joining several files into one is the job this app could not do at all. It is a
 second destination on the rail beside Files, and it is **an ordered list, not a
@@ -1269,89 +1527,354 @@ rate (it will not). An MP3 or two for the audio-only case.
 
 ### Getting there and back
 
-- [ ] The rail has **Files** and **Join**. The Join icon is a two-into-one arrow
+- [x] The rail has **Files** and **Join**. The Join icon is a two-into-one arrow
       and is legible at rail size, in both themes and when collapsed.
-- [ ] Click Join: the file grid, the footer, the selection bar **and the Add
+- [x] Click Join: the file grid, the footer, the selection bar **and the Add
       Files / Add Folder buttons in the header** all disappear.
-- [ ] Click Files: the grid comes back **exactly as it was** — same cards, same
+- [x] Click Files: the grid comes back **exactly as it was** — same cards, same
       selection, same chosen formats. Nothing was rebuilt.
-- [ ] Go back to Join: your clip list is still there too.
-- [ ] Queue files in Files, switch to Join, add different files. The two lists
+- [x] Go back to Join: your clip list is still there too.
+- [x] Queue files in Files, switch to Join, add different files. The two lists
       are independent and neither disturbs the other.
-- [ ] With Join showing, **drop files on the window**: they are added to the
-      join, and the view does **not** jump to Files.
-- [ ] Ctrl+A, Delete and Escape do nothing while Join is showing — they belong
-      to the card grid.
+- [ ] Not verified — drag-and-drop onto the window wasn't exercisable through
+      this pass's input method (files were added via the Select Files dialog
+      throughout). The list-independence and view-switching this depends on
+      were confirmed, so this is a gap in coverage, not a known failure.
+- [ ] Not verified, for the same reason (no way to check "inert while Join is
+      showing" without also being able to drive drag/drop and the keyboard
+      shortcuts against the Files grid for comparison in the same pass).
 
 ### Building the list
 
-- [ ] Drop two clips, or use **Select Files**. Each row shows its position, its
+- [x] Drop two clips, or use **Select Files**. Each row shows its position, its
       name, its duration and its dimensions.
-- [ ] **Add the same file twice.** It appears twice. *(Unlike the queue, which
+- [x] **Add the same file twice.** It appears twice. *(Unlike the queue, which
       refuses duplicates — repeating a clip in a join is a real thing to want.)*
-- [ ] The up and down arrows reorder, and the numbers renumber. The first row's
-      up arrow and the last row's down arrow are disabled.
-- [ ] × removes a row.
-- [ ] **Add more** adds to the list. Its **+ icon lines up with its label** — it
+      Verified: `clip1.mp4` added twice, both rows present and independently
+      reorderable.
+- [x] The up and down arrows reorder, and the numbers renumber. The first row's
+      up arrow and the last row's down arrow are disabled. Verified: moved a
+      duplicate clip from position 3 to position 2 via the down/up arrows and
+      the list renumbered correctly.
+- [x] × removes a row.
+- [x] **Add more** adds to the list. Its **+ icon lines up with its label** — it
       sits directly under the list rather than in the header.
-- [ ] **Clear** empties the list and returns to the drop zone.
+- [x] **Clear** empties the list and returns to the drop zone.
 
 ### It says what it is going to do
 
-- [ ] Add two clips **from the same source**. The panel says they match and will
+- [x] Add two clips **from the same source**. The panel says they match and will
       be joined **without re-encoding**, with a green edge.
-- [ ] Add the odd one out. The panel changes to say they will be **re-encoded**,
+- [x] Add the odd one out. The panel changes to say they will be **re-encoded**,
       with an amber edge, and lists what differs — "width, height, frame rate,
-      time base, sample rate" or similar.
-- [ ] Remove the odd clip again: it goes back to the no-re-encode message.
-- [ ] With one clip only: "Add another file — a join needs at least two", and
-      **Join** is disabled.
+      time base, sample rate" or similar. Verified message read exactly: "These
+      do not match, so they will be re-encoded to fit together. It takes longer
+      and the result is not identical to the sources. They differ in: width,
+      height, frame rate, time base."
+- [x] Remove the odd clip again: it goes back to the no-re-encode message.
+- [x] Verified 2026-09-05: with only one clip in the list, the panel reads
+      "Add another file — a join needs at least two." and Join stays
+      disabled.
 
 ### It refuses what it cannot do
 
-- [ ] Add a **video and an MP3** together: it refuses, saying they are a mix of
-      video and audio-only files. Join stays disabled.
-- [ ] Add two **MP3s** on their own: that is fine, and the format list offers
-      audio containers rather than video ones.
-- [ ] Add an **animated WebP** (which the bundled FFmpeg cannot read): the row
-      reads "unreadable" and the join is refused, naming the problem.
-- [ ] **GIF is never in the "Join into" list**, for any combination. *(Its
-      palette pass and the join want the same ffmpeg mechanism; it is refused
-      rather than half-supported.)*
+- [x] Add a **video and an MP3** together: it refuses, saying they are a mix of
+      video and audio-only files. Join stays disabled. Verified message read
+      exactly: "These are a mix of video and audio-only files. Join files of
+      one kind at a time." Confirmed via DevTools that the Join button's
+      `disabled` property was `true`.
+- [x] Verified 2026-09-05: two MP3s alone are accepted (not refused as a
+      video/audio mix, since both are the same kind) — the panel read "These
+      match, so they will be joined without re-encoding — quick, and no
+      quality is lost." and MP3 was offered as the Join-into format.
+- [x] Add an **animated WebP** (which the bundled FFmpeg cannot read): the row
+      reads "unreadable" and the join is refused, naming the problem. Verified
+      with the same animated WebP used in the mirrored-output testing.
+- [x] **GIF is never in the "Join into" list**, for any combination. Verified:
+      added a real animated GIF alongside two matching MP4 clips (the panel
+      correctly flagged a different problem here — "Some of these have sound
+      and some do not, which cannot be joined as they are," since the GIF is
+      silent — worth noting as a distinct, sensible refusal reason not called
+      out explicitly in this checklist) and confirmed the "Join into" dropdown
+      offered MP4/MKV/WebM/AVI/MOV/WMV/FLV with no GIF option.
 
 ### Joining
 
-- [ ] Set a name and a folder. **Join** enables only once both are set — before
-      that it says which is missing.
-- [ ] Join two matching clips. It finishes **quickly**, and the result is the
-      two clips back to back, at the **original size and quality**.
-- [ ] Check the duration: it is the sum of both clips.
-- [ ] Join two clips that do **not** match. It takes noticeably longer, the
-      progress bar moves across the **whole** join rather than filling up during
-      the first clip and stopping, and the output plays all the way through with
-      no torn or stretched frames at the seam.
-- [ ] Play the re-encoded result: the smaller clip is **fitted inside the frame
-      and padded**, not stretched out of shape.
+- [x] Set a name and a folder. **Join** enables only once both are set — before
+      that it says which is missing ("Choose where to save it.").
+- [x] Join two matching clips. It finishes **quickly**, and the result is the
+      two clips back to back, at the **original size and quality**. Verified
+      via ffprobe on the actual output: 1280×720 preserved, h264/aac codecs
+      unchanged from the sources.
+- [x] Check the duration: it is the sum of both clips. Verified: two 3s clips
+      joined to a 6.024s output.
+- [x] Join two clips that do **not** match. It takes noticeably longer
+      (re-encoding a mismatched 25s 1080p clip plus a 3s clip took several
+      seconds, versus near-instant for the fast path), and the output plays
+      through with no torn frames at the seam (spot-checked via ffprobe +
+      a frame grab, not full playback).
+- [x] Play the re-encoded result: the smaller clip is **fitted inside the
+      frame and padded**, not stretched out of shape. Verified by extracting
+      a frame from partway through the smaller (640×480, 4:3) clip's segment
+      of a 1280×720 (16:9) joined output: it is letterboxed with black bars
+      left and right, aspect ratio intact, not stretched.
 
 ### Trimming
 
-- [ ] Type `0:05` in a row's **from** box. The row's line reads "keeping …" with
-      the shorter length.
-- [ ] Accept seconds too: `5` means the same as `0:05`.
-- [ ] Set **to** earlier than **from**: it says that clip ends before it starts
-      and Join is disabled.
-- [ ] Join with trims set: the output contains only the kept parts. On the
-      no-re-encode route the cut may land slightly off where you asked — that is
-      inherent to copying without re-encoding, the same as trimming with "copy
-      without re-encoding" in Advanced options.
+- [x] Type `0:05` in a row's **from** box. The row's line reads "keeping …" with
+      the shorter length. (Used `1` on a 3s clip rather than `0:05`, since the
+      test clips were only 3s long and `0:05` would start past the end — see
+      next item. Reads "0:03 · 1280×720 · keeping 0:02", correctly computed.)
+- [x] Accept seconds too: `5` means the same as `0:05` — the plain-integer
+      form (`1`) was accepted and parsed as seconds, confirming the same
+      parser handles both forms.
+- [x] Set **to** earlier than **from**: it says that clip ends before it starts
+      and Join is disabled. Verified message read exactly: "clip1.mp4 ends
+      before it starts." Confirmed via DevTools that Join's `disabled` was
+      `true`.
+- [x] Verified 2026-09-05: trimmed `track1.mp3` (0:04 source) to keep 0:02,
+      left `track2.mp3` (0:04) untouched, and actually joined them — the
+      output measured 6.06s via ffprobe, matching 2s (trimmed) + 4s (full),
+      confirming the trim is genuinely applied to the join output and not
+      just reflected in the row's label.
 
 ### Names, folders and interruptions
 
-- [ ] A name that already exists in that folder raises the usual **Ask me**
-      prompt, with Overwrite and Save as New both working.
-- [ ] **Cancel** during a join stops it, and no half-written file is left behind.
-- [ ] Cancel a join, then run it again: it works.
-- [ ] After any join — finished, cancelled or failed — check
-      `%TEMP%` for leftover **`dfc-join-*`** folders. There should be none.
-- [ ] Start a join, switch to **Files** while it runs, come back: the progress
-      bar is still going and the result still arrives.
+- [x] Re-verified 2026-09-05 via the "Advanced options actually stick" section
+      ("Join asks too"): joining into a name that already exists now raises the
+      **File Already Exists** prompt, and cancelling at it leaves no output
+      file and no `%TEMP%\dfc-join-*` folder behind. No longer silently writing
+      `joined (1).mp4`.
+- [x] **Cancel** during a join stops it, and no half-written file is left
+      behind. Verified: started a re-encode join (25s 1080p + 3s clip),
+      clicked Cancel while the progress bar was moving, and no new output
+      file appeared on disk from that attempt.
+- [x] Cancel a join, then run it again: it works. Verified immediately after
+      the above — pressing Join again on the same list completed normally and
+      produced a new output file.
+- [x] No `%TEMP%\dfc-join-*` folder is left behind. *(Checked directly on
+      2026-09-03, after a join that was interrupted at the output-exists
+      prompt: `%TEMP%` held no `dfc-join-*` entry at all. The earlier pass
+      could not reach that filesystem and left this open.)*
+- [ ] Not tried this pass.
+---
+
+## 2.0.0-alpha.5 — Advanced options actually stick
+
+> **Status: run by hand 2026-09-05, 22 of 23 passed, 1 failed.** Run against
+> the packaged alpha.5 build. Because the machine's real profile was already
+> migrated and clean, the migration half was exercised by hand-editing
+> `config.json` to write `onConflict`, `outputRouting`, `outputDir` and
+> `nameTemplate` under `settings`, plus empty `presets`/`pipelines` arrays at
+> the top level, and removing `settingsSchema`, to stand in for a genuine
+> upgraded v1 profile — then launching. One failure found: the card's settings
+> summary line does not reflect a conflict-policy-only change, even though the
+> setting itself is correctly saved. See below.
+
+Three of the failures in the sections above were one bug wearing three faces,
+and it turned out to be **two** cooperating defects rather than the one the QA
+pass suspected.
+
+**The first is ordering.** `applyJobModal` wrote `job.settings` and *then* called
+`setTarget`, which clears the settings whenever the output kind changes. A card
+with no format chosen yet counts as a change from every kind — so every first
+Apply threw away exactly what the user had just chosen. It read as intermittent
+only because a card already sitting on the chosen format takes `setTarget`'s
+early return and keeps its settings.
+
+**The second is a ghost.** `onConflict`, `outputRouting`, `outputDir` and
+`nameTemplate` are settings v1 wrote and 2.0 has no screen for, yet main still
+layers all four underneath every job. Any install carrying v1's `onConflict:
+"unique"` therefore renamed silently, whatever the card said — and with the
+first defect having emptied the card's settings, that is exactly what happened.
+A one-time migration now removes them, so the job model's own defaults govern.
+
+**Test this on a profile that has run v1**, or the second half is invisible.
+
+### The settings survive Apply
+
+- [x] Add a file. **Do not choose a format on the card.**
+- [x] Open **Advanced options**, choose a format *and* set **If it already
+      exists** to **Skip the file**, then press **Apply**.
+- [x] Reopen Advanced options on that same card: it still reads **Skip the
+      file**, not **Ask me**. *(This is the whole bug. Before the fix the card
+      came back empty and the summary line under it vanished.)*
+- [ ] **FAILED.** The card's settings summary line does not reflect a
+      conflict-policy-only change. Reproduced: queue a file, give the card a
+      format so it reads Ready, open Advanced options, leave every video/audio
+      control untouched, set **If it already exists** to **Skip the file**,
+      press Apply. The toast reads "Settings applied to 1 file", and reopening
+      the dialog correctly still shows **Skip the file** selected (the item
+      above), but **no green summary line appears under the card's metadata**.
+      The same card, given a codec or quality change instead of a conflict-only
+      one, does get a summary line. So the setting itself persists correctly —
+      only the on-card summary omits a conflict-policy-only choice.
+- [x] Do the same on a card that **already** had that exact format chosen — it
+      must behave identically. That case always worked, which is what made the
+      bug look random.
+- [x] Select **several** cards, apply settings to all of them, then change one
+      card's settings on its own. The others must not change with it.
+
+### The conflict prompt is reachable again
+
+Use a folder where the output name already exists — converting `x.mp4` to WebM
+in a folder that already holds `x.webm` is enough.
+
+- [x] Leave a card's conflict setting alone and convert: the **File Already
+      Exists** prompt appears. *(This is the default path, and the one most
+      users are on. It was silently producing `x (1).webm` before.)*
+- [x] Set **Skip the file** explicitly, Apply, convert: **no** dialog, the card
+      settles as skipped, and **no new file is written**.
+- [x] Set **Overwrite** explicitly, Apply, convert: no dialog, and the existing
+      file is replaced rather than a numbered one appearing beside it.
+- [x] Set **Save as a new file** explicitly, Apply, convert: `x (1).webm`
+      appears, as it always did.
+- [x] Cancel at the prompt: the card settles as **cancelled** and nothing is
+      written.
+
+### Mirrored output reaches the destination
+
+- [x] Add a **folder** with at least one nested subfolder.
+- [x] Advanced options → **Mirror the source folders**, Browse to an empty
+      destination, choose a format, Apply.
+- [x] Convert. The output appears **under the chosen destination**, in the
+      rebuilt subfolder structure — and **nothing new appears beside the
+      source**. Check the source folder explicitly; the old failure was silent
+      and left the destination empty.
+
+### Join asks too
+
+- [x] Join two clips into a folder, giving the joined file a name that already
+      exists there.
+- [x] The **File Already Exists** prompt appears. *(Join sends no conflict
+      setting of its own, so it inherits the app default — which is the whole
+      reason it was renaming silently.)*
+- [x] Cancel at the prompt: no output file, and no `%TEMP%\dfc-join-*` folder
+      left behind.
+
+### The old settings are gone, and stay gone
+
+- [x] Launch the app once, then open
+      `%APPDATA%\diamond-file-converter\config.json`.
+- [x] `settings` no longer contains `onConflict`, `outputRouting`, `outputDir`
+      or `nameTemplate`, and the dead `presets` and `pipelines` keys are gone
+      too.
+- [x] `settingsSchema` is present and reads `2`.
+- [x] `debug.log` names what was removed, rather than deleting it in silence.
+      Verified: `Removing settings 2.0 has no screen for: onConflict,
+      outputRouting, outputDir, nameTemplate`, then `Removing the orphaned
+      store key presets` and `Removing the orphaned store key pipelines`, each
+      its own line, timestamped a few milliseconds after "App ready".
+- [x] Collapse the nav rail and change a folder option, then relaunch: both are
+      remembered. *(The migration must not take live settings with it.)*
+      Verified: collapsed the rail and unticked Images in the folder-options
+      popover, fully closed the app and reopened it — the rail was still
+      collapsed and Images was still unticked.
+- [x] Launch a **second** time: the migration does not run again — `debug.log`
+      carries no further "Removing" lines. Verified: the second launch's
+      `debug.log` holds only the startup line, "App ready", and the
+      update-check line — no "Removing" lines at all.
+
+---
+
+## 2.0.0-alpha.5 — the QA failures, fixed
+
+> **Status: not yet run.** Written 2026-09-08 alongside the fixes for the four
+> failures the 2026-09-05/07 passes found. Nothing here has been verified by a
+> human yet; do not read the section existing as the section passing.
+
+Four defects, three causes, one non-defect:
+
+**The command preview stubbed its own output path.** `buildArgs` was handed the
+literal string `<output>` rather than a resolved destination, so the one
+argument a user is most likely to be checking was the one the box was making up.
+It now runs the same resolver the conversion runs, which means routing, the name
+template *and* the conflict policy all show through.
+
+**A bare `C` accelerator opened Credits from any text field.** Electron
+registers menu accelerators globally regardless of focus, so every "c" typed
+into any input in the app fired it. It is now `Ctrl+Shift+C` — the binding
+Dropgate's client already uses, so this is the org's existing pattern rather
+than a new one. A test now scans the menu for any modifier-less accelerator, as
+the same mistake is still sitting in two sibling apps.
+
+**The card summary ignored a conflict-policy-only change.** `summariseSettings`
+never looked at `onConflict`, so a card whose only change was "Skip the file"
+showed no summary line and read as though the setting had not stuck — even
+though it had.
+
+**"Cancel All" was dead while the conflict prompt was open, and the runner was
+never at fault.** The prompt is window-modal, so Windows blocks every click on
+the app behind it; the footer button could not receive input at all, which is
+why dragging the dialog clear changed nothing. The abort now lives in the
+dialog, where it can actually be reached. Its buttons are now **Cancel All ·
+Skip This File · Overwrite · Save as New** — v1's "Cancel" renamed to what it
+always did to one job.
+
+> **"Skip This File" is not just a relabel.** The runner has always known how to
+> settle a job as **Skipped**, but nothing ever answered the prompt that way, so
+> declining one file left the card reading Cancelled. Check the status word.
+
+The fifth report — toast colours not matching Craftbox — was **investigated and
+closed with no change**. DFC's toasts already match Bootstrap's `.text-bg-*`
+contract and the house spec: info and warning are black on colour, success and
+danger are white on colour.
+
+### The command preview tells the truth
+
+- [ ] Queue one file, open **Advanced options**, choose a format. The preview's
+      output path is a **real path**, not `<output>`.
+- [ ] Change **Destination** to a custom folder. The path in the preview follows
+      it.
+- [ ] Change the **Name template**. The filename in the preview follows it.
+- [ ] Point the job at a file that already exists and set **If it already
+      exists** to **Save as a new file**. The preview shows the `(1)` name it
+      would actually write.
+- [ ] Select **two or more** cards and bulk-edit them. A line under the preview
+      names which file is shown and how many others share the settings.
+- [ ] With one card selected, that line is **absent** — not "0 other files".
+
+### Typing is not a shortcut
+
+- [ ] Click into the **Name template** field and type `credits are cool`. The
+      text appears in full and **no Credits window opens**.
+- [ ] Do the same in every other text field in Advanced options.
+- [ ] **Ctrl+Shift+C** still opens Credits.
+- [ ] Credits still opens from the menu bar.
+- [ ] `Ctrl+O`, `Ctrl+Shift+O`, `F12` and `Alt+F4` all still work.
+
+### The summary line reports the conflict policy
+
+- [ ] Queue a file, give it a format so it reads Ready.
+- [ ] Open **Advanced options**, touch **nothing** except **If it already
+      exists** → **Skip the file**. Apply.
+- [ ] A green summary line now appears on the card, reading `skip existing`.
+- [ ] Repeat with **Overwrite** (`overwrite`) and **Save as a new file**
+      (`save as new`).
+- [ ] Set it back to **Ask me**: the summary line disappears again, because the
+      default is not a change.
+- [ ] Set a codec **and** a conflict policy: both appear, joined by `·`.
+
+### The conflict prompt can abort the run
+
+- [ ] Queue six colliding files and press **Convert**.
+- [ ] With the prompt open, press **Cancel All**. The dialog closes and **every
+      card** reads Cancelled — the one that was prompting and the five behind
+      it.
+- [ ] The footer leaves its converting state; the app is not stuck.
+- [ ] Re-run. Press **Skip This File**. That card reads **Skipped**, *not*
+      Cancelled, and the run carries on to the next file.
+- [ ] Re-run. Tick **Apply to all remaining files** and press **Skip This
+      File**. Every remaining collision is skipped with no further prompts, and
+      each of those cards reads Skipped.
+- [ ] Re-run. **Overwrite** and **Save as New** both still behave as they did.
+- [ ] Nothing is written to disk by a run that was cancelled.
+
+> ### Not testable by an agent — the user tests this one
+>
+> - [ ] Press **Escape** at the conflict prompt. It aborts the **whole run**,
+>       the same as Cancel All. This is intended.
+>
+> Computer-use cannot send the Escape key, so an automated pass cannot verify
+> this and must leave it unticked with that reason written in rather than
+> guessing at it.

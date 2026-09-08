@@ -280,6 +280,16 @@
         pcm_s16le: "PCM 16-bit", pcm_s24le: "PCM 24-bit", pcm_f32le: "PCM 32-bit float",
     };
 
+    /* Terser than the select in the dialog, because a summary line is a list of
+       fragments rather than a sentence — "Skip the file" reads oddly with a
+       codec either side of it, "skip existing" does not. "ask" has no entry: it
+       is the default and never reaches here. */
+    const CONFLICT_LABELS = {
+        overwrite: "overwrite",
+        unique: "save as new",
+        skip: "skip existing",
+    };
+
     /** Whether a target can stream-copy, i.e. remux without re-encoding. */
     /**
      * Whether "copy without re-encoding" is worth offering.
@@ -404,6 +414,11 @@
             const o = settings.output;
             if (o.routing && o.routing !== "alongside") parts.push(o.routing === "mirror" ? "mirrored" : "custom folder");
             if (o.nameTemplate && o.nameTemplate !== "{name}") parts.push("renamed");
+            // "ask" is the default and stays silent, the same way "alongside"
+            // and "{name}" do above. Without this a card whose only change was
+            // the conflict policy showed no summary line at all, so a setting
+            // that had genuinely been applied looked like it had not stuck.
+            if (o.onConflict && o.onConflict !== "ask") parts.push(CONFLICT_LABELS[o.onConflict] || o.onConflict);
         }
 
         return parts.length > 0 ? parts.join(" · ") : null;

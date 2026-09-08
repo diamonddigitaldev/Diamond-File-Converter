@@ -1,6 +1,6 @@
 {
     "name": "diamond-file-converter",
-    "version": "2.0.0-alpha.4",
+    "version": "2.0.0-alpha.5",
     "description": "An Electron-based Windows app for converting audio, video, and image files.",
     "main": "src/main.js",
     "funding": {

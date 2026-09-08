@@ -1317,6 +1317,7 @@ function schedulePreview() {
         const sample = jobs.find(j => modalScope.includes(j.id));
         if (!target || !sample) {
             $("jm-preview").textContent = "Choose a format to see the command.";
+            $("jm-preview-note").textContent = "";
             $("jm-errors").textContent = "";
             return;
         }
@@ -1328,6 +1329,17 @@ function schedulePreview() {
             { inputPath: sample.filePath, targetExt: target, ...settings,
               output: withMirrorRoot(sample, settings.output) });
         $("jm-preview").textContent = `ffmpeg ${result.args.join(" ")}`;
+
+        // One command can only describe one file, and a bulk edit is usually
+        // several. Saying whose it is beats silently showing the first card's
+        // and letting it be read as the whole batch — every other file differs
+        // only in the paths, which are exactly the part that is not shared.
+        const others = modalScope.length - 1;
+        $("jm-preview-note").textContent =
+            others <= 0 ? ""
+            : others === 1 ? `Showing ${p.basename(sample.filePath)}. One other file uses these settings with its own paths.`
+            : `Showing ${p.basename(sample.filePath)}. ${others} other files use these settings with their own paths.`;
+
         $("jm-errors").textContent = result.ok ? "" : result.errors.join(" ");
         $("jm-apply").disabled = !result.ok;
     }, 180);
@@ -1337,14 +1349,24 @@ function applyJobModal() {
     const target = $("jm-target").value || null;
     const settings = readSettingsFromForm();
 
+    // The format is set FIRST, and the order is load-bearing. setTarget clears
+    // job.settings whenever the output kind changes, and a card that has no
+    // format yet counts as a change from every kind — so applying settings
+    // before it threw away everything the user had just chosen, on every first
+    // Apply. It read as intermittent because a card already sitting on the
+    // chosen format takes setTarget's early return and kept its settings.
+    if (target) setTarget(modalScope, target);
+
     for (const job of jobs) {
         if (!modalScope.includes(job.id)) continue;
         if (job.status === "running") continue;
 
-        job.settings = settings;
+        // Each card gets its own copy. One shared object across a bulk edit
+        // works only for as long as nothing ever edits a single card's settings
+        // in place, which is not a property worth relying on.
+        job.settings = structuredClone(settings);
         updateCard(job);
     }
-    if (target) setTarget(modalScope, target);
 
     jobModal.hide();
     const n = modalScope.length;

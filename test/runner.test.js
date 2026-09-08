@@ -246,3 +246,53 @@ test("runner: answering cancel settles the job without spawning", async () => {
         cleanup();
     }
 });
+
+// ---------------------------------------------------------------------------
+// Aborting the whole run from inside the prompt
+// ---------------------------------------------------------------------------
+
+// QA on alpha.5 pressed the footer's "Cancel All" with the prompt open and
+// nothing happened. The cause was not here — the dialog is window-modal, so the
+// click never reached the page at all — and the fix moved the abort into the
+// dialog. That makes this path, which had no caller before, the one the button
+// now depends on, so it is worth driving for real.
+test("runner: cancelAll while a job is parked at the prompt settles the whole batch", async () => {
+    const { jobs, cleanup } = collidingJobs(6);
+    try {
+        const held = heldPromise();
+        let spawned = 0;
+        let idleCount = 0;
+
+        const runner = new JobRunner({
+            ffmpegPath: "ffmpeg",
+            concurrency: 1,
+            spawn: () => {
+                spawned++;
+                const child = fakeChild();
+                setImmediate(() => child.emit("close", 0));
+                return child;
+            },
+            conflictResolver: () => held.promise,
+        });
+        runner.on("idle", () => { idleCount++; });
+
+        runner.enqueueAll(jobs);
+        runner.start();
+        await settle();
+
+        assert.equal(spawned, 0, "nothing converts until the first prompt is answered");
+
+        // The order main uses: the runner is told first, and the resolver only
+        // then returns, because the parked job cannot be killed from outside.
+        runner.cancelAll();
+        held.release({ action: "cancel" });
+        for (let i = 0; i < 40; i++) await settle();
+
+        assert.equal(spawned, 0, "aborting a run must not start a conversion on the way out");
+        assert.deepEqual([...new Set(jobs.map(j => j.status))], [STATUS.CANCELLED],
+            "every card ends Cancelled — the parked one and the five behind it");
+        assert.equal(idleCount, 1, "the run must end, or the footer never leaves Cancel All");
+    } finally {
+        cleanup();
+    }
+});

@@ -4,7 +4,8 @@ const fs = require("fs");
 const { spawn } = require("child_process");
 const path = require("path");
 
-const { APP_NAME, IPC, WINDOW, LOG, ARGV_BATCH_DEBOUNCE_MS, SETTINGS_DEFAULTS } = require("./constants");
+const { APP_NAME, IPC, WINDOW, LOG, ARGV_BATCH_DEBOUNCE_MS, SETTINGS_DEFAULTS,
+        LEGACY_STORE_KEYS, SETTINGS_SCHEMA_VERSION, pruneLegacySettings } = require("./constants");
 const formats = require("./core/formats");
 const { createJob, createJoinJob, validateJob, validateJoin, defaultModeFor, STATUS } = require("./core/job");
 const { JobRunner, defaultConcurrency } = require("./core/runner");
@@ -63,6 +64,45 @@ const store = new Store({
         settings: SETTINGS_DEFAULTS,
     }
 });
+
+/**
+ * One-time cleanup of keys v1 wrote and 2.0 cannot reach. See constants.js for
+ * why they have to go rather than simply be ignored.
+ *
+ * Guarded by a version marker so it runs once. An unconditional prune would eat
+ * a value a future preferences screen legitimately wrote, on the very next
+ * launch, which is the same class of bug in the opposite direction.
+ */
+function migrateStore() {
+    if (store.get("settingsSchema") === SETTINGS_SCHEMA_VERSION) return;
+
+    const { settings, removed } = pruneLegacySettings(store.get("settings"));
+    if (removed.length > 0) {
+        log(LOG.INFO, `Removing settings 2.0 has no screen for: ${removed.join(", ")}`);
+        store.set("settings", settings);
+    }
+    for (const key of LEGACY_STORE_KEYS) {
+        if (store.has(key)) {
+            log(LOG.INFO, `Removing the orphaned store key ${key}`);
+            store.delete(key);
+        }
+    }
+
+    store.set("settingsSchema", SETTINGS_SCHEMA_VERSION);
+}
+
+/**
+ * The app-wide settings, with the defaults underneath.
+ *
+ * electron-store's `defaults` replace the whole `settings` key the first time
+ * anything writes to it, and the renderer only ever writes `scan` and
+ * `navCollapsed` — so reading the key raw hands back an object missing every
+ * other field, and `?? SETTINGS_DEFAULTS` never fires because the object it is
+ * guarding is present. Merging is what actually restores a default.
+ */
+function appSettings() {
+    return { ...SETTINGS_DEFAULTS, ...(store.get("settings") ?? {}) };
+}
 
 let mainWindow;
 let runner = null;
@@ -250,7 +290,7 @@ function setupMenu() {
         },
         {
             label: "Credits",
-            accelerator: "C",
+            accelerator: "CmdOrCtrl+Shift+C",
             click: () => { createCreditsWindow(); }
         }
     ];
@@ -303,7 +343,7 @@ function filePathsFromArgv(argv) {
 function getRunner() {
     if (runner) return runner;
 
-    const settings = store.get("settings") ?? SETTINGS_DEFAULTS;
+    const settings = appSettings();
 
     runner = new JobRunner({
         ffmpegPath: getFfmpegPath(),
@@ -339,6 +379,12 @@ let conflictPromptChain = Promise.resolve();
 /** Turn a chosen action into the result the runner expects. */
 function applyConflictChoice(choice, candidatePath, isDirectory) {
     if (choice === "cancel") return { action: "cancel" };
+    // The runner has always known how to settle a job as Skipped — it is what
+    // the per-card "Skip the file" policy resolves to — but nothing ever
+    // answered the prompt with it, so choosing not to convert one file left the
+    // card reading Cancelled instead. Same status vocabulary, now reachable
+    // from the dialog too.
+    if (choice === "skip") return { action: "skip" };
     if (choice === "overwrite") return { action: "write", outputPath: candidatePath };
     return {
         action: "write",
@@ -347,8 +393,16 @@ function applyConflictChoice(choice, candidatePath, isDirectory) {
 }
 
 /**
- * The output-exists prompt, with v1's exact button set so the behaviour users
- * already know is unchanged.
+ * The output-exists prompt.
+ *
+ * This departs from v1's button set, which was kept unchanged until now. It had
+ * to: the dialog is window-modal, so while it is open Windows blocks every
+ * click on the app behind it — including the footer's own "Cancel All", which
+ * left a user who wanted to abort a batch with no reachable way to say so.
+ * Dragging the dialog aside does not help, because position was never the
+ * problem. The abort therefore lives in the only surface that can receive
+ * input, and v1's "Cancel" is renamed to "Skip This File", which is what it
+ * always did to a single job.
  *
  * The checkbox matters: jobs run through a concurrency pool, so without a way
  * to answer once for the whole batch, converting fifty files into a folder
@@ -384,14 +438,29 @@ async function promptForConflict(candidatePath, isDirectory) {
         detail: isDirectory
             ? "A folder with this name is already in the destination."
             : "A file with this name is already in the destination.",
-        buttons: ["Cancel", "Overwrite", "Save as New"],
-        defaultId: 2,
+        buttons: ["Cancel All", "Skip This File", "Overwrite", "Save as New"],
+        defaultId: 3,
         cancelId: 0,
         checkboxLabel: "Apply to all remaining files",
         checkboxChecked: false,
     });
 
-    const choice = ["cancel", "overwrite", "unique"][result.response] ?? "cancel";
+    // An out-of-range response is a dismissed dialog, which cancelId already
+    // defines as Cancel All, so the fallback matches it rather than inventing a
+    // gentler answer the button set does not offer.
+    const choice = ["cancelAll", "skip", "overwrite", "unique"][result.response] ?? "cancelAll";
+
+    // Cancelling the run is a decision about the batch, not about this file, so
+    // it is answered here rather than in applyConflictChoice — and it is never
+    // remembered as the batch choice, because there is no batch left to apply
+    // it to. This job is not settled here either: the runner re-reads
+    // _cancelledAll before it looks at the answer, and finishes it as Cancelled
+    // on the way past.
+    if (choice === "cancelAll") {
+        if (runner) runner.cancelAll();
+        return { action: "cancel" };
+    }
+
     if (result.checkboxChecked) conflictChoiceForBatch = choice;
 
     return applyConflictChoice(choice, candidatePath, isDirectory);
@@ -422,7 +491,7 @@ function runJobToCompletion(job) {
 // ── IPC ──────────────────────────────────────────────────────────────────────
 
 ipcMain.handle(IPC.JOB_RUN, async (_event, spec) => {
-    const settings = store.get("settings") ?? SETTINGS_DEFAULTS;
+    const settings = appSettings();
 
     const job = createJob({
         ...spec,
@@ -473,7 +542,7 @@ ipcMain.handle(IPC.JOB_RUN, async (_event, spec) => {
 });
 
 ipcMain.handle(IPC.JOIN_RUN, async (_event, spec) => {
-    const settings = store.get("settings") ?? SETTINGS_DEFAULTS;
+    const settings = appSettings();
 
     // A join always names its own destination, so only the conflict policy is
     // inherited — routing and the name template describe one input becoming one
@@ -610,7 +679,15 @@ ipcMain.handle(IPC.JOB_PREVIEW, (_event, spec) => {
         const validation = validateJob(job);
         if (!validation.valid) return { ok: false, errors: validation.errors, args: [] };
 
-        return { ok: true, errors: [], args: buildArgs(job, { outputPath: "<output>", progress: false }) };
+        // The destination is resolved for real rather than stubbed with a
+        // placeholder. The point of this box is that what it shows is what will
+        // be executed, and an output path reading "<output>" broke that for the
+        // one argument the user is most likely to be checking. Routing, the
+        // name template and the conflict policy all feed it, so "Save as a new
+        // file" onto an existing target previews "clip (1).mp4" — which is what
+        // will actually be written.
+        const { outputPath } = paths.resolveOutputPath(job);
+        return { ok: true, errors: [], args: buildArgs(job, { outputPath, progress: false }) };
     } catch (err) {
         return { ok: false, errors: [err.message], args: [] };
     }
@@ -734,6 +811,9 @@ function checkForUpdatesManually() {
 
 app.whenReady().then(() => {
     log(LOG.INFO, "=== App ready ===");
+    // Before the window, because the renderer asks for settings on load and
+    // should never be handed a value the migration is about to remove.
+    migrateStore();
     probe.setFfprobePath(getFfprobePath());
     createWindow();
     setupMenu();

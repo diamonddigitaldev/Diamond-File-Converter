@@ -89,6 +89,45 @@ const SETTINGS_DEFAULTS = {
     },
 };
 
+// Settings v1 wrote that 2.0 has no way to show or change. Every one of them is
+// still layered underneath a job in main.js, so a value left over from v1 wins
+// over the card's own choice and there is no screen on which to see it, let
+// alone correct it: an install carrying onConflict "unique" silently renamed
+// every colliding output and never showed the prompt, whatever the card said.
+//
+// They are pruned rather than merely ignored, so the file on disk stops
+// disagreeing with the app. The layering in main.js stays exactly as it is —
+// it is the right shape for the day a preferences screen exists, and on that
+// day these keys come back as things the user actually chose.
+const LEGACY_SETTINGS_KEYS = ["outputRouting", "outputDir", "nameTemplate", "onConflict"];
+
+// Store keys whose code is gone: presets went with the orphaned channels in
+// c20826f, pipelines with the editor in 09eaca3.
+const LEGACY_STORE_KEYS = ["presets", "pipelines"];
+
+// Bumped whenever this list grows. The migration in main.js runs once per
+// version, so a value a future preferences screen writes is not eaten on the
+// next launch.
+const SETTINGS_SCHEMA_VERSION = 2;
+
+/**
+ * Drop the settings 2.0 cannot reach. Returns a new object; the input is left
+ * alone. Reports what it removed so the caller can say so in the log rather
+ * than deleting a user's data in silence.
+ *
+ * @param {object|null|undefined} settings
+ * @returns {{settings: object, removed: string[]}}
+ */
+function pruneLegacySettings(settings) {
+    const kept = {};
+    const removed = [];
+    for (const [key, value] of Object.entries(settings ?? {})) {
+        if (LEGACY_SETTINGS_KEYS.includes(key)) removed.push(key);
+        else kept[key] = value;
+    }
+    return { settings: kept, removed };
+}
+
 module.exports = {
     APP_NAME,
     IPC,
@@ -96,4 +135,8 @@ module.exports = {
     LOG,
     ARGV_BATCH_DEBOUNCE_MS,
     SETTINGS_DEFAULTS,
+    LEGACY_SETTINGS_KEYS,
+    LEGACY_STORE_KEYS,
+    SETTINGS_SCHEMA_VERSION,
+    pruneLegacySettings,
 };
