@@ -318,3 +318,27 @@ test("conflict: the prompt carries the abort, because nothing behind it can be c
     assert.match(main, /if \(choice === "skip"\) return \{ action: "skip" \};/,
         "Skip must settle the card as Skipped, which the runner already knows how to do");
 });
+
+test("conflict: Cancel All ends the run, not just the file it was answered on", () => {
+    // Re-QA found the button above still declining one file at a time. Two
+    // holes, both about where a batch ends: the prompts behind the answered one
+    // were chained before the abort and so were already past the runner's own
+    // cancelled check, and the runner clears that check on its next start() —
+    // which happens whenever a batch goes idle waiting for a later file to
+    // finish probing. Both let a fresh dialog open for a run already stopped.
+    //
+    // Escape is not a separate path to fix: cancelId picks button 0, which is
+    // Cancel All, so it lands on the same branch.
+    const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
+
+    assert.match(main, /if \(conflictAbort\) return \{ action: "cancel" \};/,
+        "no dialog may open for a batch that has already been aborted");
+    assert.match(main, /conflictAbort = true;\s+if \(runner\) runner\.cancelAll\(\);/,
+        "answering Cancel All must record the abort as well as tell the runner");
+    assert.match(main, /jobsInFlight === 0/,
+        "the batch is bounded by the job:run calls still outstanding, not by the runner going idle");
+    assert.ok(!/runner\.on\("idle",[^)]*conflictChoiceForBatch/.test(main),
+        "batch state cannot be scoped to idle: a batch outlives an idle whenever a later file is still being probed");
+    assert.match(main, /cancelId:\s*0,/,
+        "Escape must resolve to Cancel All, which is what the checklist promises it does");
+});

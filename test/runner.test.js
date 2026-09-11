@@ -296,3 +296,83 @@ test("runner: cancelAll while a job is parked at the prompt settles the whole ba
         cleanup();
     }
 });
+
+// ---------------------------------------------------------------------------
+// One press of Cancel All, one dialog
+// ---------------------------------------------------------------------------
+
+// The fix above moved the abort into the dialog, and a re-QA pass then found it
+// still declined only the file it was answered on: every remaining collision
+// opened a prompt of its own, so six files wanted six presses of a button
+// labelled All. Two things behind that, both about where a batch ends.
+
+test("runner: an abort does not survive the next start, so it cannot live here", () => {
+    // Every job:run nudges the pool with start(), and start() clears the abort.
+    // That is fine while a batch is one run — but the renderer submits each card
+    // separately and main probes each one before enqueueing it, so a batch whose
+    // first file is answered before its last file has finished probing empties
+    // the pool, ends the run, and starts a new one. main therefore keeps the
+    // abort itself, for as long as any job:run of the batch is outstanding.
+    const runner = new JobRunner({ ffmpegPath: "ffmpeg" });
+
+    runner.start();
+    runner.cancelAll();
+    assert.equal(runner._cancelledAll, true);
+
+    runner.start();
+    assert.equal(runner._cancelledAll, false,
+        "start() forgets the abort, which is why the runner cannot be asked whether the batch was cancelled");
+});
+
+test("runner: one Cancel All ends a batch whose files are still arriving", async () => {
+    // main's conflict resolver in miniature — prompts serialised so only one
+    // dialog is ever open, and an abort held outside the runner for the life of
+    // the batch. Transcribed rather than imported because it lives in main.js,
+    // which cannot be loaded without Electron; the pool it drives is the real
+    // one, and the pool is where the jobs that were never asked about sit.
+    const { jobs, cleanup } = collidingJobs(6);
+    try {
+        let batchAborted = false;
+        let chain = Promise.resolve();
+        let dialogs = 0;
+        let spawned = 0;
+
+        const runner = new JobRunner({
+            ffmpegPath: "ffmpeg",
+            concurrency: 4,
+            spawn: () => {
+                spawned++;
+                const child = fakeChild();
+                setImmediate(() => child.emit("close", 0));
+                return child;
+            },
+            conflictResolver: () => {
+                const mine = chain.then(() => {
+                    if (batchAborted) return { action: "cancel" };
+                    dialogs++;
+                    // The user presses Cancel All on the first dialog they see.
+                    batchAborted = true;
+                    runner.cancelAll();
+                    return { action: "cancel" };
+                });
+                chain = mine.then(() => {}, () => {});
+                return mine;
+            },
+        });
+
+        // Each file reaches the pool as its own job:run, once its probe returns.
+        for (const job of jobs) {
+            runner.enqueue(job);
+            runner.start();
+            for (let i = 0; i < 5; i++) await settle();
+        }
+        for (let i = 0; i < 40; i++) await settle();
+
+        assert.equal(dialogs, 1, "one press of Cancel All, one dialog — not one per file");
+        assert.equal(spawned, 0, "an aborted batch converts nothing on its way out");
+        assert.deepEqual([...new Set(jobs.map(j => j.status))], [STATUS.CANCELLED],
+            "every card ends Cancelled, including the ones that arrived after the abort");
+    } finally {
+        cleanup();
+    }
+});

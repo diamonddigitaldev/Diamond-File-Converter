@@ -363,15 +363,40 @@ function getRunner() {
         }
     });
 
-    // "Apply to all remaining" is scoped to one batch, not to the session.
-    runner.on("idle", () => { conflictChoiceForBatch = null; });
-
     return runner;
 }
 
-// A choice the user asked to apply to the rest of the batch. Cleared whenever
-// the runner goes idle, so it never leaks into the next run.
+// The two answers that belong to a whole batch rather than to one file: a
+// choice to apply to the rest of it, and the abort that ends it.
+//
+// A batch is one press of Convert — the renderer submits every card at once
+// and awaits them together — and the runner cannot be asked where one ends.
+// It goes idle between two files of the same batch whenever the later one is
+// still being probed, and start() clears its own _cancelledAll on the way back
+// in. Scoping this state to the runner's idle therefore threw it away mid-batch:
+// an abort answered on the first dialog was forgotten, and the next file to
+// arrive opened a dialog of its own for a run the user had already stopped.
+//
+// Counting the job:run calls that have not returned yet bounds the batch
+// properly, because the file being prompted about is itself one of them — the
+// count cannot reach zero while a prompt is open.
 let conflictChoiceForBatch = null;
+let conflictAbort = false;
+let jobsInFlight = 0;
+
+/** Run one submitted job as part of the batch it arrived with. */
+async function withBatchJob(work) {
+    if (jobsInFlight === 0) {
+        conflictChoiceForBatch = null;
+        conflictAbort = false;
+    }
+    jobsInFlight++;
+    try {
+        return await work();
+    } finally {
+        jobsInFlight--;
+    }
+}
 
 // Serialises the output-exists prompts so only one dialog is ever open.
 let conflictPromptChain = Promise.resolve();
@@ -427,6 +452,14 @@ async function resolveConflict(job, candidatePath) {
 
 /** The prompt itself. Only ever called one at a time, via resolveConflict. */
 async function promptForConflict(candidatePath, isDirectory) {
+    // Cancel All ends the batch, not just the file it was answered on. The
+    // prompts behind this one were chained before the abort and are already
+    // past the runner's own cancelled check, so without this each of them
+    // still opened a dialog of its own — six colliding files meant six presses
+    // of a button labelled All. Escape arrives here too: cancelId is 0, which
+    // is that same button.
+    if (conflictAbort) return { action: "cancel" };
+
     if (conflictChoiceForBatch) {
         return applyConflictChoice(conflictChoiceForBatch, candidatePath, isDirectory);
     }
@@ -451,12 +484,14 @@ async function promptForConflict(candidatePath, isDirectory) {
     const choice = ["cancelAll", "skip", "overwrite", "unique"][result.response] ?? "cancelAll";
 
     // Cancelling the run is a decision about the batch, not about this file, so
-    // it is answered here rather than in applyConflictChoice — and it is never
-    // remembered as the batch choice, because there is no batch left to apply
-    // it to. This job is not settled here either: the runner re-reads
-    // _cancelledAll before it looks at the answer, and finishes it as Cancelled
-    // on the way past.
+    // it is answered here rather than in applyConflictChoice. It is not kept as
+    // the batch *choice* — there is nothing left to apply one to — but it is
+    // kept as the batch's abort, which is what stops the prompts already chained
+    // behind this one from ever being shown. This job is not settled here
+    // either: the runner re-reads _cancelledAll before it looks at the answer,
+    // and finishes it as Cancelled on the way past.
     if (choice === "cancelAll") {
+        conflictAbort = true;
         if (runner) runner.cancelAll();
         return { action: "cancel" };
     }
@@ -490,7 +525,7 @@ function runJobToCompletion(job) {
 
 // ── IPC ──────────────────────────────────────────────────────────────────────
 
-ipcMain.handle(IPC.JOB_RUN, async (_event, spec) => {
+async function runSubmittedJob(spec) {
     const settings = appSettings();
 
     const job = createJob({
@@ -539,9 +574,11 @@ ipcMain.handle(IPC.JOB_RUN, async (_event, spec) => {
     }
 
     return result;
-});
+}
 
-ipcMain.handle(IPC.JOIN_RUN, async (_event, spec) => {
+ipcMain.handle(IPC.JOB_RUN, (_event, spec) => withBatchJob(() => runSubmittedJob(spec)));
+
+async function runSubmittedJoin(spec) {
     const settings = appSettings();
 
     // A join always names its own destination, so only the conflict policy is
@@ -563,10 +600,14 @@ ipcMain.handle(IPC.JOIN_RUN, async (_event, spec) => {
         log(LOG.ERROR, `Join failed: ${result.error}`);
     }
     return result;
-});
+}
+
+ipcMain.handle(IPC.JOIN_RUN, (_event, spec) => withBatchJob(() => runSubmittedJoin(spec)));
 
 ipcMain.handle(IPC.JOB_CANCEL, (_event, jobId) => getRunner().cancel(jobId));
-ipcMain.handle(IPC.QUEUE_CANCEL_ALL, () => { getRunner().cancelAll(); });
+// The footer button, reachable only when no prompt is open — but it aborts the
+// same batch, so it records it the same way.
+ipcMain.handle(IPC.QUEUE_CANCEL_ALL, () => { conflictAbort = true; getRunner().cancelAll(); });
 ipcMain.handle(IPC.QUEUE_SET_CONCURRENCY, (_event, n) => {
     getRunner().setConcurrency(n);
     store.set("settings.concurrency", n);

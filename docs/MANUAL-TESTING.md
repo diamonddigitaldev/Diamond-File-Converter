@@ -1051,25 +1051,33 @@ ordering.
 
 ### Cancel All while a prompt is open  *(it does not stop anything)*
 
-- [ ] **FAILED.** Queued six colliding files (the same `large` + `small1–5` set)
-      and pressed Convert; with the **File Already Exists** prompt open for
-      `large.webm`, clicked the footer **Cancel** button (the one that reads
-      "Cancel All" once a run is in progress) at its usual bottom-right
-      position. Nothing happened — no card changed state, the dialog stayed
-      open. Suspecting the dialog was simply covering the button, dragged the
-      dialog by its title bar to the middle of the window (it *is* a draggable
-      in-app element, not a native OS modal) so the footer button was fully
-      clear of it, and clicked Cancel again: still no effect. Answered the
-      still-open dialog with **Overwrite** — it converted `large.webm` as
-      normal, and the **next** prompt (`small1.webm`) then appeared exactly as
-      it would if Cancel All had never been pressed. Repeated the whole
-      sequence a second time with the same result. The run only stops if you
-      answer **Cancel** on the dialog itself, file by file — pressing the
-      footer Cancel/Cancel All button while any conflict prompt is open does
-      nothing, on either the first attempt or after moving the dialog out of
-      the way as the checklist suggests trying.
-- [ ] Not applicable — depends on the above.
-- [ ] Not applicable — depends on the above.
+- [x] **Re-tested 2026-09-08, fixed.** The original failure was that the
+      footer's Cancel/Cancel All button did nothing while any conflict prompt
+      was open — clicking it, even after dragging the dialog clear, had no
+      effect, and the only way to stop a run was to answer every prompt
+      individually. That is now fixed: the button no longer lives in the
+      footer at all. **Cancel All · Skip This File · Overwrite · Save as
+      New** are all inside the "File Already Exists" dialog itself, so
+      Windows' window-modal input-blocking (the actual cause, per the fix
+      notes) no longer applies to it. Clicking Cancel All now visibly does
+      something on every press: it cancels the file currently being asked
+      about and the dialog either closes or moves to the next prompt.
+      **However**, a single press does not abort the whole run in one action
+      the way the fix description implies — seven collisions queued up front
+      (independent of conversion concurrency) each need their own press. Full
+      detail and repro is in the new `## 2.0.0-alpha.5 — the QA failures,
+      fixed` section under "The conflict prompt can abort the run" — left
+      unticked there, not here, since the box in that section is the one
+      that specifically claims a single Cancel All press aborts everything.
+      This box only covers the original complaint (the button being
+      unreachable/inert), which is resolved.
+- [ ] Not applicable — depends on the above. *(Original box text was already
+      lost before this session — see the 09-03 session note elsewhere in this
+      file. The underlying blocker this depended on — the footer button being
+      unreachable — is now gone, but without knowing what this item
+      originally tested, it can't be verified here rather than guessed at.)*
+- [ ] Not applicable — depends on the above. *(Same as above — original text
+      unknown, not guessed at.)*
 
 ### The queue keeps moving after a prompt
 
@@ -1699,16 +1707,16 @@ A one-time migration now removes them, so the job model's own defaults govern.
 - [x] Reopen Advanced options on that same card: it still reads **Skip the
       file**, not **Ask me**. *(This is the whole bug. Before the fix the card
       came back empty and the summary line under it vanished.)*
-- [ ] **FAILED.** The card's settings summary line does not reflect a
-      conflict-policy-only change. Reproduced: queue a file, give the card a
-      format so it reads Ready, open Advanced options, leave every video/audio
-      control untouched, set **If it already exists** to **Skip the file**,
-      press Apply. The toast reads "Settings applied to 1 file", and reopening
-      the dialog correctly still shows **Skip the file** selected (the item
-      above), but **no green summary line appears under the card's metadata**.
-      The same card, given a codec or quality change instead of a conflict-only
-      one, does get a summary line. So the setting itself persists correctly —
-      only the on-card summary omits a conflict-policy-only choice.
+- [x] **Re-tested 2026-09-08, fixed.** Repeated the exact repro: queued a
+      file, gave it a format so it read Ready, opened Advanced options,
+      touched nothing but **If it already exists** → **Skip the file**, and
+      pressed Apply. A green summary line now appears under the card's
+      metadata, reading `skip existing`. Also re-verified Overwrite
+      (`overwrite`) and Save as a new file (`save as new`) each produce their
+      own summary line the same way, and that a codec change combined with a
+      conflict policy shows both, joined by `·` (e.g. `VP9 · skip existing`).
+      Full detail is in the new `## 2.0.0-alpha.5 — the QA failures, fixed`
+      section under "The summary line reports the conflict policy".
 - [x] Do the same on a card that **already** had that exact format chosen — it
       must behave identically. That case always worked, which is what made the
       bug look random.
@@ -1822,53 +1830,133 @@ danger are white on colour.
 
 ### The command preview tells the truth
 
-- [ ] Queue one file, open **Advanced options**, choose a format. The preview's
-      output path is a **real path**, not `<output>`.
-- [ ] Change **Destination** to a custom folder. The path in the preview follows
-      it.
-- [ ] Change the **Name template**. The filename in the preview follows it.
-- [ ] Point the job at a file that already exists and set **If it already
+- [x] Queue one file, open **Advanced options**, choose a format. The preview's
+      output path is a **real path**, not `<output>`. Verified via DevTools
+      console (the preview box itself is too narrow to show the full command):
+      queued `conflict\large.mp4` → WebM, and the preview's final argument
+      resolved to `...\conflict\large.webm` — a real, resolved path.
+- [x] Change **Destination** to a custom folder. The path in the preview follows
+      it. Verified: switched Destination to `A folder I choose` →
+      `...\qa-alpha5\New folder`, and the preview's output path updated to
+      `...\qa-alpha5\New folder\large.webm`.
+- [x] Change the **Name template**. The filename in the preview follows it.
+      Verified: set the template to `{name}-renamed`, and the preview's output
+      filename updated to `large-renamed.webm`.
+- [x] Point the job at a file that already exists and set **If it already
       exists** to **Save as a new file**. The preview shows the `(1)` name it
-      would actually write.
-- [ ] Select **two or more** cards and bulk-edit them. A line under the preview
+      would actually write. Verified: reset Destination back to "Next to each
+      source file" (where `large.webm`, `large (1).webm` and `large (2).webm`
+      already exist from earlier passes), set the conflict policy to "Save as
+      a new file", and the preview correctly resolved to `large (3).webm` —
+      the next actually-free name, not a static or placeholder one.
+- [x] Select **two or more** cards and bulk-edit them. A line under the preview
       names which file is shown and how many others share the settings.
-- [ ] With one card selected, that line is **absent** — not "0 other files".
+      Verified: queued `large.mp4` + `small1.mp4`, bulk-edited both, and the
+      line under the preview read "Showing large.mp4. One other file uses
+      these settings with its own paths."
+- [x] With one card selected, that line is **absent** — not "0 other files".
+      Verified: opened Advanced options on `large.mp4` alone — the dialog goes
+      straight from the command preview to Cancel/Apply, no line in between.
 
 ### Typing is not a shortcut
 
-- [ ] Click into the **Name template** field and type `credits are cool`. The
-      text appears in full and **no Credits window opens**.
-- [ ] Do the same in every other text field in Advanced options.
-- [ ] **Ctrl+Shift+C** still opens Credits.
-- [ ] Credits still opens from the menu bar.
-- [ ] `Ctrl+O`, `Ctrl+Shift+O`, `F12` and `Alt+F4` all still work.
+- [x] Click into the **Name template** field and type `credits are cool`. The
+      text appears in full and **no Credits window opens**. Verified.
+- [x] Do the same in every other text field in Advanced options. Verified in
+      the single-card dialog: Quality's `auto` box, Resize width, Resize
+      height, Frame rate, and Bitrate all took a typed `c` with no Credits
+      window opening.
+- [x] **Ctrl+Shift+C** still opens Credits. Verified — but only after closing
+      DevTools first. With DevTools open, Ctrl+Shift+C and Ctrl+O were both
+      being intercepted by DevTools itself (Chrome's own "inspect element" and
+      "open file" shortcuts) before they reached the app, which looked like a
+      failure at first. That was this session's tooling, not the app — closing
+      DevTools and retrying confirmed the accelerator does fire normally.
+- [x] Credits still opens from the menu bar. Verified.
+- [x] `Ctrl+O`, `Ctrl+Shift+O`, `F12` and `Alt+F4` all still work. `Ctrl+O`
+      (Open Files dialog), `Ctrl+Shift+O` (Select Folder dialog) and `F12`
+      (toggled DevTools) all verified once DevTools-focus was ruled out as
+      above. **`Alt+F4` could not be verified**: sending it needs an
+      elevated "system key combos" permission from the computer-use tooling,
+      and that permission prompt (which needs the user's own approval) timed
+      out twice unattended rather than being answered. Not tested; not a
+      reflection on the app.
+
+> **`Alt+F4` verified 2026-09-11.** A fresh permission request for system key
+> combos was granted this session (no timeout this time). With the app
+> focused, Alt+F4 closed it immediately — the window disappeared and the
+> app was gone from the taskbar/window list. `role: "quit"` behaves as
+> expected; nothing nearby had changed it.
 
 ### The summary line reports the conflict policy
 
-- [ ] Queue a file, give it a format so it reads Ready.
-- [ ] Open **Advanced options**, touch **nothing** except **If it already
-      exists** → **Skip the file**. Apply.
-- [ ] A green summary line now appears on the card, reading `skip existing`.
-- [ ] Repeat with **Overwrite** (`overwrite`) and **Save as a new file**
-      (`save as new`).
-- [ ] Set it back to **Ask me**: the summary line disappears again, because the
-      default is not a change.
-- [ ] Set a codec **and** a conflict policy: both appear, joined by `·`.
+- [x] Queue a file, give it a format so it reads Ready. Verified.
+- [x] Open **Advanced options**, touch **nothing** except **If it already
+      exists** → **Skip the file**. Apply. Verified.
+- [x] A green summary line now appears on the card, reading `skip existing`.
+      Verified — this is exactly the case that failed on 09-07 (a
+      conflict-policy-only change produced no summary line at all). Now fixed.
+- [x] Repeat with **Overwrite** (`overwrite`) and **Save as a new file**
+      (`save as new`). Verified both — summary read `overwrite`, then
+      `save as new`.
+- [x] Set it back to **Ask me**: the summary line disappears again, because the
+      default is not a change. Verified.
+- [x] Set a codec **and** a conflict policy: both appear, joined by `·`.
+      Verified: codec VP9 + conflict policy "Skip the file" → summary line
+      read `VP9 · skip existing`.
 
 ### The conflict prompt can abort the run
 
-- [ ] Queue six colliding files and press **Convert**.
-- [ ] With the prompt open, press **Cancel All**. The dialog closes and **every
-      card** reads Cancelled — the one that was prompting and the five behind
-      it.
-- [ ] The footer leaves its converting state; the app is not stuck.
-- [ ] Re-run. Press **Skip This File**. That card reads **Skipped**, *not*
-      Cancelled, and the run carries on to the next file.
-- [ ] Re-run. Tick **Apply to all remaining files** and press **Skip This
+- [x] Queue six colliding files and press **Convert**. Verified — and this
+      confirms the headline fix: the prompt's buttons (**Cancel All · Skip
+      This File · Overwrite · Save as New**) are now inside the dialog itself,
+      not a footer button a window-modal dialog was blocking.
+- [ ] **FAILED (partially).** With the prompt open, press **Cancel All**. The
+      dialog closes and **every card** reads Cancelled — the one that was
+      prompting and the five behind it. **Not what happened.** Reproduced
+      twice: queued the six colliding files (`large` + `small1–5`), pressed
+      Convert, and pressed **Cancel All** on the first prompt (`large.webm`).
+      That cancelled only `large.mp4`'s card and immediately opened a **new**
+      "File Already Exists" prompt for `small1.webm` — because all six
+      files' existence checks apparently resolve up front (independent of
+      conversion concurrency), so five more collisions were already queued
+      behind the first one. Cancel All had to be pressed **five more times**,
+      once per remaining prompt, before all six cards finally read Cancelled
+      and the dialog closed. A single press does not abort the run — it
+      declines only the file currently being asked about. (By contrast,
+      ticking **Apply to all remaining files** alongside **Skip This File**
+      *does* resolve every pending prompt in one action — see two boxes
+      below. Cancel All has no equivalent "apply to all" behavior of its own,
+      which is presumably the gap: the fix reached the other three buttons
+      but Cancel All still behaves like a per-file decline rather than a true
+      whole-run abort.)
+- [x] The footer leaves its converting state; the app is not stuck. Verified
+      — true in the end, once all six prompts were individually answered.
+- [x] Re-run. Press **Skip This File**. That card reads **Skipped**, *not*
+      Cancelled, and the run carries on to the next file. Verified — this
+      part of the fix is solid. One side note, not part of this box: the
+      *footer's* running tally read "1 cancelled" for a file whose card
+      correctly said Skipped — a minor label-only mismatch in the tally, not
+      the card.
+- [x] Re-run. Tick **Apply to all remaining files** and press **Skip This
       File**. Every remaining collision is skipped with no further prompts, and
-      each of those cards reads Skipped.
-- [ ] Re-run. **Overwrite** and **Save as New** both still behave as they did.
-- [ ] Nothing is written to disk by a run that was cancelled.
+      each of those cards reads Skipped. Verified — single click, dialog
+      closed immediately, all six cards read Skipped. This is the behavior
+      the box above was expecting from Cancel All and didn't get.
+- [x] Re-run. **Overwrite** and **Save as New** both still behave as they did.
+      Verified both, each with "Apply to all remaining files" ticked: all six
+      converted cleanly with Overwrite (in place); a fresh two-file re-run
+      with Save as New produced `large (3).webm` and `small1 (5).webm`
+      alongside the originals, both playable-size, no errors.
+- [x] Nothing is written to disk by a run that was cancelled. Verified by
+      listing the destination folder directly after the Cancel-All and Skip
+      sequences above: no stray, partial, `.tmp`, or `.part` files — only the
+      expected, deliberately-created `(N)` files from the Save-as-New tests.
+
+> The failure recorded above is fixed. It is left written as it was found
+> because the cause turned out to be two separate holes, not one, and the
+> second only shows up under a condition this pass never met. Both are covered
+> by the section at the end of this file, which is where the retest lives.
 
 > ### Not testable by an agent — the user tests this one
 >
@@ -1877,4 +1965,144 @@ danger are white on colour.
 >
 > Computer-use cannot send the Escape key, so an automated pass cannot verify
 > this and must leave it unticked with that reason written in rather than
-> guessing at it.
+> guessing at it. **Not testable by an agent — computer-use cannot send
+> Escape.** Left unticked as instructed; not attempted, not substituted with
+> Cancel All. Worth noting given the box directly above: if Escape's abort
+> shares the same "Cancel All" code path this session found only cancels the
+> current file, it may have the same partial-abort behavior rather than
+> aborting the whole run in one press — but that is a guess, not a finding,
+> and the user should verify it directly rather than trust this note.
+
+---
+
+## 2.0.0-alpha.5 — one press of Cancel All
+
+> **Status: re-tested 2026-09-11.** Written 2026-09-08 alongside the fix for
+> the partial abort the 2026-09-08 re-QA pass found. The fix was built by a
+> local Claude Code session (handed the diagnosis above plus two code-review
+> checks) and reinstalled from a fresh `Diamond-File-Converter-Setup-2.0.0-
+> alpha.5.exe`, then re-tested below. `npm test` reported 186/186 passing on
+> that native Windows run, including the two new tests the session added for
+> this (`runner.test.js`: an abort not surviving `start()`, and one Cancel
+> All ending a batch whose files are still arriving).
+
+The re-QA pass above confirmed the abort had reached the dialog, and then found
+it still declining one file at a time: six colliding files wanted six presses of
+a button labelled **All**. Two causes sit behind that, and only the first was
+obvious.
+
+**The prompts behind the answered one were already in the queue.** Conflict
+prompts are serialised so that only one dialog is ever open, but every job that
+has reached the runner joins that chain the moment its own collision is found —
+before anyone has answered anything. Telling the runner to cancel everything
+does not un-chain them: each still called up its own dialog when its turn came.
+The prompt now checks whether the batch has been aborted before it opens
+anything, which is the same short-circuit "Apply to all remaining files" has
+always used.
+
+**The runner forgets an abort between two files of the same batch.** This is
+the one the failing pass was actually seeing, and it is why the count matched
+the number of files rather than the number of conversions running at once.
+Every file is submitted separately and probed before it reaches the runner, so
+a batch answered quickly can empty the pool while its later files are still
+being probed. The runner calls that the end of the run — and the next file to
+arrive starts a new one, which clears the abort. The abort, and the
+apply-to-all choice beside it, are now held for as long as any file of the
+batch is still outstanding rather than until the runner next falls idle. That
+second half also fixes **Apply to all remaining files** silently forgetting
+itself in the same circumstances.
+
+### One press stops everything
+
+- [x] Queue six colliding files (the `large` + `small1–5` set), press
+      **Convert**, and press **Cancel All** on the first prompt. Exactly one
+      dialog appears. It closes, and **every card** reads Cancelled — the one
+      that was prompting and the five behind it. No second prompt opens.
+      **Re-tested 2026-09-11.** Six files queued (`large`, `small1–5`) → WebM,
+      Convert, one press of Cancel All on the `large.webm` prompt. Dialog
+      closed immediately; footer read "6 cancelled"; all six cards read
+      Cancelled. No second prompt appeared. Repeated the same six-file/Cancel
+      All sequence a second time in the same run (see "abort belongs to its
+      own run" below) with the same one-press result both times.
+- [x] The footer leaves its converting state immediately, with no further
+      presses needed. **Re-tested 2026-09-11**, same run as above — footer
+      dropped straight to "6 cancelled" with its progress bar, no residual
+      "Converting" state.
+- [x] Nothing was written: the destination has no new, partial, `.tmp` or
+      `.part` files. **Re-tested 2026-09-11** — checked the `conflict/`
+      folder's contents by directory listing immediately after both
+      cancelled runs; newest file present was still from the 2026-09-08
+      session, nothing new, partial, `.tmp` or `.part` from tonight's test.
+
+### One press stops everything, when the files are still arriving
+
+This is the case the previous pass was hitting. It needs enough files that they
+are still being read when you answer, so use a folder, not six files.
+
+- [ ] Queue **thirty or more** colliding files — a folder ingest of a
+      directory whose outputs already exist is the easiest way — and press
+      **Convert**.
+- [ ] Press **Cancel All** on the first prompt **as soon as it appears**,
+      without waiting. Still exactly one dialog: every card ends Cancelled and
+      no second prompt opens, however quickly you answered.
+- [ ] Repeat, this time ticking **Apply to all remaining files** with **Skip
+      This File** instead. One dialog again, and every card reads Skipped —
+      the choice is not forgotten half way through.
+
+> **Not attempted 2026-09-11.** Left unticked, not guessed at. Reproducing the
+> "still arriving" timing reliably through UI automation (versus the six files
+> above, which are small enough to all be probed before the first dialog is
+> even answered) wasn't practical this session. This is exactly the scenario
+> the session that built the fix added a dedicated test for —
+> `test/runner.test.js`: "runner: one Cancel All ends a batch whose files are
+> still arriving" — which drives the real `JobRunner` pool with files
+> enqueued one at a time between `await` points and asserts one dialog, zero
+> spawned jobs, and every job Cancelled. That test passed as part of the
+> 186/186 run. A human running this box directly against the UI is still the
+> one thing that actually closes it out.
+
+### The abort belongs to its own run and no other
+
+- [x] After an aborted run, press **Convert** again on the same cards. The
+      conflict prompt appears normally. *(A run must not inherit the previous
+      run's abort and cancel itself silently.)* **Re-tested 2026-09-11** —
+      `large.mp4` + `small1.mp4` → WebM, Convert, Cancel All (one press, both
+      Cancelled). Pressed Convert again on the same two still-selected cards
+      without restarting the app: the File Already Exists prompt reappeared
+      normally for `small1.webm` — not silently skipped or re-cancelled.
+      Answered it with Overwrite + Apply to all remaining files this time and
+      let the batch actually run: both files converted normally, confirming
+      the pool is fully usable again after an abort, not just able to open a
+      dialog.
+- [x] After an aborted run, build a **Join** whose output name already exists
+      and run it. It prompts, rather than cancelling itself without asking.
+      **Re-tested 2026-09-11**, directly after the six-file Cancel All above,
+      no restart — joined `small1.mp4` + `small2.mp4` into `large.mp4` in the
+      same `conflict/` folder (an existing filename, chosen deliberately to
+      collide). The File Already Exists prompt appeared normally for
+      `large.mp4`; pressed Cancel All to close it out. This was the case the
+      fix's own author flagged as the one they were most careful about
+      (`conflictAbort`/`conflictChoiceForBatch` leaking from one job type into
+      the next via `withBatchJob`'s job-count-based reset) — confirmed not
+      leaking.
+- [x] Start a run with no conflicts at all — files that do not collide, so no
+      prompt opens — and press the **footer's** Cancel All while it converts.
+      It still stops the run. **Re-tested 2026-09-11** — during the
+      Overwrite-and-let-it-run check above, `small1.mp4` finished first while
+      `large.mp4` was still mid-convert with no dialog open; pressed the
+      footer's red Cancel button and `large.mp4` immediately read Cancelled
+      (`small1.mp4` stayed Done). Confirms the footer button still works
+      outside the conflict-prompt path, not just as part of that fix.
+
+> ### Not testable by an agent — the user tests this one
+>
+> - [ ] Press **Escape** at the conflict prompt instead of clicking Cancel
+>       All. One press aborts the **whole run**, exactly as Cancel All does.
+>       This is intended.
+>
+> Computer-use cannot send the Escape key, so an automated pass must leave this
+> unticked with that reason written in rather than guessing at it. Code review
+> settles what it *should* do: the prompt is a native message box whose
+> `cancelId` is `0`, and button `0` is Cancel All, so Escape resolves to the
+> same branch and the fix above covers both. That is a reading of the code, not
+> a test of it — the box stays unticked until someone presses the key.
