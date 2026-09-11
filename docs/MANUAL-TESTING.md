@@ -2109,8 +2109,11 @@ are still being read when you answer, so use a folder, not six files.
 
 ## 2.0.0-beta.1 — one app, two sections
 
-> **Status: written 2026-09-11 alongside the fix, not yet run by hand.** The
-> layout was measured in the running app through a driver rather than by eye:
+> **Status: signed off by hand 2026-09-11, before the beta.1 release.** The
+> boxes below were not ticked one by one as part of that sign-off, so they
+> stand for whoever runs the section formally. Written 2026-09-11 alongside
+> the fix. The layout was measured in the running app through a driver
+> rather than by eye:
 > the header, the title, the toolbar and the drop zone occupy the same
 > rectangle on Convert and on Join, to the pixel, and the rail's three icons
 > sit at the same y whether the rail is expanded or collapsed. What a driver
