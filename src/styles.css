@@ -149,6 +149,10 @@ body.popup-window span:hover {
     gap: 0.75rem;
 }
 
+/* The toolbar on the right is shared by both sections and never hidden, which
+   is what keeps this the same height on every view. The title is shorter than
+   the buttons, so hiding them would drop the header by 7px and everything
+   under it with it. */
 .app-header {
     display: flex;
     align-items: center;
@@ -852,6 +856,11 @@ body.popup-window span:hover {
     background: none;
     color: var(--bs-body-color);
     font-size: 0.9rem;
+    /* The label's line box is what sets the item's height, and Bootstrap's 1.5
+       makes it 21.6px against a 20px icon. Collapsing hides the label, the
+       item shrinks by that 1.6px, and every icon below it creeps up. Pinning
+       the line box to the icon's own height makes both states identical. */
+    line-height: 20px;
     text-align: left;
     white-space: nowrap;
     overflow: hidden;
@@ -893,29 +902,32 @@ body.popup-window span:hover {
     display: none;
 }
 
+.nav-collapse .nav-icon {
+    transition: transform var(--dur-state) var(--ease-state);
+}
+
 .nav-rail.collapsed .nav-collapse .nav-icon {
     transform: rotate(180deg);
 }
 
 /* ── View switching ──────────────────────────────────────────────────────── */
 
-/* render() and renderSelection() own d-none on the files elements and know
+/* render() and renderSelection() own d-none on the convert elements and know
    nothing about which view is showing, so these must force-hide with
    !important rather than compete with them. Each view then keeps its own state
    while hidden and returns to it intact rather than being rebuilt.
 
-   Five elements, not three: #bulk-bar is toggled by renderSelection rather than
-   by render, and .view-files-only is the header's Add Files / Add Folder group,
-   which had no rule anywhere until now. */
+   Four elements, not three: #bulk-bar is toggled by renderSelection rather
+   than by render. The header's Add Files / Add Folder group is deliberately
+   not here — it serves both sections, and hiding it moved the header. */
 .app-shell[data-view="join"] #empty-state,
 .app-shell[data-view="join"] #grid-scroll,
 .app-shell[data-view="join"] #action-bar,
-.app-shell[data-view="join"] #bulk-bar,
-.app-shell[data-view="join"] .view-files-only {
+.app-shell[data-view="join"] #bulk-bar {
     display: none !important;
 }
 
-.app-shell[data-view="files"] #join-view {
+.app-shell[data-view="convert"] #join-view {
     display: none !important;
 }
 

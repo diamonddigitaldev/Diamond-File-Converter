@@ -2106,3 +2106,112 @@ are still being read when you answer, so use a folder, not six files.
 > `cancelId` is `0`, and button `0` is Cancel All, so Escape resolves to the
 > same branch and the fix above covers both. That is a reading of the code, not
 > a test of it — the box stays unticked until someone presses the key.
+
+## 2.0.0-beta.1 — one app, two sections
+
+> **Status: written 2026-09-11 alongside the fix, not yet run by hand.** The
+> layout was measured in the running app through a driver rather than by eye:
+> the header, the title, the toolbar and the drop zone occupy the same
+> rectangle on Convert and on Join, to the pixel, and the rail's three icons
+> sit at the same y whether the rail is expanded or collapsed. What a driver
+> cannot judge — whether it *looks* still — is what this section is for.
+
+Three things stopped the two sections reading as one app, and all three were
+visible in the first thirty seconds of using it.
+
+**Switching moved the title.** The Add Files / Add Folder group was hidden on
+Join, and those buttons are 31px tall against a 24px title. Taking them out of
+the header shrank it by 7px, and the title and everything under it jumped up on
+every switch. The toolbar is now shared: it stays in the header on both
+sections and adds to whichever one is showing, so the header is the same height
+everywhere. That is also what puts the buttons on Join — they were missing
+there, and Join could not take a folder at all.
+
+**Collapsing moved the icons.** A rail item is a 20px icon beside a label whose
+line box, at Bootstrap's 1.5, is 21.6px. The label sets the item's height;
+collapsing hides the label; every item shrinks by 1.6px and every icon below it
+creeps up. The item's line box is now pinned to the icon's height, so the two
+states are identical and the icons hold still while the width animates.
+
+**Join's empty state was its own design.** Different lines, a hint in the wrong
+colour, no "or", and the section's icon on the rail was a grid while the zone
+above it showed an upload arrow. The two zones are now the same zone line for
+line, and the icon at the top of each is the same glyph as that section's rail
+item. **Files is now Convert**, with the source-to-target arrow the cards
+already draw. That last rule is written into the design system — a section is
+named by one glyph, not two — in `docs/design-system/` (regenerate with
+`node docs/design-system/build.js`; the Claude Design project needs a
+`/design-login` from an interactive session to receive it).
+
+### Nothing moves when you switch
+
+- [ ] Launch the app. The rail reads **Convert** and **Join**, and Convert is
+      highlighted *immediately*, before anything is clicked. *(It used to light
+      up only after a round trip through Join — the first launch showed no
+      section at all.)*
+- [ ] Click Join, then Convert, then Join again, watching the title **Diamond
+      File Converter**. It does not move by a pixel. *(It jumped up 7px on
+      Join.)*
+- [ ] Same switch, watching the drop zone's dashed border. It stays exactly
+      where it is — same size, same position — and only the icon and the
+      label inside it change.
+- [ ] Same switch, watching **Add Files** and **Add Folder** in the header.
+      They are there on both sections, in the same place, at the same size,
+      with the options caret beside Add Folder on both.
+- [ ] Both themes.
+
+### Nothing moves when you collapse
+
+- [ ] With the rail expanded, press **Collapse**, watching the three icons —
+      Convert, Join and the chevron. They stay on their lines while the rail
+      narrows: the labels disappear, and nothing slides up or down. *(Each
+      item used to shrink by 1.6px, so the icons below it crept upward.)*
+- [ ] Press **Expand**. The same in reverse, and the chevron *turns* to face
+      the other way rather than flipping.
+- [ ] Do it from Join as well. The collapse must not care which section is
+      showing.
+- [ ] Collapsed, hover each icon: the hover wash is the same rounded box as
+      when expanded, just narrower.
+
+### The two sections read as one app
+
+- [ ] Convert's zone, top to bottom: a green ⇄ arrow, "Drag & Drop Files or
+      Folders Here", a grey "or", **Select Files**. The ⇄ is the same glyph
+      as the Convert item on the rail.
+- [ ] Join's zone, top to bottom: the green two-into-one arrow, "Drag & Drop
+      Files to Join Here", a grey "or", **Select Files**. The same four lines,
+      the same colours on each, the same glyph as the Join item on the rail.
+      *(It had five lines, and the extra one was in body colour, not grey.)*
+- [ ] Click anywhere in Join's zone that is not the button: the file dialog
+      opens. Click the button: it opens once, not twice. *(Convert's zone has
+      always done this; Join's only answered to its button.)*
+- [ ] Hover Join's zone: the same green wash as Convert's. Drag a file over it:
+      the same stronger wash.
+
+### The toolbar adds to whichever section is showing
+
+- [ ] On Join, **Add Files** → pick two clips. They are listed on Join, and
+      Convert's grid is untouched.
+- [ ] On Join, **Add Folder** → a folder of clips. Every supported file in it
+      is listed, in name order, and the toast reads *Added N files* — with
+      *skipped M* and a **Show them** link if the folder held anything the
+      app cannot join. *(Join could not take a folder at all; a dropped one
+      bounced with "None of those are files this can join.")*
+- [ ] Drop a folder onto Join's zone. The same result as Add Folder.
+- [ ] Untick **Include subfolders** in the options caret, then Add Folder a
+      folder that has a subfolder of clips. The subfolder's clips are not
+      listed. *(The folder options apply on Join exactly as on Convert.)*
+- [ ] Switch to Convert, **Add Files**. They go to the grid, not to Join.
+- [ ] Drop files on Convert while Join has a list. They go to the grid; the
+      join list is untouched.
+
+### Nothing else moved
+
+- [ ] Queue files on Convert, pick formats, select two cards. Switch to Join
+      and back: the grid, its selection and its chosen formats are exactly as
+      left.
+- [ ] Ctrl+A and Delete still act on the grid on Convert and do nothing on
+      Join.
+- [ ] Collapse the rail, quit, relaunch. Still collapsed.
+- [ ] Add the same clip twice on Join, by two separate Add Files. It appears
+      twice. *(A folder walk lists each file once, but two adds are two adds.)*

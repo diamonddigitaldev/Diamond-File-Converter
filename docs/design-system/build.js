@@ -382,6 +382,30 @@ card("components/drop-zone.html", "Drop Zone",
 <h2>The nested-button guard</h2>
 <div class="panel"><code>.drop-zone:hover:not(:has(button:hover))</code></div>
 <p class="note"><b>The whole zone is a click target</b>, so it must stop signalling "drop here" once the pointer is over a button inside it. This exact idiom appears in the File Converter, the Dropgate client and the Dropgate server. Note the matching JS guard: the zone's click handler returns early when the event originated on a button, or the browse dialog opens twice.</p>
+
+<h2>One zone per section, and the icon is the section's</h2>
+<div class="grid" style="grid-template-columns:1fr 1fr">
+  <div>
+    <div class="dz">
+      <div class="dz-icon" style="color:var(--accent);opacity:.75">⇄</div>
+      <p class="dz-label">Drag &amp; Drop Files or Folders Here</p>
+      <p class="dz-or">or</p>
+      <button class="mini">Select Files</button>
+    </div>
+    <div class="caption">Convert — the rail item's glyph, at 48px</div>
+  </div>
+  <div>
+    <div class="dz">
+      <div class="dz-icon" style="color:var(--accent);opacity:.75">⑂</div>
+      <p class="dz-label">Drag &amp; Drop Files to Join Here</p>
+      <p class="dz-or">or</p>
+      <button class="mini">Select Files</button>
+    </div>
+    <div class="caption">Join — same zone, its own glyph</div>
+  </div>
+</div>
+<p class="note"><b>In an app with a rail, the zone's icon is the rail item's icon.</b> A section is named by one glyph, not two: whatever sits beside its label on the rail is what sits at the top of its empty state, in the accent at <code>--opacity-muted</code>. Never a generic upload glyph — File Converter's Convert zone showed <code>upload_file</code> under a rail item drawn as <code>grid_view</code>, and the two never met.</p>
+<p class="note"><b>Sibling sections get the same zone, line for line.</b> Icon, label, "or", button — same classes, same colours, same count of lines. Only the icon and the label change. A hint line that one section has and the other lacks makes one zone taller than the other, and the two sections stop reading as one app.</p>
 `);
 
 card("components/file-row.html", "File Row & List",
@@ -927,15 +951,15 @@ card("shell/nav-rail.html", "Navigation Rail",
 <div class="row" style="align-items:flex-start;gap:18px">
   <div class="raildemo">
     <div class="rail">
-      <div class="ni on"><span class="ic">▦</span><span class="lbl">Files</span></div>
+      <div class="ni on"><span class="ic">⇄</span><span class="lbl">Convert</span></div>
       <div class="ni"><span class="ic">⑂</span><span class="lbl">Join</span></div>
       <div class="ni last"><span class="ic">‹</span><span class="lbl">Collapse</span></div>
     </div>
-    <div class="body"><h4>Files</h4><p>The active section fills the rest of the window.</p></div>
+    <div class="body"><h4>Convert</h4><p>The active section fills the rest of the window.</p></div>
   </div>
   <div class="raildemo" style="max-width:300px">
     <div class="rail narrow">
-      <div class="ni on"><span class="ic">▦</span><span class="lbl">Files</span></div>
+      <div class="ni on"><span class="ic">⇄</span><span class="lbl">Convert</span></div>
       <div class="ni"><span class="ic">⑂</span><span class="lbl">Join</span></div>
       <div class="ni last"><span class="ic">›</span><span class="lbl">Expand</span></div>
     </div>
@@ -948,12 +972,17 @@ card("shell/nav-rail.html", "Navigation Rail",
 <tr><th>Part</th><th>Value</th></tr>
 <tr><td>Rail</td><td><code>168px</code> expanded, <code>56px</code> collapsed, <code>--dur-state --ease-state</code> on width</td></tr>
 <tr><td>Surface</td><td><code>--bs-tertiary-bg</code> with a <code>--bs-border-color</code> right edge — a step back from the content, not a block of accent</td></tr>
-<tr><td>Item</td><td><code>.5rem .6rem</code> padding, <code>--radius-control</code>, icon <code>20px</code> + label, <code>.6rem</code> gap</td></tr>
+<tr><td>Item</td><td><code>.5rem .6rem</code> padding, <code>--radius-control</code>, icon <code>20px</code> + label, <code>.6rem</code> gap, <b><code>line-height: 20px</code></b> — see "Two jitters" below</td></tr>
+<tr><td>Icon</td><td>The section's one glyph: the same icon heads that section's empty-state drop zone. Convert is <code>swap_horiz</code>, Join is <code>merge_type</code></td></tr>
 <tr><td>Hover</td><td>border <code>rgba(accent, .5)</code>, fill <code>rgba(accent, .04)</code> — the standard wash ladder</td></tr>
 <tr><td>Active</td><td>border <code>rgba(accent, 1)</code>, fill <code>rgba(accent, .06)</code>, <b>and the label in <code>--accent</code></b></td></tr>
-<tr><td>Collapse control</td><td>Pinned with <code>margin-top:auto</code>, muted, chevron rotated 180° when collapsed</td></tr>
+<tr><td>Collapse control</td><td>Pinned with <code>margin-top:auto</code>, muted, chevron rotated 180° when collapsed, with <code>--dur-state</code> on the transform so it turns rather than flips</td></tr>
 <tr><td>Focus</td><td><code>box-shadow: 0 0 0 .2rem rgba(accent, .35)</code> on <code>:focus-visible</code>, <code>outline:none</code></td></tr>
 </table>
+
+<h2>Two jitters, and what stops them</h2>
+<p class="note"><b>Pin the item's line box to the icon.</b> Bootstrap's <code>1.5</code> line-height makes a <code>.9rem</code> label 21.6px tall against a 20px icon, and the label is what sets the item's height. Collapse hides the label, every item shrinks by that 1.6px, and every icon below it creeps up. <code>line-height: 20px</code> on the item makes the expanded and collapsed states the same height, so the icons hold still while the width animates.</p>
+<p class="note"><b>Nothing in the header may change height with the view.</b> The header's toolbar is shared by every section and routed to whichever is showing, never hidden per view. File Converter hid Add Files / Add Folder on Join, which took the buttons' 31px out of a header whose title is 24px — so the title and everything under it jumped 7px on every switch. If a section genuinely has no use for a control, reserve its height; do not remove it.</p>
 
 <h2>Where it sits in the shell</h2>
 <p class="note">The rail is <b>outside</b> the padded content column, so it reaches the window edge. That means the shell is no longer the outermost element: an <code>.app-frame</code> row wraps the rail and the column, and the column keeps the padding, the header, the content and the footer. Give the column <code>min-width:0</code> or a wide child stretches it and the whole window scrolls sideways.</p>

@@ -21,12 +21,18 @@
 
     <div class="app-frame">
 
-        <!-- Files and Join are siblings you switch between, not a place you
-             have to back out of. Each keeps its own state while hidden. -->
+        <!-- Convert and Join are siblings you switch between, not a place you
+             have to back out of. Each keeps its own state while hidden.
+
+             Each section's icon is its identity: the same glyph names it here
+             and sits at the top of its empty-state drop zone. swap_horiz is
+             the source-to-target arrow the cards already draw. -->
         <nav id="nav-rail" class="nav-rail" aria-label="Sections">
-            <button class="nav-item" data-view="files" type="button" aria-current="page">
-                <span class="material-icons-round nav-icon">grid_view</span>
-                <span class="nav-label">Files</span>
+            <!-- active as well as aria-current: showView only toggles the class
+                 on a switch, so without it the first launch highlights nothing. -->
+            <button class="nav-item active" data-view="convert" type="button" aria-current="page">
+                <span class="material-icons-round nav-icon">swap_horiz</span>
+                <span class="nav-label">Convert</span>
             </button>
             <!-- merge_type over merge or call_merge: all three are the same
                  two-into-one arrow, but this one's fork is asymmetric and stays
@@ -41,11 +47,15 @@
             </button>
         </nav>
 
-    <div class="app-shell" data-view="files">
+    <div class="app-shell" data-view="convert">
 
         <header class="app-header">
             <h1 class="app-title">Diamond File Converter</h1>
-            <div class="d-flex gap-2 align-items-center view-files-only">
+            <!-- One toolbar for both sections, adding to whichever is showing.
+                 It used to be hidden on Join, which took the buttons' 31px out
+                 of a header whose title is 24px tall — so the title and
+                 everything under it jumped 7px on every switch. -->
+            <div class="d-flex gap-2 align-items-center">
                 <button id="btn-add-files" class="btn btn-sm btn-secondary d-inline-flex align-items-center gap-1">
                     <span class="material-icons-round" style="font-size:16px">note_add</span>Add Files
                 </button>
@@ -98,7 +108,7 @@
         <!-- Empty state: the full drop target -->
         <div id="empty-state" class="empty-state">
             <div id="drop-zone" class="drop-zone">
-                <span class="material-icons-round drop-icon">upload_file</span>
+                <span class="material-icons-round drop-icon">swap_horiz</span>
                 <p class="drop-label mb-1">Drag &amp; Drop Files or Folders Here</p>
                 <p class="text-secondary small mb-2">or</p>
                 <button id="browse-btn" class="btn btn-sm btn-secondary">Select Files</button>
@@ -148,11 +158,13 @@
         <!-- Join: an ordered list of clips that become one file. Deliberately a
              list and not a canvas — the order is the whole model. -->
         <main id="join-view" class="join-view">
+            <!-- The same zone as Convert's, line for line, so the two sections
+                 read as one app. Only the icon and the label change. -->
             <div id="join-empty" class="empty-state">
                 <div id="join-drop" class="drop-zone">
                     <span class="material-icons-round drop-icon">merge_type</span>
-                    <p class="drop-label mb-1">Drop the files you want joined into one</p>
-                    <p class="drop-hint small mb-2">They are joined in the order you list them.</p>
+                    <p class="drop-label mb-1">Drag &amp; Drop Files to Join Here</p>
+                    <p class="text-secondary small mb-2">or</p>
                     <button id="btn-join-add" class="btn btn-sm btn-secondary">Select Files</button>
                 </div>
             </div>

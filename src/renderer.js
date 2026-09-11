@@ -1578,12 +1578,11 @@ function confirmDialog({ title, body, confirmLabel = "Confirm", variant = "prima
 
 // -- Views ---------------------------------------------------------------------
 //
-// The rail currently has one destination. It stays because the surface for
-// joining files together will sit beside Files, and because everything the file
-// grid owns keeps its own d-none state while hidden — so arriving back restores
-// the grid exactly as it was rather than rebuilding it.
+// Convert and Join. Everything the file grid owns keeps its own d-none state
+// while hidden, so arriving back restores the grid exactly as it was rather
+// than rebuilding it.
 
-let currentView = "files";
+let currentView = "convert";
 
 /** The single route between views: a rail click, or a file drop from elsewhere. */
 async function showView(name) {
@@ -1599,7 +1598,7 @@ async function showView(name) {
         else item.removeAttribute("aria-current");
     }
 
-    if (name === "files") render();
+    if (name === "convert") render();
     else if (name === "join") renderJoin();
 }
 
@@ -1624,6 +1623,37 @@ function parseTime(text) {
     return parts.reduce((total, part) => total * 60 + part, 0);
 }
 
+/**
+ * Join's counterpart to ingestPaths: expand folders in the main process, then
+ * list whatever came back. The header's Add Folder and a dropped directory both
+ * land here, and both follow the folder options — the scanner is the one place
+ * that knows what a folder contains, and it walks a directory in name order,
+ * which for a set of numbered clips is the order they want joining in.
+ */
+async function addJoinPaths(inputPaths) {
+    if (!inputPaths || inputPaths.length === 0) return;
+    try {
+        const result = await api.scanPaths(inputPaths, buildScanOptions());
+        const added = await addJoinClips(result.files);
+        reportIngest({
+            added,
+            skipped: result.skipped ?? [],
+            duplicates: 0,
+            truncated: result.truncated,
+            found: result.files.length,
+        });
+        for (const err of result.errors ?? []) {
+            toast(`Could not read ${p.basename(err.path)}: ${err.error}`, "danger");
+        }
+    } catch (_) {
+        // The scan itself failed, so folders cannot be expanded. List whatever
+        // was handed over as plain files.
+        const added = await addJoinClips(inputPaths);
+        if (added === 0) toast("None of those are files this can join.", "warning");
+    }
+}
+
+/** List the clips and probe them. Returns how many were listed. */
 async function addJoinClips(filePaths) {
     const added = [];
     for (const filePath of filePaths ?? []) {
@@ -1636,10 +1666,7 @@ async function addJoinClips(filePaths) {
         joinClips.push(clip);
         added.push(clip);
     }
-    if (added.length === 0) {
-        if ((filePaths ?? []).length > 0) toast("None of those are files this can join.", "warning");
-        return;
-    }
+    if (added.length === 0) return 0;
     renderJoin();
 
     // Every clip has to be probed before the copy-or-re-encode question can be
@@ -1649,6 +1676,7 @@ async function addJoinClips(filePaths) {
         clip.meta = await api.probeFile(clip.filePath);
     }));
     renderJoin();
+    return added.length;
 }
 
 function removeJoinClip(id) {
@@ -1894,6 +1922,12 @@ async function runJoin() {
 function setupJoin() {
     $("btn-join-add").addEventListener("click", browseJoinFiles);
     $("btn-join-add-more").addEventListener("click", browseJoinFiles);
+    // The whole zone is a click target, as Convert's is — with the same guard,
+    // or the button inside it opens the dialog twice.
+    $("join-drop").addEventListener("click", (e) => {
+        if (e.target.closest("button")) return;
+        browseJoinFiles();
+    });
     $("btn-join-clear").addEventListener("click", () => { joinClips = []; renderJoin(); });
     $("btn-join-run").addEventListener("click", runJoin);
     $("btn-join-cancel").addEventListener("click", () => { if (joinRunning) api.cancelJob(joinRunning); });
@@ -1911,7 +1945,7 @@ function setupJoin() {
 
     async function browseJoinFiles() {
         const filePaths = await api.browseFiles();
-        if (filePaths) addJoinClips(filePaths);
+        if (filePaths) addJoinPaths(filePaths);
     }
 }
 
@@ -2020,9 +2054,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.addEventListener("dragenter", (e) => {
         e.preventDefault();
         dragDepth++;
-        // The highlight belongs to the grid, so it stays off while the editor
-        // is showing — the drop still works, it just switches view first.
-        if (currentView !== "files") return;
+        // The highlight belongs to the grid, so it stays off while Join is
+        // showing — Join's own zone lights itself.
+        if (currentView !== "convert") return;
         shell.classList.add("drag-over");
         if (jobs.length === 0) $("drop-zone").classList.add("drag-over");
     });
@@ -2049,22 +2083,24 @@ document.addEventListener("DOMContentLoaded", async () => {
             .filter(Boolean);
 
         // A drop means "take these", and where they go is whichever view is
-        // showing. Switching to Files under someone who is assembling a join
+        // showing. Switching to Convert under someone who is assembling a join
         // would be the surprising reading of the same gesture.
-        if (currentView === "join") {
-            addJoinClips(paths);
-            return;
-        }
-        ingestPaths(paths);
+        takePaths(paths);
     });
 
+    // The header's Add Files and Add Folder serve both sections, so they take
+    // the same reading as a drop: whichever section is showing gets the files.
+    function takePaths(paths) {
+        if (currentView === "join") addJoinPaths(paths);
+        else ingestPaths(paths);
+    }
     async function browseFiles() {
         const filePaths = await api.browseFiles();
-        if (filePaths) ingestPaths(filePaths);
+        if (filePaths) takePaths(filePaths);
     }
     async function browseFolder() {
         const folders = await api.browseFolder();
-        if (folders) ingestPaths(folders);
+        if (folders) takePaths(folders);
     }
 
     $("browse-btn").addEventListener("click", browseFiles);
@@ -2161,7 +2197,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         // Card shortcuts belong to the file grid, so they do nothing while
         // another section is showing.
-        if (currentView !== "files") return;
+        if (currentView !== "convert") return;
 
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
             e.preventDefault();

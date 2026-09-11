@@ -94,4 +94,28 @@ tr:last-child td{border-bottom:none}
 <div class="panel"><code>.drop-zone:hover:not(:has(button:hover))</code></div>
 <p class="note"><b>The whole zone is a click target</b>, so it must stop signalling "drop here" once the pointer is over a button inside it. This exact idiom appears in the File Converter, the Dropgate client and the Dropgate server. Note the matching JS guard: the zone's click handler returns early when the event originated on a button, or the browse dialog opens twice.</p>
 
+<h2>One zone per section, and the icon is the section's</h2>
+<div class="grid" style="grid-template-columns:1fr 1fr">
+  <div>
+    <div class="dz">
+      <div class="dz-icon" style="color:var(--accent);opacity:.75">⇄</div>
+      <p class="dz-label">Drag &amp; Drop Files or Folders Here</p>
+      <p class="dz-or">or</p>
+      <button class="mini">Select Files</button>
+    </div>
+    <div class="caption">Convert — the rail item's glyph, at 48px</div>
+  </div>
+  <div>
+    <div class="dz">
+      <div class="dz-icon" style="color:var(--accent);opacity:.75">⑂</div>
+      <p class="dz-label">Drag &amp; Drop Files to Join Here</p>
+      <p class="dz-or">or</p>
+      <button class="mini">Select Files</button>
+    </div>
+    <div class="caption">Join — same zone, its own glyph</div>
+  </div>
+</div>
+<p class="note"><b>In an app with a rail, the zone's icon is the rail item's icon.</b> A section is named by one glyph, not two: whatever sits beside its label on the rail is what sits at the top of its empty state, in the accent at <code>--opacity-muted</code>. Never a generic upload glyph — File Converter's Convert zone showed <code>upload_file</code> under a rail item drawn as <code>grid_view</code>, and the two never met.</p>
+<p class="note"><b>Sibling sections get the same zone, line for line.</b> Icon, label, "or", button — same classes, same colours, same count of lines. Only the icon and the label change. A hint line that one section has and the other lacks makes one zone taller than the other, and the two sections stop reading as one app.</p>
+
 </body></html>
