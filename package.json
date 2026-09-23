@@ -99,7 +99,7 @@
     "author": "Diamond Digital Development <https://diamonddigital.dev>",
     "license": "Apache-2.0",
     "devDependencies": {
-        "electron": "^44.3.0",
+        "electron": "^44.4.5",
         "electron-builder": "^26.15.3"
     },
     "dependencies": {
