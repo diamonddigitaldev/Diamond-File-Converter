@@ -761,13 +761,6 @@ let framePreviewTimer = null;
 let framePreviewToken = 0;
 
 /**
- * Show the frames at either end of the span.
- *
- * Debounced and token-guarded: dragging a handle asks for a great many frames
- * in quick succession, and a slow decode that lands after the user has moved on
- * must not paint a frame they are no longer looking at.
- */
-/**
  * Where to actually decode a preview from. Seeking to exactly the duration
  * lands past the last frame and decodes nothing, which is precisely where the
  * end handle sits until someone drags it.
@@ -777,14 +770,40 @@ function previewAt(seconds) {
     return Math.max(0, Math.min(seconds, limit));
 }
 
+/**
+ * Does the span being chosen have pictures to show? Audio has none, and nor
+ * does a song whose only "video" is its cover art.
+ */
+function trimHasPictures() {
+    const meta = modalSample()?.meta;
+    return !!(meta && meta.ok && meta.hasVideo && !meta.isStill);
+}
+
+/** How long one frame of the sample lasts, for stepping back off the end. */
+function sampleFrameLength() {
+    const fps = modalSample()?.meta?.video?.fps;
+    return fps > 0 ? 1 / fps : 0.04;
+}
+
+/**
+ * Show the frames at either end of the span.
+ *
+ * Debounced and token-guarded: dragging a handle asks for a great many frames
+ * in quick succession, and a slow decode that lands after the user has moved on
+ * must not paint a frame they are no longer looking at.
+ */
 function requestFramePreviews() {
     const sample = modalSample();
     const visible = !$("jm-frame-previews").classList.contains("d-none");
     if (!visible || !sample || !trimState.available) return;
 
+    // The end of a span is where it stops, so the frame sitting exactly there
+    // is the first one left out. The last one kept is a frame earlier, and that
+    // is the one worth seeing when deciding where a clip ends.
+    const lastKept = Math.max(trimState.start, trimState.end - sampleFrameLength());
     const wanted = isSingleFrame()
         ? [["jm-frame-start", trimState.start]]
-        : [["jm-frame-start", trimState.start], ["jm-frame-end", trimState.end]];
+        : [["jm-frame-start", trimState.start], ["jm-frame-end", lastKept]];
 
     // Captions are the user's own input, so they keep up with the drag rather
     // than waiting on a decode.
@@ -846,7 +865,10 @@ function renderFramesChoice(sections) {
     $("jm-trim-title").textContent = on ? "Frames" : "Trim";
     $("jm-frames-choice").classList.toggle("d-none", !on);
     $("jm-frames-estimate").classList.toggle("d-none", !on);
-    $("jm-frame-previews").classList.toggle("d-none", !on || !trimState.available);
+    // A trim of anything that moves gets the same two frames as a frame range:
+    // where a clip starts and ends is far easier to judge by picture than by
+    // clock. Audio keeps the slider alone.
+    $("jm-frame-previews").classList.toggle("d-none", !(on || trimHasPictures()) || !trimState.available);
 
     for (const button of document.querySelectorAll("#jm-frames-choice [data-frame-mode]")) {
         const active = button.dataset.frameMode === (modalChosenMode ?? "frames");

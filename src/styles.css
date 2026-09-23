@@ -1072,7 +1072,7 @@ body.popup-window span:hover {
     display: flex;
     justify-content: space-between;
     gap: 0.5rem;
-    margin-bottom: 0.5rem;
+    margin: 0.5rem 0 0.25rem;
 }
 
 /* Centred when there is only one, so a single-frame choice does not sit

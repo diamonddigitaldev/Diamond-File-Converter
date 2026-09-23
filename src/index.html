@@ -384,16 +384,6 @@
               </div>
 
               <div id="jm-trim-wrap">
-                <div id="jm-frame-previews" class="frame-previews d-none">
-                  <figure class="frame-preview">
-                    <img id="jm-frame-start" alt="">
-                    <figcaption id="jm-frame-start-cap">0:00</figcaption>
-                  </figure>
-                  <figure class="frame-preview" id="jm-frame-end-wrap">
-                    <img id="jm-frame-end" alt="">
-                    <figcaption id="jm-frame-end-cap">0:00</figcaption>
-                  </figure>
-                </div>
                 <div id="jm-trim-slider" class="trim-slider">
                   <div class="trim-track"></div>
                   <div id="jm-trim-range" class="trim-range"></div>
@@ -406,6 +396,18 @@
                   <span id="jm-trim-start-label">0:00</span>
                   <span id="jm-trim-kept" class="text-body-secondary"></span>
                   <span id="jm-trim-end-label">0:00</span>
+                </div>
+                <!-- Under the slider, each frame beneath the end of the span it
+                     shows, so the picture sits where the hand already is. -->
+                <div id="jm-frame-previews" class="frame-previews d-none">
+                  <figure class="frame-preview">
+                    <img id="jm-frame-start" alt="">
+                    <figcaption id="jm-frame-start-cap">0:00</figcaption>
+                  </figure>
+                  <figure class="frame-preview" id="jm-frame-end-wrap">
+                    <img id="jm-frame-end" alt="">
+                    <figcaption id="jm-frame-end-cap">0:00</figcaption>
+                  </figure>
                 </div>
                 <div class="form-text" id="jm-trim-help">Drag either end. Hold <kbd>Shift</kbd> while dragging for finer control.</div>
                 <div id="jm-frames-estimate" class="form-text d-none"></div>
