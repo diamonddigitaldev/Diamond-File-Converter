@@ -66,6 +66,68 @@
         return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
     }
 
+    /**
+     * Seconds to a clock that keeps any fraction: 1:05, 1:05.04, 1:02:03.5.
+     * formatDuration rounds to the second, which is right for a card and wrong
+     * for a trim point someone placed a frame at a time.
+     */
+    function formatTimecode(seconds) {
+        if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return null;
+        const ms = Math.round(seconds * 1000);
+        const whole = Math.floor(ms / 1000);
+        const fraction = ms % 1000;
+        const clock = formatDuration(whole);
+        return fraction === 0 ? clock : `${clock}.${String(fraction).padStart(3, "0").replace(/0+$/, "")}`;
+    }
+
+    /**
+     * How far one step of the trim control moves. A whole second by default;
+     * held Shift is one frame of anything that moves, and a tenth of a second
+     * of anything that does not.
+     */
+    function trimStep(meta, fine) {
+        if (!fine) return 1;
+        const moving = meta && meta.hasVideo && !meta.isStill && meta.video;
+        const fps = moving ? meta.video.fps : null;
+        return fps > 0 ? 1 / fps : 0.1;
+    }
+
+    /**
+     * Put a trim point on the step's grid: "round" to the nearest step, "floor"
+     * or "ceil" to the one below or above.
+     *
+     * The result is floored to the millisecond rather than rounded. A frame
+     * step is rarely a whole number of milliseconds, and ffmpeg keeps frames
+     * from the first one at or after -ss — rounding a frame's time up past its
+     * own timestamp would quietly drop the frame the handle was put on.
+     */
+    function snapToStep(seconds, step, how = "round") {
+        const EPSILON = 1e-6;   // 3 / (1/25) is 75.00000000000001, not 75
+        const n = how === "floor" ? Math.floor(seconds / step + EPSILON)
+            : how === "ceil" ? Math.ceil(seconds / step - EPSILON)
+            : Math.round(seconds / step);
+        return Math.floor(n * step * 1000 + EPSILON) / 1000;
+    }
+
+    /**
+     * Where a trim handle lands when moved toward `seconds`: on the grid, inside
+     * the clip, and at least one step clear of the other handle.
+     *
+     * The end is the one exception to the grid. A clip is rarely a whole number
+     * of seconds long, and snapping its last stretch to the second below would
+     * trim off a fraction nobody asked to lose — so near enough the end is the
+     * end.
+     */
+    function placeTrimHandle(handle, seconds, { start, end, duration, step }) {
+        if (handle === "start") {
+            const latest = snapToStep(Math.max(0, end - step), step, "floor");
+            return Math.max(0, Math.min(snapToStep(seconds, step), latest));
+        }
+        if (seconds >= duration - step / 2) return duration;
+        const earliest = Math.min(duration, snapToStep(start + step, step, "ceil"));
+        return Math.min(duration, Math.max(snapToStep(seconds, step), earliest));
+    }
+
     /** Bytes to a short human size. Binary units, one decimal below 10. */
     function formatBytes(bytes) {
         if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return null;
@@ -704,6 +766,10 @@
         compactSettings,
         CODEC_LABELS,
         formatDuration,
+        formatTimecode,
+        trimStep,
+        snapToStep,
+        placeTrimHandle,
         formatBytes,
         formatEta,
         describeMeta,

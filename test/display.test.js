@@ -30,6 +30,67 @@ test("display: durations read as clocks, and unknown stays unknown", () => {
     assert.equal(d.formatDuration(NaN), null);
 });
 
+test("display: a timecode keeps the fraction a duration rounds away", () => {
+    assert.equal(d.formatTimecode(65), "1:05");
+    assert.equal(d.formatTimecode(65.04), "1:05.04");
+    assert.equal(d.formatTimecode(3723.5), "1:02:03.5");
+    assert.equal(d.formatTimecode(1.0344), "0:01.034", "to the millisecond, no further");
+    assert.equal(d.formatTimecode(0.7000000000000001), "0:00.7", "float noise is not a fraction");
+    assert.equal(d.formatTimecode(null), null);
+    assert.equal(d.formatTimecode(-1), null);
+});
+
+// ---------------------------------------------------------------------------
+// trim stepping
+// ---------------------------------------------------------------------------
+
+const VIDEO_25 = { ok: true, hasVideo: true, isStill: false, video: { fps: 25 } };
+const SONG_WITH_ART = { ok: true, hasVideo: false, isStill: true, video: { fps: null } };
+
+test("trim: a step is a second, or with Shift a frame of video and a tenth of anything else", () => {
+    assert.equal(d.trimStep(VIDEO_25, false), 1);
+    assert.equal(d.trimStep(VIDEO_25, true), 0.04);
+    assert.equal(d.trimStep({ ok: true, hasVideo: false, video: null }, true), 0.1);
+    assert.equal(d.trimStep(SONG_WITH_ART, true), 0.1, "cover art has no frames to step through");
+    assert.equal(d.trimStep(null, true), 0.1);
+});
+
+test("trim: an ordinary drag lands on whole seconds, never a fraction", () => {
+    const at = (seconds) => d.placeTrimHandle("start", seconds, { start: 0, end: 60, duration: 60, step: 1 });
+    assert.equal(at(3.47), 3);
+    assert.equal(at(3.5), 4);
+    assert.equal(at(-2), 0);
+});
+
+test("trim: a fine step lands on a frame, and never rounds past the frame it was put on", () => {
+    // Frame 31 at 29.97fps starts at 1.03437s. Rounded to 1.035 it would be
+    // after the frame's own timestamp, and ffmpeg would start a frame later.
+    const step = 1 / 29.97;
+    const placed = d.snapToStep(31 * step, step);
+    assert.equal(placed, 1.034);
+    assert.ok(placed <= 31 * step && placed > 30 * step);
+
+    assert.equal(d.snapToStep(3, 0.04), 3, "whole seconds survive a frame grid");
+    assert.equal(d.snapToStep(0.7, 0.1), 0.7);
+});
+
+test("trim: the two handles always keep at least one step between them", () => {
+    const state = { start: 5, end: 10, duration: 60, step: 1 };
+    assert.equal(d.placeTrimHandle("start", 12, state), 9, "start stops a second short of the end");
+    assert.equal(d.placeTrimHandle("end", 2, state), 6, "end stops a second past the start");
+
+    const fine = { start: 5, end: 10, duration: 60, step: 0.04 };
+    assert.equal(d.placeTrimHandle("start", 10, fine), 9.96, "one frame apart, not zero");
+    assert.equal(d.placeTrimHandle("end", 5, fine), 5.04);
+});
+
+test("trim: the end of a clip that is not a whole number of seconds is still reachable", () => {
+    const state = { start: 0, end: 12.48, duration: 12.48, step: 1 };
+    assert.equal(d.placeTrimHandle("end", 12.2, state), 12.48, "near enough the end is the end");
+    assert.equal(d.placeTrimHandle("end", 11.8, state), 12);
+    assert.equal(d.placeTrimHandle("start", 12.48, state), 11, "and the start stays on a whole second below it");
+});
+
 test("display: byte sizes stay short", () => {
     assert.equal(d.formatBytes(0), "0 B");
     assert.equal(d.formatBytes(512), "512 B");

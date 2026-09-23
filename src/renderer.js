@@ -746,14 +746,16 @@ const ENCODER_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast",
 //
 // A two-point slider rather than a pair of text boxes: the useful thing about a
 // trim is where the kept span sits relative to the whole clip, which a pair of
-// numbers does not show. Holding Shift scales pointer movement down for fine
-// adjustment, and the arrow keys do the same with a smaller step.
+// numbers does not show.
+//
+// Both handles move in whole seconds. Held Shift steps one frame at a time for
+// anything that moves and a tenth of a second for anything that does not —
+// while dragging and on the arrow keys alike — so a command only ever carries a
+// fraction when someone deliberately asked for one.
 
 const trimState = { duration: 0, start: 0, end: 0, pendingEnd: null, available: false };
 
-const TRIM_MIN_SPAN = 0.05;   // never let the two handles cross
-const TRIM_KEY_STEP = 1;      // seconds per arrow press
-const TRIM_FINE = 0.15;       // Shift multiplier while dragging
+const TRIM_FINE_PX = 4;       // pixels of Shift-drag per fine step
 
 const FRAME_PREVIEW_DEBOUNCE = 220;   // ms after the slider settles
 
@@ -808,7 +810,7 @@ function requestFramePreviews() {
     // Captions are the user's own input, so they keep up with the drag rather
     // than waiting on a decode.
     for (const [id, seconds] of wanted) {
-        $(`${id}-cap`).textContent = display.formatDuration(seconds) ?? "0:00";
+        $(`${id}-cap`).textContent = display.formatTimecode(seconds) ?? "0:00";
     }
 
     clearTimeout(framePreviewTimer);
@@ -881,8 +883,10 @@ function renderFramesChoice(sections) {
     $("jm-frame-end-wrap").classList.toggle("d-none", single);
     $("jm-trim-range").classList.toggle("d-none", single);
     $("jm-trim-help").textContent = single
-        ? "Drag to choose the frame. Hold Shift while dragging for finer control."
-        : "Drag either end. Hold Shift while dragging for finer control.";
+        ? "Drag to choose the frame. Hold Shift to move one frame at a time."
+        : trimHasPictures()
+            ? "Drag either end. It moves in whole seconds; hold Shift to move one frame at a time."
+            : "Drag either end. It moves in whole seconds; hold Shift to move a tenth of a second at a time.";
 
     renderFramesEstimate();
     requestFramePreviews();
@@ -944,11 +948,11 @@ function renderTrim() {
     $("jm-trim-range").style.left = pct(start);
     $("jm-trim-range").style.width = pct(end - start);
 
-    $("jm-trim-start-label").textContent = display.formatDuration(start) ?? "0:00";
-    $("jm-trim-end-label").textContent = display.formatDuration(end) ?? "";
+    $("jm-trim-start-label").textContent = display.formatTimecode(start) ?? "0:00";
+    $("jm-trim-end-label").textContent = display.formatTimecode(end) ?? "";
     // The same span means different things: a trim keeps a stretch of the
     // result, a frame range covers a stretch of the source.
-    const span = display.formatDuration(end - start) ?? "0:00";
+    const span = display.formatTimecode(end - start) ?? "0:00";
     $("jm-trim-kept").textContent = isSingleFrame() ? "" : `${framesMode() ? "covering" : "keeping"} ${span}`;
 
     for (const [id, value] of [["jm-trim-thumb-start", start], ["jm-trim-thumb-end", end]]) {
@@ -964,7 +968,9 @@ function renderTrim() {
 function readTrim() {
     if (!trimState.available) return null;
     const { duration, start, end } = trimState;
-    const round = (v) => Math.round(v * 100) / 100;
+    // Handles already sit on a step, so this only trims float noise. To the
+    // millisecond, not the hundredth: a frame at 29.97fps is 33.4ms long.
+    const round = (v) => Math.round(v * 1000) / 1000;
     return {
         start: start > 0 ? round(start) : null,
         // One frame is a position, not a span, so it carries no end. Leaving one
@@ -974,13 +980,14 @@ function readTrim() {
     };
 }
 
-function moveTrimHandle(handle, seconds) {
-    const { duration } = trimState;
-    if (handle === "start") {
-        trimState.start = Math.max(0, Math.min(seconds, trimState.end - TRIM_MIN_SPAN));
-    } else {
-        trimState.end = Math.min(duration, Math.max(seconds, trimState.start + TRIM_MIN_SPAN));
-    }
+/** One step of the trim control for the file on show, coarse or fine. */
+function currentTrimStep(fine) {
+    return display.trimStep(modalSample()?.meta, fine);
+}
+
+function moveTrimHandle(handle, seconds, fine = false) {
+    const step = currentTrimStep(fine);
+    trimState[handle] = display.placeTrimHandle(handle, seconds, { ...trimState, step });
     renderTrim();
     renderFramesEstimate();
     requestFramePreviews();
@@ -997,17 +1004,25 @@ function initTrimSlider() {
             if (!trimState.available) return;
             e.preventDefault();
             thumb.setPointerCapture(e.pointerId);
-            const originX = e.clientX;
-            const origin = handle === "start" ? trimState.start : trimState.end;
+            // Tracked unsnapped and moved by each pointer event's own
+            // distance, not the distance from where the drag began. Shift can
+            // go down or up mid-drag, and measuring from the origin at the new
+            // rate would throw the handle to somewhere else entirely.
+            let lastX = e.clientX;
+            let raw = trimState[handle];
 
             const onMove = (ev) => {
                 const width = slider.getBoundingClientRect().width || 1;
-                // Shift shrinks how far the value travels per pixel, which is
-                // what "finer control" means for a drag.
-                const scale = ev.shiftKey ? TRIM_FINE : 1;
+                const perPixel = trimState.duration / width;
+                // Shift slows the drag to a few pixels per frame, however long
+                // the clip, so single frames can actually be reached by hand.
+                const rate = ev.shiftKey
+                    ? Math.min(perPixel, currentTrimStep(true) / TRIM_FINE_PX)
+                    : perPixel;
                 slider.classList.toggle("fine", ev.shiftKey);
-                const delta = ((ev.clientX - originX) / width) * trimState.duration * scale;
-                moveTrimHandle(handle, origin + delta);
+                raw = Math.max(0, Math.min(trimState.duration, raw + (ev.clientX - lastX) * rate));
+                lastX = ev.clientX;
+                moveTrimHandle(handle, raw, ev.shiftKey);
             };
             const onUp = (ev) => {
                 thumb.releasePointerCapture(ev.pointerId);
@@ -1021,10 +1036,11 @@ function initTrimSlider() {
 
         thumb.addEventListener("keydown", (e) => {
             if (!trimState.available) return;
-            const step = e.shiftKey ? TRIM_KEY_STEP * TRIM_FINE : TRIM_KEY_STEP;
-            const current = handle === "start" ? trimState.start : trimState.end;
-            if (e.key === "ArrowLeft") { e.preventDefault(); moveTrimHandle(handle, current - step); }
-            else if (e.key === "ArrowRight") { e.preventDefault(); moveTrimHandle(handle, current + step); }
+            const fine = e.shiftKey;
+            const step = currentTrimStep(fine);
+            const current = trimState[handle];
+            if (e.key === "ArrowLeft") { e.preventDefault(); moveTrimHandle(handle, current - step, fine); }
+            else if (e.key === "ArrowRight") { e.preventDefault(); moveTrimHandle(handle, current + step, fine); }
             else if (e.key === "Home") { e.preventDefault(); moveTrimHandle(handle, 0); }
             else if (e.key === "End") { e.preventDefault(); moveTrimHandle(handle, trimState.duration); }
         });
