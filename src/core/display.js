@@ -81,6 +81,32 @@
     }
 
     /**
+     * Read a typed time back: "83", "83.5", "1:23", "1:23.04" or "1:02:03.5".
+     * Null for blank, which means "no limit at this end"; NaN for anything that
+     * is not a time, so a caller can tell a mistake from an empty box.
+     *
+     * Only the last part may carry a fraction, and every part after the first
+     * must be under 60 — "1:75" is far more likely a typo than 2:15.
+     */
+    function parseTimecode(text) {
+        const value = String(text ?? "").trim();
+        if (!value) return null;
+        const parts = value.split(":");
+        if (parts.length > 3) return NaN;
+        const last = parts.length - 1;
+        let total = 0;
+        for (let i = 0; i < parts.length; i++) {
+            const pattern = i === last ? /^\d+(\.\d+)?$|^\.\d+$/ : /^\d+$/;
+            if (!pattern.test(parts[i])) return NaN;
+            const n = Number(parts[i]);
+            if (i > 0 && n >= 60) return NaN;
+            total = total * 60 + n;
+        }
+        // 60 + 23.04 is 83.03999999999999 in floating point.
+        return Math.round(total * 1e6) / 1e6;
+    }
+
+    /**
      * How far one step of the trim control moves. A whole second by default;
      * held Shift is one frame of anything that moves, and a tenth of a second
      * of anything that does not.
@@ -126,6 +152,35 @@
         if (seconds >= duration - step / 2) return duration;
         const earliest = Math.min(duration, snapToStep(start + step, step, "ceil"));
         return Math.min(duration, Math.max(snapToStep(seconds, step), earliest));
+    }
+
+    /**
+     * Check a trim point typed into one of the boxes against the clip and the
+     * other end: { value } when it can be used exactly as typed, { error } when
+     * it cannot. A blank box means the very start or the very end.
+     *
+     * The clip's own length is accepted however it was typed. A duration of
+     * 9.743673s shows as 0:09.744, and typing back what the box showed must not
+     * be refused for being a third of a millisecond too long.
+     */
+    function checkTrimEntry(which, text, { start, end, duration }) {
+        const parsed = parseTimecode(text);
+        if (Number.isNaN(parsed)) return { error: "Use a time like 1:23 or 1:23.5." };
+        const clip = formatTimecode(duration);
+        const exact = (v) => Math.min(duration, Math.round(v * 1000) / 1000);
+
+        if (which === "start") {
+            const value = exact(parsed ?? 0);
+            if (value >= duration) return { error: `The start must be inside the clip, which is ${clip} long.` };
+            if (value >= end) return { error: `The start must be before the end, at ${formatTimecode(end)}.` };
+            return { value };
+        }
+        if (parsed != null && parsed > duration + 0.0005) {
+            return { error: `The end cannot be past the end of the clip, at ${clip}.` };
+        }
+        const value = parsed == null ? duration : exact(parsed);
+        if (value <= start) return { error: `The end must be after the start, at ${formatTimecode(start)}.` };
+        return { value };
     }
 
     /** Bytes to a short human size. Binary units, one decimal below 10. */
@@ -767,9 +822,11 @@
         CODEC_LABELS,
         formatDuration,
         formatTimecode,
+        parseTimecode,
         trimStep,
         snapToStep,
         placeTrimHandle,
+        checkTrimEntry,
         formatBytes,
         formatEta,
         describeMeta,

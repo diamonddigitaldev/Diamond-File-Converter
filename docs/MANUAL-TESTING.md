@@ -24,7 +24,7 @@ sections — the history is useful.
 
 ```
 npm install
-npm test          # expect 183 passing, 0 failing
+npm test          # expect 196 passing, 0 failing
 npm start
 ```
 
@@ -2218,3 +2218,137 @@ named by one glyph, not two — in `docs/design-system/` (regenerate with
 - [ ] Collapse the rail, quit, relaunch. Still collapsed.
 - [ ] Add the same clip twice on Join, by two separate Add Files. It appears
       twice. *(A folder walk lists each file once, but two adds are two adds.)*
+
+---
+
+## 2.0.0-beta.2 — trimming you can place exactly
+
+> **Status: written 2026-09-23 alongside the change, not yet run by hand.**
+> Checked in the running app through a driver, not by eye. Drags, arrow keys
+> and Shift-steps landed on the grid. Typed values reached the command exactly
+> as typed (`-ss 3.04 … -t 4.46`). A backwards end was refused, and Apply
+> stayed off until it was fixed. Two handles one frame apart gave `-t 0.04`.
+> Screenshots were taken in both themes, single-frame mode and audio. A driver
+> cannot tell whether a drag *feels* right, so that is what this section is for.
+
+This supersedes parts of the alpha.1 **Trim slider** section. That section
+says the control is "not a pair of text boxes" and that Shift makes the handle
+move "much more slowly". Neither is true any more.
+
+Three things were wrong with the trim control.
+
+**The command carried whatever fraction the pointer landed on.** An ordinary
+drag gave `-ss 3.47 -t 8.21`. Handles now move in whole seconds. With **Shift**
+held, whether dragging or on the arrow keys, they move one frame at a time for
+video, or a tenth of a second for audio.
+
+**The two handles could sit on top of each other.** Only 0.05s had to separate
+them, so on any clip longer than a few seconds they covered each other and the
+span could shrink to nothing you could see or grab. They now always stay at
+least one step apart: a second, or a frame or tenth with Shift. Each handle is
+half a pill on the *outside* of its point, so two handles a frame apart sit
+side by side as one whole pill.
+
+**There was no way to say an exact time, and no picture for a trim.** Each end
+now has a box above the slider for an exact time. The first and last kept
+frames show under the slider for any video trim, not only when exporting
+frames.
+
+### Test media
+
+A video of 10–20 seconds that is **not** a whole number of seconds long, with
+something visibly changing from frame to frame (a clock, a timecode, motion).
+One audio file. One song with cover art (an MP3 or FLAC with an embedded
+picture).
+
+### Whole seconds by default
+
+- [ ] Add the video, pick **MKV**, open Advanced options. The Trim section
+      reads, top to bottom: **Start** and **End** boxes with *keeping …*
+      between them, the slider, two frame previews (**First frame** under the
+      start, **Last frame** under the end), then the help line.
+- [ ] Drag the start handle slowly across. The Start box only ever shows whole
+      seconds (`0:03`, `0:04`), never `0:03.47`. The command preview shows
+      `-ss 3`, not `-ss 3.47`.
+- [ ] Drag the end handle in from the right, then all the way back. You can
+      reach the true end of the clip. The End box shows its full length, for
+      example `0:12.48`, and the command has **no** `-t`.
+- [ ] Click a handle, then press ← and →. It moves a second at a time.
+
+### Shift for single frames
+
+- [ ] Hold **Shift** and drag a handle. It moves a few pixels per frame, and
+      the box counts up in frames (`0:03.04`, `0:03.08` at 25fps). The cursor
+      turns to a crosshair while Shift is held.
+- [ ] Press and release Shift *during* a drag. The handle carries on from where
+      it is and does not jump somewhere else.
+- [ ] Shift+← / Shift+→ on a focused handle. One frame per press. Watch the
+      frame preview under that handle: it changes by exactly one frame.
+- [ ] Repeat with the audio file (target WAV). A Shift-step is a tenth of a
+      second (`0:03.1`, `0:03.2`). The help line says "a tenth of a second".
+
+### The handles never cover each other
+
+- [ ] Set Start to `6` and End to `7`, then press Shift+← on the end handle
+      until it stops. It stops **one frame** after the start. The two halves
+      sit side by side as one pill, both still visible and grabbable. The
+      command shows `-t 0.04` (at 25fps), not `-t 0`.
+- [ ] Without Shift, press ← on the end handle from well to the right. It stops
+      a whole second after the start.
+- [ ] Try to drag the start handle past the end. It stops short and does not
+      cross.
+- [ ] At both ends of the track, the handles are fully visible and not clipped
+      by the edge of the dialog.
+
+### Exact times
+
+- [ ] Type `0:03.04` into Start and press **Enter**. The handle moves there,
+      the command shows `-ss 3.04`, and the first-frame preview updates. The
+      value is **not** rounded to a whole second.
+- [ ] Each of these is accepted in the End box: `7.5`, `0:07.5`, `0:00:07.5`.
+- [ ] Clear the End box and press Tab. It fills back in with the clip's full
+      length, and the command has no `-t`.
+- [ ] Type `0:02` into End while Start is `0:03.04`, then press Enter. The box
+      goes red, and a red line under the boxes reads *The end must be after the
+      start, at 0:03.04.* **Apply is disabled.** The slider has not moved.
+- [ ] Fix the End box. The red clears and Apply comes back.
+- [ ] Each of these is refused with a message: `abc`, `1:75`, a Start equal to
+      the End, an End past the clip's length.
+- [ ] Type a bad value, then drag a handle instead. The red clears and both
+      boxes show the span the slider is actually on.
+- [ ] Type `1:2` in a box but do not leave it. Nothing goes red until you press
+      Enter or leave the box.
+
+### Previews
+
+- [ ] On the video trim, the **Last frame** preview shows the last frame *kept*,
+      one frame before the End time, not the first frame cut.
+- [ ] On the audio file there are no previews, just the boxes and slider.
+- [ ] On the song with cover art (target MP3 or WAV) there are no previews
+      either. Cover art is not a picture to trim through.
+- [ ] Target **PNG** on the video, choose **A single frame**. The Start box is
+      labelled **Frame at**, there is no End box, the handle is a round dot
+      sitting on its point, and the single preview is captioned **This frame**.
+      Type `0:04.2`. The command shows `-ss 4.2` and `-frames:v 1`.
+- [ ] Switch to **Every frame in the range**. Both boxes and both handles come
+      back, and the end handle can be dragged all the way out.
+
+### Nothing else moved
+
+- [ ] Set a trim, Apply, reopen the dialog. The boxes and handles show the same
+      span, fractions included.
+- [ ] Set a trim with a frame-exact start, Apply, convert. Check the output
+      with ffprobe or a player: it starts on that frame.
+- [ ] On **Join**, type `1:23` and `0:05` in a clip's trim fields. They still
+      work as before. `1:75` is now treated as blank, like any other
+      non-time.
+- [ ] Both themes: the boxes, the red refusal line, the pill handles and the
+      previews all read correctly in light and dark.
+
+### Not testable by an agent — Escape
+
+> A computer-use agent cannot send Escape. Leave these boxes unticked and say
+> so. Only a person at the keyboard can run them.
+
+- [ ] Type a refused value in End, then press **Escape**. The dialog closes and
+      nothing is applied. Reopen it: the trim is what it was before.

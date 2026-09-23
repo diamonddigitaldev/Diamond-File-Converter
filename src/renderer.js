@@ -744,9 +744,9 @@ const ENCODER_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast",
 
 // -- Trim slider -------------------------------------------------------------
 //
-// A two-point slider rather than a pair of text boxes: the useful thing about a
-// trim is where the kept span sits relative to the whole clip, which a pair of
-// numbers does not show.
+// A two-point slider, because the useful thing about a trim is where the kept
+// span sits relative to the whole clip, which a pair of numbers does not show.
+// A box over each end takes an exact time for anything a drag cannot reach.
 //
 // Both handles move in whole seconds. Held Shift steps one frame at a time for
 // anything that moves and a tenth of a second for anything that does not —
@@ -754,6 +754,11 @@ const ENCODER_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast",
 // fraction when someone deliberately asked for one.
 
 const trimState = { duration: 0, start: 0, end: 0, pendingEnd: null, available: false };
+
+// What is wrong with each typed box, if anything. Held apart from trimState:
+// a bad entry is never applied, so the slider keeps describing the last good
+// span while the box says why the new one was refused.
+const trimEntryErrors = { start: null, end: null };
 
 const TRIM_FINE_PX = 4;       // pixels of Shift-drag per fine step
 
@@ -806,12 +811,6 @@ function requestFramePreviews() {
     const wanted = isSingleFrame()
         ? [["jm-frame-start", trimState.start]]
         : [["jm-frame-start", trimState.start], ["jm-frame-end", lastKept]];
-
-    // Captions are the user's own input, so they keep up with the drag rather
-    // than waiting on a decode.
-    for (const [id, seconds] of wanted) {
-        $(`${id}-cap`).textContent = display.formatTimecode(seconds) ?? "0:00";
-    }
 
     clearTimeout(framePreviewTimer);
     framePreviewTimer = setTimeout(async () => {
@@ -878,15 +877,22 @@ function renderFramesChoice(sections) {
         button.setAttribute("aria-pressed", String(active));
     }
 
-    // One handle for one frame: the second would have nothing to mean.
+    // One handle for one frame: the second would have nothing to mean. Nor may
+    // it linger where it was left, or the one handle there is could not be
+    // dragged past a point that is no longer on screen.
+    if (single && trimState.available) trimState.end = trimState.duration;
     $("jm-trim-thumb-end").classList.toggle("d-none", single);
+    $("jm-trim-slider").classList.toggle("single", single);
+    $("jm-trim-end-field").classList.toggle("d-none", single);
     $("jm-frame-end-wrap").classList.toggle("d-none", single);
     $("jm-trim-range").classList.toggle("d-none", single);
+    $("jm-trim-start-name").textContent = single ? "Frame at" : "Start";
+    $("jm-frame-start-cap").textContent = single ? "This frame" : "First frame";
     $("jm-trim-help").textContent = single
-        ? "Drag to choose the frame. Hold Shift to move one frame at a time."
+        ? "Drag to choose the frame, or type an exact time. Hold Shift to move one frame at a time."
         : trimHasPictures()
-            ? "Drag either end. It moves in whole seconds; hold Shift to move one frame at a time."
-            : "Drag either end. It moves in whole seconds; hold Shift to move a tenth of a second at a time.";
+            ? "Drag either end, or type an exact time. It moves in whole seconds; hold Shift to move one frame at a time."
+            : "Drag either end, or type an exact time. It moves in whole seconds; hold Shift to move a tenth of a second at a time.";
 
     renderFramesEstimate();
     requestFramePreviews();
@@ -926,6 +932,9 @@ function setupTrim() {
     trimState.duration = duration;
     trimState.available = duration > 0;
 
+    // A refusal belongs to the box it was typed in, not to the next file.
+    setTrimEntryError("start", null);
+    setTrimEntryError("end", null);
     $("jm-trim-wrap").classList.toggle("d-none", !trimState.available);
     $("jm-trim-unavailable").classList.toggle("d-none", trimState.available);
     if (!trimState.available) return;
@@ -948,8 +957,12 @@ function renderTrim() {
     $("jm-trim-range").style.left = pct(start);
     $("jm-trim-range").style.width = pct(end - start);
 
-    $("jm-trim-start-label").textContent = display.formatTimecode(start) ?? "0:00";
-    $("jm-trim-end-label").textContent = display.formatTimecode(end) ?? "";
+    // The boxes follow the handles. Whatever was typed and refused is replaced
+    // by the span actually in force, which is also what the slider shows.
+    $("jm-trim-start-input").value = display.formatTimecode(start) ?? "0:00";
+    $("jm-trim-end-input").value = display.formatTimecode(end) ?? "";
+    setTrimEntryError("start", null);
+    setTrimEntryError("end", null);
     // The same span means different things: a trim keeps a stretch of the
     // result, a frame range covers a stretch of the source.
     const span = display.formatTimecode(end - start) ?? "0:00";
@@ -980,6 +993,39 @@ function readTrim() {
     };
 }
 
+function setTrimEntryError(which, message) {
+    trimEntryErrors[which] = message;
+    $(`jm-trim-${which}-input`).classList.toggle("is-invalid", !!message);
+    const shown = [trimEntryErrors.start, trimEntryErrors.end].filter(Boolean);
+    $("jm-trim-error").textContent = shown.join(" ");
+    $("jm-trim-error").classList.toggle("d-none", shown.length === 0);
+}
+
+/** Is a typed trim point being refused? Apply waits until it is fixed. */
+function trimHasErrors() {
+    return !$("jm-trim-section").classList.contains("d-none")
+        && !!(trimEntryErrors.start || trimEntryErrors.end);
+}
+
+/**
+ * Take a typed time. It lands exactly as typed, not on the slider's grid —
+ * being able to say 1:23.04 and mean it is the whole reason the box exists.
+ */
+function commitTrimEntry(which) {
+    if (!trimState.available) return;
+    const result = display.checkTrimEntry(which, $(`jm-trim-${which}-input`).value, trimState);
+    if (result.error) {
+        setTrimEntryError(which, result.error);
+        schedulePreview();
+        return;
+    }
+    trimState[which] = result.value;
+    renderTrim();
+    renderFramesEstimate();
+    requestFramePreviews();
+    schedulePreview();
+}
+
 /** One step of the trim control for the file on show, coarse or fine. */
 function currentTrimStep(fine) {
     return display.trimStep(modalSample()?.meta, fine);
@@ -996,6 +1042,16 @@ function moveTrimHandle(handle, seconds, fine = false) {
 
 function initTrimSlider() {
     const slider = $("jm-trim-slider");
+
+    for (const which of ["start", "end"]) {
+        const input = $(`jm-trim-${which}-input`);
+        // Checked when the box is left or Enter is pressed, not on every
+        // keystroke — "1:" on the way to "1:23" is not a mistake yet.
+        input.addEventListener("change", () => commitTrimEntry(which));
+        input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") { e.preventDefault(); commitTrimEntry(which); }
+        });
+    }
 
     for (const handle of ["start", "end"]) {
         const thumb = $(`jm-trim-thumb-${handle}`);
@@ -1379,7 +1435,7 @@ function schedulePreview() {
             : `Showing ${p.basename(sample.filePath)}. ${others} other files use these settings with their own paths.`;
 
         $("jm-errors").textContent = result.ok ? "" : result.errors.join(" ");
-        $("jm-apply").disabled = !result.ok;
+        $("jm-apply").disabled = !result.ok || trimHasErrors();
     }, 180);
 }
 
@@ -1648,17 +1704,13 @@ async function showView(name) {
 let joinClips = [];          // { id, filePath, meta, trim: { start, end } }
 let joinRunning = null;      // the id of the job in flight
 
-/** "1:23" or "83" both mean 83 seconds. Blank means "no limit at this end". */
+/**
+ * "1:23" or "83" both mean 83 seconds. Blank means "no limit at this end", and
+ * so, as it always has here, does anything that is not a time.
+ */
 function parseTime(text) {
-    const value = String(text ?? "").trim();
-    if (!value) return null;
-    if (!value.includes(":")) {
-        const n = Number(value);
-        return Number.isFinite(n) && n >= 0 ? n : null;
-    }
-    const parts = value.split(":").map(Number);
-    if (parts.some(n => !Number.isFinite(n) || n < 0)) return null;
-    return parts.reduce((total, part) => total * 60 + part, 0);
+    const value = display.parseTimecode(text);
+    return Number.isNaN(value) ? null : value;
 }
 
 /**

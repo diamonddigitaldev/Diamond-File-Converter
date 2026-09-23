@@ -40,6 +40,47 @@ test("display: a timecode keeps the fraction a duration rounds away", () => {
     assert.equal(d.formatTimecode(-1), null);
 });
 
+test("display: a typed time reads back, and a mistake is told apart from a blank", () => {
+    assert.equal(d.parseTimecode("83"), 83);
+    assert.equal(d.parseTimecode("83.5"), 83.5);
+    assert.equal(d.parseTimecode("1:23"), 83);
+    assert.equal(d.parseTimecode(" 1:23.04 "), 83.04);
+    assert.equal(d.parseTimecode("1:02:03.5"), 3723.5);
+    assert.equal(d.parseTimecode("0:.5"), 0.5);
+    assert.equal(d.parseTimecode(""), null, "blank means no limit");
+    assert.equal(d.parseTimecode(null), null);
+    for (const bad of ["abc", "1:75", "1.5:00", "-3", "1:2:3:4", "1::2", "1:", "3e2"]) {
+        assert.ok(Number.isNaN(d.parseTimecode(bad)), `${bad} is not a time`);
+    }
+    assert.equal(d.formatTimecode(d.parseTimecode("1:23.04")), "1:23.04", "round trips");
+});
+
+test("trim: a typed start or end lands exactly as typed", () => {
+    const state = { start: 0, end: 60, duration: 60 };
+    assert.deepEqual(d.checkTrimEntry("start", "1.04", state), { value: 1.04 });
+    assert.deepEqual(d.checkTrimEntry("end", "0:30.5", state), { value: 30.5 });
+    assert.deepEqual(d.checkTrimEntry("start", "", state), { value: 0 }, "blank start is the beginning");
+    assert.deepEqual(d.checkTrimEntry("end", "", state), { value: 60 }, "blank end is the end");
+});
+
+test("trim: a typed span that would be empty or backwards is refused", () => {
+    const state = { start: 10, end: 20, duration: 60 };
+    assert.match(d.checkTrimEntry("start", "20", state).error, /before the end/);
+    assert.match(d.checkTrimEntry("start", "25", state).error, /before the end/);
+    assert.match(d.checkTrimEntry("end", "10", state).error, /after the start/);
+    assert.match(d.checkTrimEntry("end", "0:05", state).error, /after the start/);
+    assert.match(d.checkTrimEntry("start", "1:00", { ...state, end: 60 }).error, /inside the clip/);
+    assert.match(d.checkTrimEntry("end", "1:01", state).error, /past the end/);
+    assert.match(d.checkTrimEntry("start", "soon", state).error, /like 1:23/);
+});
+
+test("trim: typing back the length a box showed is never refused as too long", () => {
+    const state = { start: 0, end: 9.743673, duration: 9.743673 };
+    const shown = d.formatTimecode(state.duration);
+    assert.equal(shown, "0:09.744");
+    assert.deepEqual(d.checkTrimEntry("end", shown, state), { value: 9.743673 });
+});
+
 // ---------------------------------------------------------------------------
 // trim stepping
 // ---------------------------------------------------------------------------

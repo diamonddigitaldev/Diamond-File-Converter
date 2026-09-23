@@ -384,6 +384,25 @@
               </div>
 
               <div id="jm-trim-wrap">
+                <!-- Exact values over the ends they set. The slider shows where
+                     a span sits in the clip; these say precisely where it is,
+                     and take a typed time for anything a drag cannot reach. -->
+                <div class="trim-fields">
+                  <div class="trim-field">
+                    <label class="form-label" for="jm-trim-start-input" id="jm-trim-start-name">Start</label>
+                    <input id="jm-trim-start-input" class="form-control form-control-sm trim-input"
+                           type="text" inputmode="decimal" spellcheck="false" autocomplete="off"
+                           aria-describedby="jm-trim-error">
+                  </div>
+                  <span id="jm-trim-kept" class="trim-kept text-body-secondary"></span>
+                  <div class="trim-field trim-field-end" id="jm-trim-end-field">
+                    <label class="form-label" for="jm-trim-end-input">End</label>
+                    <input id="jm-trim-end-input" class="form-control form-control-sm trim-input"
+                           type="text" inputmode="decimal" spellcheck="false" autocomplete="off"
+                           aria-describedby="jm-trim-error">
+                  </div>
+                </div>
+                <div id="jm-trim-error" class="form-text text-danger d-none" role="alert"></div>
                 <div id="jm-trim-slider" class="trim-slider">
                   <div class="trim-track"></div>
                   <div id="jm-trim-range" class="trim-range"></div>
@@ -392,24 +411,19 @@
                   <div id="jm-trim-thumb-end" class="trim-thumb" data-handle="end"
                        tabindex="0" role="slider" aria-label="Trim end"></div>
                 </div>
-                <div class="trim-readout">
-                  <span id="jm-trim-start-label">0:00</span>
-                  <span id="jm-trim-kept" class="text-body-secondary"></span>
-                  <span id="jm-trim-end-label">0:00</span>
-                </div>
                 <!-- Under the slider, each frame beneath the end of the span it
                      shows, so the picture sits where the hand already is. -->
                 <div id="jm-frame-previews" class="frame-previews d-none">
                   <figure class="frame-preview">
                     <img id="jm-frame-start" alt="">
-                    <figcaption id="jm-frame-start-cap">0:00</figcaption>
+                    <figcaption id="jm-frame-start-cap">First frame</figcaption>
                   </figure>
                   <figure class="frame-preview" id="jm-frame-end-wrap">
                     <img id="jm-frame-end" alt="">
-                    <figcaption id="jm-frame-end-cap">0:00</figcaption>
+                    <figcaption id="jm-frame-end-cap">Last frame</figcaption>
                   </figure>
                 </div>
-                <div class="form-text" id="jm-trim-help">Drag either end. It moves in whole seconds; hold <kbd>Shift</kbd> for finer steps.</div>
+                <div class="form-text" id="jm-trim-help">Drag either end, or type an exact time. It moves in whole seconds; hold <kbd>Shift</kbd> for finer steps.</div>
                 <div id="jm-frames-estimate" class="form-text d-none"></div>
               </div>
               <div id="jm-trim-unavailable" class="form-text d-none">

@@ -650,11 +650,43 @@ body.popup-window span:hover {
 
 /* ── Trim slider ─────────────────────────────────────────────────────────── */
 
+/* Start and end, typed exactly, over the ends of the slider they set. */
+.trim-fields {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.trim-field .form-label {
+    margin-bottom: 0.15rem;
+    font-size: 0.75rem;
+    color: var(--bs-secondary-color);
+}
+
+.trim-field-end { text-align: right; }
+
+.trim-input {
+    width: 7.5rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.trim-field-end .trim-input { text-align: right; }
+
+.trim-kept {
+    padding-bottom: 0.35rem;
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Inset by a handle's width each side, because each handle sits wholly
+   outside the span it bounds — see .trim-thumb. */
 .trim-slider {
     position: relative;
     height: 34px;
-    margin: 0.25rem 0 0.1rem;
+    margin: 0.25rem var(--trim-thumb-w) 0.1rem;
     touch-action: none;
+    --trim-thumb-w: 12px;
 }
 
 .trim-track {
@@ -678,18 +710,35 @@ body.popup-window span:hover {
     background-color: var(--accent);
 }
 
+/* Each handle is half a pill, on the outside of the point it marks: the start
+   to its left, the end to its right. Two handles a frame apart then sit side
+   by side as one whole pill instead of one hiding the other, and neither can
+   be lost under its neighbour however close the two points are. */
 .trim-thumb {
     position: absolute;
     top: 50%;
-    width: 15px;
-    height: 15px;
-    margin: -7.5px 0 0 -7.5px;
-    border-radius: 50%;
+    width: var(--trim-thumb-w);
+    height: 20px;
+    margin: -10px 0 0 calc(-1 * var(--trim-thumb-w));
+    border-radius: 10px 3px 3px 10px;
     background-color: var(--accent);
     border: 2px solid var(--bs-body-bg);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
     cursor: grab;
     transition: transform var(--dur-micro) var(--ease-micro);
+}
+
+.trim-thumb[data-handle="end"] {
+    margin-left: 0;
+    border-radius: 3px 10px 10px 3px;
+}
+
+/* One frame is a point, not the edge of a span, so its handle sits on it. */
+.trim-slider.single .trim-thumb[data-handle="start"] {
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    border-radius: 50%;
 }
 
 .trim-thumb:hover { transform: scale(1.15); }
@@ -702,13 +751,6 @@ body.popup-window span:hover {
 
 /* Held Shift means a finer drag; the cursor says so. */
 .trim-slider.fine .trim-thumb:active { cursor: crosshair; }
-
-.trim-readout {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.75rem;
-    font-variant-numeric: tabular-nums;
-}
 
 /* ── Toast ───────────────────────────────────────────────────────────────── */
 
