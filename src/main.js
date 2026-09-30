@@ -13,7 +13,6 @@ const { buildArgs } = require("./core/ffmpeg-args");
 const probe = require("./core/probe");
 const paths = require("./core/paths");
 const scan = require("./core/scan");
-const version = require("./core/version");
 const { menuItems } = require("./menu");
 
 const LOG_LEVELS = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3 };
@@ -57,7 +56,8 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
 
 // The house frame: the shared preload (window.kitAPI) on the app's session,
-// the settings, the Credits tab, the menu and the theme push. The settings are
+// the settings, the Credits tab, the menu, the theme push and the updater
+// (Settings > Update: the channel, automatic downloads, the dot). The settings are
 // the kit's to keep, in the same "settings" key of the same config.json as
 // 2.0.0, so what was saved carries over; this file's own store below keeps
 // the window's bounds and the migration's marker beside them.
@@ -74,6 +74,9 @@ const kit = require("@diamonddigitaldev/electron-kit/main").start({
         donate: "https://buymeacoff.ee/willtda",
     },
     menu: { items: menuItems({ openFiles, openFolder }) },
+    // Packaged, the kit checks 5 seconds after launch, as 2.0.0 did, and when
+    // asked; it never offers a downgrade or a release outside the channel.
+    updates: {},
 });
 
 const store = new Store({
@@ -642,80 +645,6 @@ kit.ipc.handle(IPC.JOB_PREVIEW, (_event, spec) => {
 
 
 
-// ── Auto-update ──────────────────────────────────────────────────────────────
-
-function setupAutoUpdater() {
-    const { autoUpdater } = require("electron-updater");
-    autoUpdater.autoDownload = false;
-    autoUpdater.autoInstallOnAppQuit = true;
-
-    // Pre-releases are never an update target. The updater only ever looks at
-    // the latest stable, whatever the user is currently running.
-    //
-    // This has to be explicit: electron-updater turns allowPrerelease ON BY
-    // ITSELF when the running version carries a pre-release tag, so shipping
-    // 2.0.0-alpha.1 would silently opt every alpha tester into being updated to
-    // the next alpha. allowDowngrade stays off so an alpha user is not dragged
-    // back to an older stable either — they simply get nothing until a stable
-    // release supersedes what they are running.
-    autoUpdater.allowPrerelease = false;
-    autoUpdater.allowDowngrade = false;
-    autoUpdater.channel = "latest";
-
-    autoUpdater.on("update-available", (info) => {
-        const currentVersion = app.getVersion();
-        const newVersion = info.version;
-
-        // Belt and braces. allowPrerelease above should mean this never fires
-        // for a pre-release, but a mis-tagged GitHub release would otherwise
-        // push an alpha at every user, so the offer is checked again here.
-        if (!version.isOfferableUpdate(newVersion, currentVersion)) {
-            log(LOG.WARN, `Ignoring update ${newVersion}: not an offerable stable release`);
-            return;
-        }
-
-        dialog.showMessageBox(mainWindow, {
-            type: "info",
-            title: "Update Available",
-            message: "A new version of Diamond File Converter is available!",
-            detail: `Current version: ${currentVersion}\nNew version: ${newVersion}\n\nWould you like to download and install this update?`,
-            buttons: ["Yes, Update Now", "No, Later", "View Changelog"],
-            defaultId: 0,
-            cancelId: 1
-        }).then(result => {
-            if (result.response === 0) autoUpdater.downloadUpdate();
-            if (result.response === 2) shell.openExternal(`https://github.com/diamonddigitaldev/Diamond-File-Converter/releases/tag/${newVersion}`);
-        });
-    });
-
-    autoUpdater.on("update-not-available", () => log(LOG.INFO, "No updates available"));
-
-    autoUpdater.on("download-progress", (progress) => {
-        log(LOG.INFO, `Download progress: ${Math.round(progress.percent)}%`);
-    });
-
-    autoUpdater.on("update-downloaded", (info) => {
-        dialog.showMessageBox(mainWindow, {
-            type: "info",
-            title: "Update Ready",
-            message: "Update downloaded successfully!",
-            detail: `Version ${info.version} is ready to install. The application will restart to complete the update.`,
-            buttons: ["Install Now", "Install on Quit"],
-            defaultId: 0,
-            cancelId: 1
-        }).then(result => {
-            if (result.response === 0) autoUpdater.quitAndInstall();
-        });
-    });
-
-    autoUpdater.on("error", (err) => log(LOG.ERROR, "Auto-updater error:", err.message));
-
-    // delay startup check so the window is ready to show a dialog
-    setTimeout(() => {
-        autoUpdater.checkForUpdates().catch(() => {});
-    }, 5000);
-}
-
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 
 // kit.ready: the app is ready, and the kit's preload, menu and theme push are in place.
@@ -727,7 +656,6 @@ kit.ready.then(() => {
     probe.setFfprobePath(getFfprobePath());
     createWindow();
     queueIncomingFiles(filePathsFromArgv(process.argv));
-    if (app.isPackaged) setupAutoUpdater();
 });
 
 // macOS delivers associated files through this event rather than argv.

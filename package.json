@@ -17,6 +17,7 @@
         "url": "https://github.com/diamonddigitaldev/Diamond-File-Converter"
     },
     "build": {
+        "extends": "@diamonddigitaldev/electron-kit/builder/base.json",
         "appId": "com.diamonddigitaldev.diamondfileconverter",
         "files": [
             "**/*",
@@ -83,15 +84,11 @@
             "repo": "Diamond-File-Converter"
         },
         "win": {
-            "target": [
-                "nsis"
-            ],
             "icon": "src/assets/diamondfileconverter.ico"
         },
         "nsis": {
             "perMachine": true,
             "createDesktopShortcut": true,
-            "menuCategory": "Diamond Digital Development",
             "include": "installer.nsh"
         }
     },

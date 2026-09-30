@@ -10,7 +10,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
-const { assertAccentContrast, assertNoBareAccelerators } = require("@diamonddigitaldev/electron-kit/testing");
+const { assertAccentContrast, assertNoBareAccelerators, assertBuildExtendsKit } = require("@diamonddigitaldev/electron-kit/testing");
 
 const { IPC, SETTINGS_DEFAULTS } = require("../src/constants");
 const { menuItems } = require("../src/menu");
@@ -38,6 +38,27 @@ test("every one of the app's own handlers goes through kit.ipc.handle()", () => 
     const pushes = [IPC.JOB_PROGRESS, IPC.JOB_STATUS, IPC.FILES_OPENED];
     const handled = [...main.matchAll(/kit\.ipc\.handle\(IPC\.([A-Z_]+)/g)].map(m => IPC[m[1]]);
     assert.deepEqual(handled.sort(), Object.values(IPC).filter(c => !pushes.includes(c)).sort());
+});
+
+test("the updater is the kit's: DFC passes updates, and has no updater or update boxes of its own", () => {
+    const main = read("main.js");
+    assert.match(main, /\.start\(\{[^]*?updates: \{\},/, "kit.start() gets the updates option");
+    assert.ok(!/electron-updater|autoUpdater|setupAutoUpdater/.test(main), "main.js leaves electron-updater to the kit");
+    assert.ok(!/Update Available|Update Ready/.test(main), "no native update boxes");
+    assert.ok(!fs.existsSync(path.join(__dirname, "..", "src", "core", "version.js")), "the version rules are the kit's (its main exports them as version)");
+    // The kit's own rule, as DFC relied on it: a pre-release never reaches Stable, and nothing older is offered.
+    const { version } = require("@diamonddigitaldev/electron-kit/main");
+    assert.equal(version.isOfferableUpdate("2.0.0", "2.0.0-beta.2", "beta"), true);
+    assert.equal(version.isOfferableUpdate("2.1.0-beta.1", "2.0.0", "stable"), false);
+    assert.equal(version.isOfferableUpdate("1.0.0", "2.0.0-alpha.1", "stable"), false);
+});
+
+test("the build extends the kit's base config, and keeps DFC's own", () => {
+    const pkg = require("../package.json");
+    assertBuildExtendsKit(pkg);
+    assert.deepEqual(pkg.build.publish, { provider: "github", owner: "diamonddigitaldev", repo: "Diamond-File-Converter" });
+    assert.equal(pkg.build.nsis.perMachine, true);
+    assert.equal(pkg.build.nsis.include, "installer.nsh");
 });
 
 test("the Credits tab is given the app's name, not package.json's npm name", () => {

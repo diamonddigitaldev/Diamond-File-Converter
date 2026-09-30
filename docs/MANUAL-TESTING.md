@@ -2352,3 +2352,43 @@ picture).
 
 - [ ] Type a refused value in End, then press **Escape**. The dialog closes and
       nothing is applied. Reopen it: the trim is what it was before.
+
+## Settings > Update — channels and automatic downloads
+
+The update boxes are gone. Updates live in **Settings > Update**, and the menu's
+**Check for Updates** opens that tab and checks. Test against a packaged build:
+nothing checks from a build run from source.
+
+### The tab
+
+- [ ] Settings > Update shows `Diamond File Converter <version>`, **Check for
+      Updates** with a status line under it, the **Download updates
+      automatically** switch (on), and the **Update channel** select.
+- [ ] On a beta build with nothing saved, the channel is **Beta**, with the help
+      line "Betas and finished releases." Change it to **Stable**: the line
+      changes, and a check runs.
+- [ ] Close and reopen: the switch and the channel are as you left them.
+
+### Automatic downloads on
+
+- [ ] With a newer release in the channel, about 5 seconds after launch one
+      toast says "Version X has downloaded and will be installed when you close
+      Diamond File Converter." No box asks anything.
+- [ ] The Update tab says the same. Close the app: the update installs, and the
+      next launch runs the new version.
+
+### Automatic downloads off
+
+- [ ] A yellow dot shows on the rail's Settings (on the corner of its icon when
+      the rail is collapsed) and on the Update tab, which says "Version X is
+      available." with **Download Update**. Nothing downloads by itself.
+- [ ] **Download Update** downloads it, with no toast. The dot stays. Close the
+      app: it installs, and the dot is gone on the new version.
+
+### Never the wrong release
+
+- [ ] On **Stable**, running a beta, nothing older than the beta is offered, and
+      no pre-release is either.
+- [ ] **Check for Updates** with nothing newer says "You're up to date."
+- [ ] With no network, the check says "Couldn't check for updates. Try again
+      later." in red, and the app carries on.
