@@ -7,7 +7,10 @@ const LOG = {
     DEBUG: "DEBUG",
 };
 
-// IPC channel names.
+// IPC channel names: the app's own, each answered in main.js through
+// kit.ipc.handle(), which answers the app's own page only. The shared ones
+// (app:get-version, settings:get and :set, shell:open-external, theme:changed,
+// view:show) are the kit's, reached through window.kitAPI.
 //
 // Namespaced by domain. v1 kept a flat map that also carried an
 // electron-updater event name ("update-available") alongside real IPC
@@ -40,15 +43,10 @@ const IPC = {
     // Shell and app.
     SHELL_OPEN_PATH:      "shell:open-path",
     SHELL_SHOW_IN_FOLDER: "shell:show-in-folder",
-    SHELL_OPEN_EXTERNAL:  "shell:open-external",
-    APP_GET_VERSION:      "app:get-version",
     APP_GET_FORMATS:      "app:get-formats",
-    SETTINGS_GET:         "settings:get",
-    SETTINGS_SET:         "settings:set",
 
     // Pushed from main.
     FILES_OPENED:  "files:opened",  // push: string[] of paths from menu/argv/shell
-    THEME_CHANGED: "theme:changed", // push: "dark" | "light" when the OS theme changes
 };
 
 // Window size constraints. Widened for the card grid — the v1 single column
@@ -69,8 +67,11 @@ const WINDOW = {
 // so incoming paths are collected before being handed to the renderer.
 const ARGV_BATCH_DEBOUNCE_MS = 500;
 
-// Defaults written into electron-store on first run. v1 persisted nothing but
-// windowBounds, so there were no user settings at all.
+// The app's settings and their defaults, which the kit keeps (kit.start()'s
+// settings.defaults) under the same "settings" key in config.json that 2.0.0
+// used, so saved settings carry over. The kit adds its own navCollapsed. A
+// setting whose default is null takes any value, so concurrency keeps the
+// number someone picks. v1 persisted nothing but windowBounds.
 const SETTINGS_DEFAULTS = {
     outputRouting:   "alongside",
     outputDir:       null,
@@ -78,7 +79,6 @@ const SETTINGS_DEFAULTS = {
     concurrency:     null,   // null = derive from the CPU count
     nameTemplate:    "{name}",
     lastTargetByKind: {},
-    navCollapsed:    false,
     // Folder ingest. maxDepth and maxFiles are deliberately not here: they are
     // safety rails rather than preferences, and the toast that fires when one
     // bites explains itself at the moment it matters.

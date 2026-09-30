@@ -4,8 +4,10 @@
 //
 // v1 had no preload at all: the renderer ran with nodeIntegration:true and
 // contextIsolation:false and required fs, path and electron directly. This is
-// the entire surface the renderer is now allowed to touch, exposed under the
-// same `electronAPI` name the Dropgate client uses.
+// the app's own surface the renderer is allowed to touch, exposed under the
+// same `electronAPI` name the Dropgate client uses. The shared channels
+// (the version, settings, links out, the theme) are the kit's own preload's,
+// window.kitAPI, which the kit registers on the app's session.
 //
 // IMPORTANT: this file runs in a sandboxed preload, where require() is limited
 // to a small allowlist ("electron", "events", "timers", "url"). Requiring
@@ -32,13 +34,8 @@ const CH = {
     DIALOG_CHOOSE_OUTPUT:  "dialog:choose-output",
     SHELL_OPEN_PATH:       "shell:open-path",
     SHELL_SHOW_IN_FOLDER:  "shell:show-in-folder",
-    SHELL_OPEN_EXTERNAL:   "shell:open-external",
-    APP_GET_VERSION:       "app:get-version",
     APP_GET_FORMATS:       "app:get-formats",
-    SETTINGS_GET:          "settings:get",
-    SETTINGS_SET:          "settings:set",
     FILES_OPENED:          "files:opened",
-    THEME_CHANGED:         "theme:changed",
 };
 
 /** Subscribe helper that hands back an unsubscribe function. */
@@ -101,14 +98,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     // -- Shell and app --------------------------------------------------------
     openPath:     (target) => ipcRenderer.invoke(CH.SHELL_OPEN_PATH, target),
     showInFolder: (target) => ipcRenderer.invoke(CH.SHELL_SHOW_IN_FOLDER, target),
-    openExternal: (url)    => ipcRenderer.invoke(CH.SHELL_OPEN_EXTERNAL, url),
-    getVersion:   ()       => ipcRenderer.invoke(CH.APP_GET_VERSION),
     getFormats:   ()       => ipcRenderer.invoke(CH.APP_GET_FORMATS),
-    getSettings:  ()       => ipcRenderer.invoke(CH.SETTINGS_GET),
-    setSettings:  (s)      => ipcRenderer.invoke(CH.SETTINGS_SET, s),
 
     onFilesOpened:  (cb) => on(CH.FILES_OPENED, cb),
-    onThemeChanged: (cb) => on(CH.THEME_CHANGED, cb),
 });
 
 // Path helpers. The renderer needs basename, extname and stem for display and

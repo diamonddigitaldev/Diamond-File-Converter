@@ -1,0 +1,16 @@
+/* Diamond File Converter's accent: the only colours that differ between the
+   house apps. Its green is shaded 20% so white text on it meets WCAG AA
+   (4.64:1; the old #28a745 gave 3.13:1), with a darker hover. The text and
+   link shades are the ones that pass on the page and the rail in each theme.
+   test/kit.test.js checks every pairing. */
+
+:root {
+    --accent:            #208637;      /* the fill: primary buttons, progress, checked boxes */
+    --accent-hover:      #1b722f;      /* the fill, hovered or pressed */
+    --accent-rgb:        32, 134, 55;  /* --accent as r, g, b, for the washes */
+    --accent-contrast:   #fff;         /* text and icons on the fill */
+    --accent-text-light: #1a6b2c;      /* accent text, and links on hover, in each theme */
+    --accent-text-dark:  #98d5a5;
+    --accent-link-light: #208637;      /* links, in each theme */
+    --accent-link-dark:  #7eca8f;
+}

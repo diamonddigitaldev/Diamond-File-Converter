@@ -103,6 +103,7 @@
         "electron-builder": "^26.15.3"
     },
     "dependencies": {
+        "@diamonddigitaldev/electron-kit": "file:../packs/diamonddigitaldev-electron-kit-0.0.0.tgz",
         "bootstrap": "^5.3.3",
         "electron-store": "^11.0.2",
         "electron-updater": "^6.8.9",

@@ -1,5 +1,7 @@
-/* App-specific styles. Shared house tokens live in styles/tokens.css, which
-   must be linked before this file. */
+/* App-specific styles. The house tokens, the shell (the frame, the nav rail,
+   the header and the Settings view) and Bootstrap's controls are the kit's
+   kit.css, and the accent is styles/accent.css; both are linked before this
+   file, which never restyles the kit's own components. */
 
 html {
     height: 100%;
@@ -31,59 +33,7 @@ a {
 }
 
 .accent {
-    color: var(--accent);
-}
-
-/* base styles for modal/secondary windows (credits, settings, etc.)
-   add class="popup-window" to the <body> of those pages */
-body.popup-window {
-    background-color: var(--bs-body-bg);
-    color: var(--bs-body-color);
-    padding: 20px;
-    height: auto;
-    overflow: auto;
-}
-
-body.popup-window h1 {
-    font-size: 24px;
-    margin-bottom: 20px;
-    text-align: center;
-}
-
-body.popup-window hr {
-    margin: 20px 0;
-    border: none;
-    border-top: 1px solid var(--bs-border-color);
-}
-
-body.popup-window .btn {
-    display: block;
-    width: 100%;
-    padding: 10px;
-    margin-top: 20px;
-    font-size: 16px;
-    background-color: var(--bs-secondary-bg);
-    color: var(--bs-body-color);
-    border: none;
-    border-radius: var(--radius-control);
-    transition: background-color var(--dur-default);
-    cursor: pointer;
-}
-
-body.popup-window .btn:hover {
-    background-color: var(--bs-tertiary-bg);
-}
-
-body.popup-window span {
-    color: var(--accent-muted);
-    text-decoration: none;
-    cursor: pointer;
-    transition: all var(--dur-default);
-}
-
-body.popup-window span:hover {
-    color: var(--accent);
-    text-decoration: underline;
+    color: var(--accent-text);
 }
 
 /* ── Drop zone ───────────────────────────────────────────────────────────── */
@@ -117,7 +67,7 @@ body.popup-window span:hover {
 
 .drop-icon {
     font-size: 48px;
-    color: var(--accent);
+    color: var(--accent-text);
     opacity: var(--opacity-muted);
 }
 
@@ -127,44 +77,17 @@ body.popup-window span:hover {
     margin: 0.75rem 0 0;
 }
 
-/* ── App shell ───────────────────────────────────────────────────────────── */
+/* ── Convert ───────────────────────────────────────────────────────────────── */
 
-/* The rail sits outside the padded content column so it can reach the window
-   edge, which is why the shell is no longer the outermost element. */
-.app-frame {
-    display: flex;
-    height: 100vh;
-    overflow: hidden;
-}
-
-.app-shell {
+/* The Convert view: its drop target, the selection bar, the grid and the
+   action bar, one column in the kit's content area. The grid scrolls, not the
+   view, so the bars stay put. */
+.convert-view {
     display: flex;
     flex-direction: column;
     flex: 1 1 auto;
-    height: 100%;
-    /* Without this a long filename stretches the column and the whole window
-       scrolls sideways. */
-    min-width: 0;
-    padding: 1rem 1.25rem;
+    min-height: 0;
     gap: 0.75rem;
-}
-
-/* The toolbar on the right is shared by both sections and never hidden, which
-   is what keeps this the same height on every view. The title is shorter than
-   the buttons, so hiding them would drop the header by 7px and everything
-   under it with it. */
-.app-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-shrink: 0;
-}
-
-.app-title {
-    font-size: 1.25rem;
-    font-weight: 600;
-    margin: 0;
 }
 
 /* ── Folder options ──────────────────────────────────────────────────────── */
@@ -346,16 +269,6 @@ body.popup-window span:hover {
     --bs-form-check-bg: var(--bs-body-bg);
 }
 
-.card-select:checked {
-    background-color: var(--accent);
-    border-color: var(--accent);
-}
-
-.card-select:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 0.2rem rgba(var(--accent-rgb), 0.25);
-}
-
 .card-head .kind-icon {
     font-size: 18px;
     flex-shrink: 0;
@@ -489,7 +402,7 @@ body.popup-window span:hover {
     animation: status-pulse var(--dur-ambient) infinite var(--ease-state);
 }
 
-.tone-running .status-text { color: var(--accent); }
+.tone-running .status-text { color: var(--accent-text); }
 
 .card-progress {
     height: 4px;
@@ -637,12 +550,12 @@ body.popup-window span:hover {
     transition: color var(--dur-micro) var(--ease-micro);
 }
 
-.card-configure:hover { color: var(--accent); }
+.card-configure:hover { color: var(--accent-text); }
 .card-configure .material-icons-round { font-size: 16px; line-height: 1; display: block; }
 
 .card-settings {
     font-size: 0.72rem;
-    color: var(--accent);
+    color: var(--accent-text);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -857,121 +770,6 @@ body.popup-window span:hover {
 .toast-danger  { background-color: var(--bs-danger);  border-left-color: var(--bs-danger);  color: #fff; }
 
 /* ── Credits logo ────────────────────────────────────────────────────────── */
-
-#credits-logo {
-    margin: 0;
-    width: 24px;
-    height: 24px;
-    pointer-events: none;
-    vertical-align: middle;
-    margin-top: 5px;
-    margin-right: 10px;
-}
-
-/* ── Navigation rail ─────────────────────────────────────────────────────── */
-
-.nav-rail {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    flex-shrink: 0;
-    width: 168px;
-    padding: 1rem 0.5rem;
-    background-color: var(--bs-tertiary-bg);
-    border-right: 1px solid var(--bs-border-color);
-    transition: width var(--dur-state) var(--ease-state);
-}
-
-.nav-rail.collapsed {
-    width: 56px;
-}
-
-.nav-item,
-.nav-collapse {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    width: 100%;
-    padding: 0.5rem 0.6rem;
-    border: 1px solid transparent;
-    border-radius: var(--radius-control);
-    background: none;
-    color: var(--bs-body-color);
-    font-size: 0.9rem;
-    /* The label's line box is what sets the item's height, and Bootstrap's 1.5
-       makes it 21.6px against a 20px icon. Collapsing hides the label, the
-       item shrinks by that 1.6px, and every icon below it creeps up. Pinning
-       the line box to the icon's own height makes both states identical. */
-    line-height: 20px;
-    text-align: left;
-    white-space: nowrap;
-    overflow: hidden;
-    cursor: pointer;
-    transition: background-color var(--dur-state) var(--ease-state),
-                border-color var(--dur-state) var(--ease-state);
-}
-
-.nav-item:hover,
-.nav-collapse:hover {
-    border-color: rgba(var(--accent-rgb), var(--wash-hover-border));
-    background-color: rgba(var(--accent-rgb), var(--wash-hover-fill));
-}
-
-.nav-item.active {
-    border-color: rgba(var(--accent-rgb), var(--wash-active-border));
-    background-color: rgba(var(--accent-rgb), var(--wash-active-fill));
-    color: var(--accent);
-}
-
-.nav-item:focus-visible,
-.nav-collapse:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 0.2rem rgba(var(--accent-rgb), 0.35);
-}
-
-.nav-icon {
-    font-size: 20px;
-    flex-shrink: 0;
-}
-
-/* Collapsing is not a destination, so it sits apart from the two that are. */
-.nav-collapse {
-    margin-top: auto;
-    color: var(--bs-secondary-color);
-}
-
-.nav-rail.collapsed .nav-label {
-    display: none;
-}
-
-.nav-collapse .nav-icon {
-    transition: transform var(--dur-state) var(--ease-state);
-}
-
-.nav-rail.collapsed .nav-collapse .nav-icon {
-    transform: rotate(180deg);
-}
-
-/* ── View switching ──────────────────────────────────────────────────────── */
-
-/* render() and renderSelection() own d-none on the convert elements and know
-   nothing about which view is showing, so these must force-hide with
-   !important rather than compete with them. Each view then keeps its own state
-   while hidden and returns to it intact rather than being rebuilt.
-
-   Four elements, not three: #bulk-bar is toggled by renderSelection rather
-   than by render. The header's Add Files / Add Folder group is deliberately
-   not here — it serves both sections, and hiding it moved the header. */
-.app-shell[data-view="join"] #empty-state,
-.app-shell[data-view="join"] #grid-scroll,
-.app-shell[data-view="join"] #action-bar,
-.app-shell[data-view="join"] #bulk-bar {
-    display: none !important;
-}
-
-.app-shell[data-view="convert"] #join-view {
-    display: none !important;
-}
 
 /* ── Join ────────────────────────────────────────────────────────────────── */
 

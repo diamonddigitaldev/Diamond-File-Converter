@@ -205,36 +205,25 @@ test("settings: main.js still runs the migration, once, before the window", () =
         "migrateStore must run before the window is created");
     assert.match(main, /store\.get\("settingsSchema"\) === SETTINGS_SCHEMA_VERSION/,
         "the migration must be guarded by the schema version, or it runs every launch");
-    assert.match(main, /\{ \.\.\.SETTINGS_DEFAULTS, \.\.\.\(store\.get\("settings"\) \?\? \{\}\) \}/,
-        "settings must be read with the defaults merged underneath");
+    // The kit reads the settings merged over SETTINGS_DEFAULTS; main.js must read them from it.
+    assert.match(main, /settings:\s*\{\s*defaults:\s*SETTINGS_DEFAULTS\s*\}/,
+        "the kit must be given the defaults to merge underneath");
+    assert.match(main, /function appSettings\(\) \{\s*return kit\.settings\.get\(\);/,
+        "settings must be read through the kit, with the defaults merged underneath");
 });
 
-test("credits: Escape is handled in the main process, not the page", () => {
+// Credits used to be a window of its own, with a guard against a second one,
+// Escape handled in main, and a top-level Credits menu item. It's the last tab
+// of the kit's Settings view now, from kit.start()'s credits.
+test("credits: a tab of Settings, not a window or a menu item", () => {
     const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
-    assert.match(main, /before-input-event/,
-        "Escape must be handled via before-input-event, which does not depend on the page script");
-    assert.match(main, /input\.key === "Escape"/);
+    assert.ok(!fs.existsSync(path.join(__dirname, "..", "src", "credits.html")), "credits.html is gone");
+    assert.ok(!/credits\.html|createCreditsWindow/.test(main), "main.js opens no Credits window");
+    assert.match(main, /credits:\s*\{\s*lines:/, "the Credits tab gets DFC's credit lines");
+    assert.match(main, /donate:\s*"https:\/\/buymeacoff\.ee\/willtda"/);
 
-    // The page-level handler was the fragile version that failed when packaged.
-    const credits = fs.readFileSync(path.join(__dirname, "..", "src", "credits.html"), "utf8");
-    assert.ok(!/addEventListener\(\s*["']keydown["']/.test(credits),
-        "credits.html should no longer rely on its own keydown listener");
-});
-
-// ---------------------------------------------------------------------------
-// alpha.2 test-pass regressions (main process)
-// ---------------------------------------------------------------------------
-
-test("credits: only one Credits window can ever be open", () => {
-    // Every menu click used to build another modal. Escape closed the top one
-    // and uncovered an identical window behind it, which reads as Escape doing
-    // nothing at all — the before-input-event handler was never at fault.
-    const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
-    const fn = main.slice(main.indexOf("function createCreditsWindow"));
-    assert.match(fn.slice(0, 400), /if \(creditsWindow && !creditsWindow\.isDestroyed\(\)\)/,
-        "an existing Credits window must be focused rather than duplicated");
-    assert.match(fn.slice(0, 2000), /creditsWindow\.on\("closed"/,
-        "the reference must be cleared, or Credits can never be reopened");
+    const menu = fs.readFileSync(path.join(__dirname, "..", "src", "menu.js"), "utf8");
+    assert.ok(!/label:\s*"Credits"/.test(menu + main), "no Credits menu item");
 });
 
 // Prompt serialisation used to be asserted here by matching three identifiers
@@ -244,24 +233,23 @@ test("credits: only one Credits window can ever be open", () => {
 // "Apply to all remaining files" cases in docs/MANUAL-TESTING.md. What the
 // pool does around those prompts is covered properly in test/runner.test.js.
 
-test("theme: an OS theme change is pushed to the windows, not only observed", () => {
+// The kit pushes an OS theme change to every window (theme:changed from
+// nativeTheme), and its theme.js applies it, beside the media query.
+test("theme: the page follows the OS theme through the kit, not code of its own", () => {
     const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
-    assert.match(main, /nativeTheme\.on\("updated"/,
-        "a live OS theme change must reach the renderer without a restart");
-    assert.match(main, /IPC\.THEME_CHANGED/);
+    assert.ok(!/nativeTheme|broadcastTheme/.test(main), "main.js leaves the theme push to the kit");
 
-    // The media query listener in the page stays as the first route.
     const html = fs.readFileSync(path.join(__dirname, "..", "src", "index.html"), "utf8");
-    assert.match(html, /addEventListener\("change", apply\)/,
-        "the prefers-color-scheme listener must remain");
+    const head = html.slice(0, html.indexOf("</head>"));
+    assert.match(head, /<script src="\.\.\/node_modules\/@diamonddigitaldev\/electron-kit\/page\/theme\.js"><\/script>/,
+        "the kit's theme.js must be in <head>, so the first paint is already in the OS theme");
+    assert.ok(!/<script>/.test(head), "no inline theme script of its own");
 });
 
-test("menu: replacing the default menu must not take DevTools with it", () => {
-    // Electron's F12 accelerator comes from the default application menu, so a
-    // fully custom template silently removed it — leaving no way to open the
-    // console. devTools was never disabled in webPreferences.
+test("menu: DevTools is never disabled", () => {
+    // The kit's menu has Toggle Developer Tools (F12) on a pre-release such as
+    // 2.0.0-beta.2; devTools was never meant to be off in webPreferences.
     const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
-    assert.match(main, /role:\s*"toggleDevTools"/, "DevTools must be reachable");
     assert.ok(!/devTools:\s*false/.test(main),
         "devTools is not meant to be disabled; the loss was an accident of the custom menu");
 });
@@ -282,7 +270,8 @@ test("menu: an accelerator with no modifier steals every keystroke of that lette
     // Written as a scan rather than a check for the one binding, because the
     // same mistake is sitting in two sibling apps and would come back here the
     // moment a menu item is added without thinking about focus.
-    const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
+    // The app's items are in menu.js; the kit builds the rest of the menu, and refuses a bare one itself.
+    const main = ["main.js", "menu.js"].map(f => fs.readFileSync(path.join(__dirname, "..", "src", f), "utf8")).join("\n");
 
     const bare = [...main.matchAll(/accelerator:\s*"([^"]+)"/g)]
         .map(m => m[1])

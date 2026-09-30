@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, shell, nativeTheme } = require("electron");
+const { app, BrowserWindow, dialog, shell } = require("electron");
 const Store = require("electron-store").default;
 const fs = require("fs");
 const { spawn } = require("child_process");
@@ -14,6 +14,7 @@ const probe = require("./core/probe");
 const paths = require("./core/paths");
 const scan = require("./core/scan");
 const version = require("./core/version");
+const { menuItems } = require("./menu");
 
 const LOG_LEVELS = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3 };
 
@@ -55,13 +56,30 @@ if (process.platform === "win32") {
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
 
+// The house frame: the shared preload (window.kitAPI) on the app's session,
+// the settings, the Credits tab, the menu and the theme push. The settings are
+// the kit's to keep, in the same "settings" key of the same config.json as
+// 2.0.0, so what was saved carries over; this file's own store below keeps
+// the window's bounds and the migration's marker beside them.
+const kit = require("@diamonddigitaldev/electron-kit/main").start({
+    settings: { defaults: SETTINGS_DEFAULTS },
+    credits: {
+        lines: [
+            ["Created and maintained by ", { text: "Diamond Digital Development", href: "https://diamonddigital.dev" }, "."],
+            ["Logo designed by ", { text: "TheFuturisticIdiot", href: "https://github.com/TheFuturisticIdiot" }, "."],
+            "This software is licensed under the Apache 2.0 license.",
+        ],
+        donate: "https://buymeacoff.ee/willtda",
+    },
+    menu: { items: menuItems({ openFiles, openFolder }) },
+});
+
 const store = new Store({
     defaults: {
         windowBounds: {
             width: WINDOW.DEFAULT_WIDTH,
             height: WINDOW.DEFAULT_HEIGHT,
         },
-        settings: SETTINGS_DEFAULTS,
     }
 });
 
@@ -92,16 +110,12 @@ function migrateStore() {
 }
 
 /**
- * The app-wide settings, with the defaults underneath.
- *
- * electron-store's `defaults` replace the whole `settings` key the first time
- * anything writes to it, and the renderer only ever writes `scan` and
- * `navCollapsed` — so reading the key raw hands back an object missing every
- * other field, and `?? SETTINGS_DEFAULTS` never fires because the object it is
- * guarding is present. Merging is what actually restores a default.
+ * The app-wide settings, with the defaults underneath: the kit reads what's
+ * stored merged over SETTINGS_DEFAULTS, so a setting a partial saved object
+ * leaves out still has its default.
  */
 function appSettings() {
-    return { ...SETTINGS_DEFAULTS, ...(store.get("settings") ?? {}) };
+    return kit.settings.get();
 }
 
 let mainWindow;
@@ -139,6 +153,7 @@ function createWindow() {
         icon: getIconPath(),
         webPreferences: {
             preload: path.join(__dirname, "preload.js"),
+            sandbox: true,
             contextIsolation: true,
             nodeIntegration: false,
         }
@@ -169,133 +184,25 @@ function createWindow() {
     mainWindow.webContents.on("did-finish-load", flushPendingFiles);
 }
 
-// Both pages follow the OS theme through a prefers-color-scheme listener of
-// their own, which is the mechanism that is supposed to carry a live change.
-// A tester on real Windows saw the app stay dark after switching Windows to
-// Light, so this pushes the change explicitly as well: nativeTheme is the
-// main process's own view of the OS setting, and does not depend on the media
-// query notification reaching the renderer. Belt and braces — the page applies
-// whichever arrives first, and applying twice is a no-op.
-function broadcastTheme() {
-    const theme = nativeTheme.shouldUseDarkColors ? "dark" : "light";
-    for (const win of BrowserWindow.getAllWindows()) {
-        if (!win.isDestroyed()) win.webContents.send(IPC.THEME_CHANGED, theme);
+// The menu's own items (menu.js): the kit puts them first in the house menu.
+
+async function openFiles() {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ["openFile", "multiSelections"],
+        filters: FILE_DIALOG_FILTERS,
+    });
+    if (!result.canceled && result.filePaths.length > 0) {
+        sendFilesToRenderer(result.filePaths);
     }
 }
 
-// Only ever one Credits window. Without this guard the menu opened another
-// modal on every click, stacking identical windows: Escape closed the top one
-// and revealed the one behind it, which looks exactly like Escape doing
-// nothing. The handler below was never the problem.
-let creditsWindow = null;
-
-function createCreditsWindow() {
-    if (creditsWindow && !creditsWindow.isDestroyed()) {
-        creditsWindow.focus();
-        return;
+async function openFolder() {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ["openDirectory"],
+    });
+    if (!result.canceled && result.filePaths.length > 0) {
+        sendFilesToRenderer(result.filePaths);
     }
-
-    creditsWindow = new BrowserWindow({
-        width: 750,
-        height: 450,
-        parent: mainWindow,
-        modal: true,
-        resizable: false,
-        minimizable: false,
-        maximizable: false,
-        fullscreenable: false,
-        webPreferences: {
-            preload: path.join(__dirname, "preload.js"),
-            contextIsolation: true,
-            nodeIntegration: false,
-        },
-        icon: getIconPath()
-    });
-    creditsWindow.on("minimize", (e) => {
-        e.preventDefault();
-        creditsWindow.show();
-        creditsWindow.focus();
-    });
-
-    // Escape closes the window. Handled in the main process rather than with a
-    // keydown listener in the page: before-input-event fires no matter where
-    // focus sits inside the document, and does not depend on the page script
-    // having run. The page-level handler worked when run unpackaged but not in
-    // the packaged build, which is exactly the fragility this avoids.
-    creditsWindow.webContents.on("before-input-event", (event, input) => {
-        if (input.type === "keyDown" && input.key === "Escape") {
-            event.preventDefault();
-            if (!creditsWindow.isDestroyed()) creditsWindow.close();
-        }
-    });
-    creditsWindow.on("closed", () => { creditsWindow = null; });
-    creditsWindow.setMenu(null);
-    creditsWindow.loadFile(path.join(__dirname, "credits.html"));
-}
-
-function setupMenu() {
-    const template = [
-        {
-            label: "Menu",
-            submenu: [
-                {
-                    label: "Open Files",
-                    accelerator: "Ctrl+O",
-                    click: async () => {
-                        const result = await dialog.showOpenDialog(mainWindow, {
-                            properties: ["openFile", "multiSelections"],
-                            filters: FILE_DIALOG_FILTERS,
-                        });
-                        if (!result.canceled && result.filePaths.length > 0) {
-                            sendFilesToRenderer(result.filePaths);
-                        }
-                    }
-                },
-                {
-                    label: "Open Folder",
-                    accelerator: "Ctrl+Shift+O",
-                    click: async () => {
-                        const result = await dialog.showOpenDialog(mainWindow, {
-                            properties: ["openDirectory"],
-                        });
-                        if (!result.canceled && result.filePaths.length > 0) {
-                            sendFilesToRenderer(result.filePaths);
-                        }
-                    }
-                },
-                { type: "separator" },
-                {
-                    label: "Check for Updates",
-                    click: checkForUpdatesManually
-                },
-                { type: "separator" },
-                // Electron's F12 / Ctrl+Shift+I shortcut comes from the default
-                // application menu, so replacing that menu with this one took
-                // DevTools away with it — which left testers unable to check
-                // the console at all. Re-declared explicitly; webPreferences
-                // never disabled devTools, so this was an accident, not a
-                // lock-down.
-                {
-                    label: "Toggle Developer Tools",
-                    accelerator: "F12",
-                    role: "toggleDevTools"
-                },
-                { type: "separator" },
-                {
-                    label: "Exit",
-                    accelerator: "Alt+F4",
-                    role: "quit"
-                }
-            ]
-        },
-        {
-            label: "Credits",
-            accelerator: "CmdOrCtrl+Shift+C",
-            click: () => { createCreditsWindow(); }
-        }
-    ];
-
-    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
 // ── Incoming files (file associations, "Open with", Explorer context menu) ───
@@ -524,6 +431,10 @@ function runJobToCompletion(job) {
 }
 
 // ── IPC ──────────────────────────────────────────────────────────────────────
+//
+// Every handler goes through kit.ipc.handle(), which answers the app's own
+// page only: a window of the app navigated anywhere else still has the
+// preload's bridge, and is refused before the handler runs.
 
 async function runSubmittedJob(spec) {
     const settings = appSettings();
@@ -576,7 +487,7 @@ async function runSubmittedJob(spec) {
     return result;
 }
 
-ipcMain.handle(IPC.JOB_RUN, (_event, spec) => withBatchJob(() => runSubmittedJob(spec)));
+kit.ipc.handle(IPC.JOB_RUN, (_event, spec) => withBatchJob(() => runSubmittedJob(spec)));
 
 async function runSubmittedJoin(spec) {
     const settings = appSettings();
@@ -602,22 +513,22 @@ async function runSubmittedJoin(spec) {
     return result;
 }
 
-ipcMain.handle(IPC.JOIN_RUN, (_event, spec) => withBatchJob(() => runSubmittedJoin(spec)));
+kit.ipc.handle(IPC.JOIN_RUN, (_event, spec) => withBatchJob(() => runSubmittedJoin(spec)));
 
-ipcMain.handle(IPC.JOB_CANCEL, (_event, jobId) => getRunner().cancel(jobId));
+kit.ipc.handle(IPC.JOB_CANCEL, (_event, jobId) => getRunner().cancel(jobId));
 // The footer button, reachable only when no prompt is open — but it aborts the
 // same batch, so it records it the same way.
-ipcMain.handle(IPC.QUEUE_CANCEL_ALL, () => { conflictAbort = true; getRunner().cancelAll(); });
-ipcMain.handle(IPC.QUEUE_SET_CONCURRENCY, (_event, n) => {
+kit.ipc.handle(IPC.QUEUE_CANCEL_ALL, () => { conflictAbort = true; getRunner().cancelAll(); });
+kit.ipc.handle(IPC.QUEUE_SET_CONCURRENCY, (_event, n) => {
     getRunner().setConcurrency(n);
-    store.set("settings.concurrency", n);
+    kit.settings.set({ concurrency: n });
 });
 
-ipcMain.handle(IPC.PROBE_FILE, (_event, filePath) => probe.probe(filePath));
+kit.ipc.handle(IPC.PROBE_FILE, (_event, filePath) => probe.probe(filePath));
 
-ipcMain.handle(IPC.FS_SCAN, (_event, inputPaths, options) => scan.scanPaths(inputPaths ?? [], options ?? {}));
+kit.ipc.handle(IPC.FS_SCAN, (_event, inputPaths, options) => scan.scanPaths(inputPaths ?? [], options ?? {}));
 
-ipcMain.handle(IPC.DIALOG_BROWSE_FILES, async () => {
+kit.ipc.handle(IPC.DIALOG_BROWSE_FILES, async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
         properties: ["openFile", "multiSelections"],
         filters: FILE_DIALOG_FILTERS,
@@ -626,13 +537,13 @@ ipcMain.handle(IPC.DIALOG_BROWSE_FILES, async () => {
     return result.filePaths;
 });
 
-ipcMain.handle(IPC.DIALOG_BROWSE_FOLDER, async () => {
+kit.ipc.handle(IPC.DIALOG_BROWSE_FOLDER, async () => {
     const result = await dialog.showOpenDialog(mainWindow, { properties: ["openDirectory"] });
     if (result.canceled || result.filePaths.length === 0) return null;
     return result.filePaths;
 });
 
-ipcMain.handle(IPC.DIALOG_CHOOSE_OUTPUT, async () => {
+kit.ipc.handle(IPC.DIALOG_CHOOSE_OUTPUT, async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
         properties: ["openDirectory", "createDirectory"],
         title: "Choose an output folder",
@@ -641,21 +552,15 @@ ipcMain.handle(IPC.DIALOG_CHOOSE_OUTPUT, async () => {
     return result.filePaths[0];
 });
 
-ipcMain.handle(IPC.SHELL_OPEN_PATH, (_event, target) => shell.openPath(target));
-ipcMain.handle(IPC.SHELL_SHOW_IN_FOLDER, (_event, target) => { shell.showItemInFolder(target); });
-ipcMain.handle(IPC.SHELL_OPEN_EXTERNAL, (_event, url) => {
-    // Only ever hand the OS an http(s) URL, whatever the page asked for.
-    if (typeof url === "string" && /^https?:\/\//i.test(url)) return shell.openExternal(url);
-    log(LOG.WARN, `Refused to open external URL: ${url}`);
-});
-
+kit.ipc.handle(IPC.SHELL_OPEN_PATH, (_event, target) => shell.openPath(target));
+kit.ipc.handle(IPC.SHELL_SHOW_IN_FOLDER, (_event, target) => { shell.showItemInFolder(target); });
 /**
  * Decode a single frame for the dialog to show. Deliberately forgiving: a source
  * that will not seek, will not decode, or simply has no picture there resolves
  * to null and the dialog shows nothing. A missing preview must never be able to
  * block choosing a frame.
  */
-ipcMain.handle(IPC.PREVIEW_FRAME, (_event, request) => {
+kit.ipc.handle(IPC.PREVIEW_FRAME, (_event, request) => {
     const inputPath = request && request.inputPath;
     const timestamp = Number(request && request.timestamp) || 0;
     if (!inputPath) return null;
@@ -694,8 +599,7 @@ ipcMain.handle(IPC.PREVIEW_FRAME, (_event, request) => {
     });
 });
 
-ipcMain.handle(IPC.APP_GET_VERSION, () => app.getVersion());
-ipcMain.handle(IPC.APP_GET_FORMATS, () => ({
+kit.ipc.handle(IPC.APP_GET_FORMATS, () => ({
     conversionMap: formats.buildLegacyConversionMap(),
     aliases: formats.EXT_ALIASES,
     supported: formats.SUPPORTED_EXTENSIONS,
@@ -714,7 +618,7 @@ ipcMain.handle(IPC.APP_GET_FORMATS, () => ({
 
 // Live ffmpeg preview for the New Job dialog. Runs the spec through the real
 // argument builder, so what the dialog shows is what will actually be executed.
-ipcMain.handle(IPC.JOB_PREVIEW, (_event, spec) => {
+kit.ipc.handle(IPC.JOB_PREVIEW, (_event, spec) => {
     try {
         const job = createJob(spec);
         const validation = validateJob(job);
@@ -734,11 +638,6 @@ ipcMain.handle(IPC.JOB_PREVIEW, (_event, spec) => {
     }
 });
 
-ipcMain.handle(IPC.SETTINGS_GET, () => store.get("settings"));
-ipcMain.handle(IPC.SETTINGS_SET, (_event, settings) => {
-    store.set("settings", { ...store.get("settings"), ...settings });
-    return store.get("settings");
-});
 
 
 // ── Auto-update ──────────────────────────────────────────────────────────────
@@ -815,50 +714,16 @@ function setupAutoUpdater() {
     }, 5000);
 }
 
-function checkForUpdatesManually() {
-    const { autoUpdater } = require("electron-updater");
-    autoUpdater.allowPrerelease = false;
-    autoUpdater.allowDowngrade = false;
-    autoUpdater.channel = "latest";
-
-    autoUpdater.checkForUpdates().then(result => {
-        const found = result?.updateInfo?.version ?? null;
-        // Equality was the wrong test: running 2.0.0-alpha.1 against a latest
-        // stable of 1.0.0 is neither equal nor an update, and the check used to
-        // fall through and do nothing at all.
-        if (!version.isOfferableUpdate(found, app.getVersion())) {
-            dialog.showMessageBox(mainWindow, {
-                type: "info",
-                title: "No Updates",
-                message: "You're up to date!",
-                detail: `Diamond File Converter ${app.getVersion()} is the latest version.`,
-                buttons: ["OK", "View Changelog"]
-            }).then(r => {
-                if (r.response === 1) shell.openExternal(`https://github.com/diamonddigitaldev/Diamond-File-Converter/releases/tag/${app.getVersion()}`);
-            });
-        }
-    }).catch(err => {
-        dialog.showMessageBox(mainWindow, {
-            type: "error",
-            title: "Update Check Failed",
-            message: "Could not check for updates.",
-            detail: err.message,
-            buttons: ["OK"]
-        });
-    });
-}
-
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 
-app.whenReady().then(() => {
+// kit.ready: the app is ready, and the kit's preload, menu and theme push are in place.
+kit.ready.then(() => {
     log(LOG.INFO, "=== App ready ===");
     // Before the window, because the renderer asks for settings on load and
     // should never be handed a value the migration is about to remove.
     migrateStore();
     probe.setFfprobePath(getFfprobePath());
     createWindow();
-    setupMenu();
-    nativeTheme.on("updated", broadcastTheme);
     queueIncomingFiles(filePathsFromArgv(process.argv));
     if (app.isPackaged) setupAutoUpdater();
 });

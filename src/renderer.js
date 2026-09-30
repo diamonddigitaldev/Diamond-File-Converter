@@ -1,13 +1,16 @@
 // Renderer — job card grid.
 //
 // Runs with contextIsolation on and no Node access. Everything reaches the main
-// process through window.electronAPI, exposed by preload.js.
+// process through window.electronAPI, exposed by preload.js, except the
+// settings, which go through the kit's window.kitAPI. The frame, the nav rail,
+// the Settings view and the theme are the kit's (kit.ui.mountShell() below).
 //
 // The v1 UI was a single-column list with one shared target format per media
 // kind and a strictly sequential convert loop. This is a grid of independently
 // configurable job cards that run through the runner's concurrency pool.
 
 const api = window.electronAPI;
+const kitApi = window.kitAPI;
 const p = window.pathAPI;
 
 // -- State -------------------------------------------------------------------
@@ -1678,20 +1681,14 @@ function confirmDialog({ title, body, confirmLabel = "Confirm", variant = "prima
 
 let currentView = "convert";
 
-/** The single route between views: a rail click, or a file drop from elsewhere. */
-async function showView(name) {
-    if (name === currentView) return;
+/** The kit's shell, once mounted: showView() is the single route between views. */
+let shell = null;
 
+/** What arriving at a view does: the kit shows it, and this brings it up to date. */
+function onViewChange(name) {
     currentView = name;
-    document.querySelector(".app-shell").dataset.view = name;
-
-    for (const item of document.querySelectorAll(".nav-item")) {
-        const active = item.dataset.view === name;
-        item.classList.toggle("active", active);
-        if (active) item.setAttribute("aria-current", "page");
-        else item.removeAttribute("aria-current");
-    }
-
+    // The first view is shown as the shell is mounted, before the formats have arrived.
+    if (!FORMATS) return;
     if (name === "convert") render();
     else if (name === "join") renderJoin();
 }
@@ -2039,11 +2036,6 @@ function setupJoin() {
     }
 }
 
-function setNavCollapsed(collapsed) {
-    $("nav-rail").classList.toggle("collapsed", collapsed);
-    $("nav-collapse").title = collapsed ? "Expand" : "Collapse";
-}
-
 // -- Folder options ----------------------------------------------------------
 
 /**
@@ -2072,7 +2064,7 @@ function setupScanOptions() {
             followSymlinks: $("scan-symlinks").checked,
             kinds,
         };
-        await api.setSettings({ ...(await api.getSettings()), scan: scanPrefs });
+        await kitApi.setSettings({ scan: scanPrefs });
     }
 
     function setOpen(open) {
@@ -2110,32 +2102,34 @@ function setupScanOptions() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+    // The frame around the two sections. The kit adds Settings (with its
+    // Update and Credits tabs) and Collapse to the rail, and remembers
+    // Collapse, because a narrow window is exactly where someone collapses it
+    // and exactly where it would be most annoying to have to do so again.
+    // Mounted first, so the page is never seen without its frame.
+    shell = kit.ui.mountShell({
+        title: "Diamond File Converter",
+        sections: [
+            { view: "convert", label: "Convert", icon: "swap_horiz", element: $("convert-view") },
+            { view: "join", label: "Join", icon: "merge_type", element: $("join-view") },
+        ],
+        toolbar: $("toolbar"),
+        credits: { logo: "assets/diamondfileconverter.png" },
+        onViewChange,
+    });
+
     FORMATS = await api.getFormats();
     TARGETS = FORMATS.targetsByExt;
     DESCRIPTORS = FORMATS.descriptors;
 
-    // Navigation rail. Collapse is remembered, because a narrow window is
-    // exactly where someone collapses it and exactly where it would be most
-    // annoying to have to do so again every launch.
-    const settings = await api.getSettings();
-    setNavCollapsed(settings?.navCollapsed === true);
-
+    const settings = await kitApi.getSettings();
     if (settings?.scan) scanPrefs = { ...scanPrefs, ...settings.scan };
     setupScanOptions();
     setupJoin();
 
-    for (const item of document.querySelectorAll(".nav-item")) {
-        item.addEventListener("click", () => showView(item.dataset.view));
-    }
-    $("nav-collapse").addEventListener("click", async () => {
-        const collapsed = !$("nav-rail").classList.contains("collapsed");
-        setNavCollapsed(collapsed);
-        await api.setSettings({ ...(await api.getSettings()), navCollapsed: collapsed });
-    });
-
     // Drag and drop. The document-level guard stops a stray drop navigating the
     // window to the file and replacing the app with it.
-    const shell = document.querySelector(".app-shell");
+    const appShell = document.querySelector(".app-shell");
     let dragDepth = 0;
 
     document.addEventListener("dragover", (e) => e.preventDefault());
@@ -2147,7 +2141,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // The highlight belongs to the grid, so it stays off while Join is
         // showing — Join's own zone lights itself.
         if (currentView !== "convert") return;
-        shell.classList.add("drag-over");
+        appShell.classList.add("drag-over");
         if (jobs.length === 0) $("drop-zone").classList.add("drag-over");
     });
     document.addEventListener("dragleave", () => {
@@ -2156,13 +2150,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         // highlight flicker.
         dragDepth = Math.max(0, dragDepth - 1);
         if (dragDepth === 0) {
-            shell.classList.remove("drag-over");
+            appShell.classList.remove("drag-over");
             $("drop-zone").classList.remove("drag-over");
         }
     });
     document.addEventListener("drop", async (e) => {
         dragDepth = 0;
-        shell.classList.remove("drag-over");
+        appShell.classList.remove("drag-over");
         $("drop-zone").classList.remove("drag-over");
 
         // Read the paths before any await — dataTransfer does not survive one.
@@ -2180,9 +2174,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // The header's Add Files and Add Folder serve both sections, so they take
     // the same reading as a drop: whichever section is showing gets the files.
+    // Settings isn't one, so files arriving there go to Convert, shown.
     function takePaths(paths) {
         if (currentView === "join") addJoinPaths(paths);
-        else ingestPaths(paths);
+        else ingestFromAnywhere(paths);
     }
     async function browseFiles() {
         const filePaths = await api.browseFiles();
@@ -2326,14 +2321,12 @@ api.onJobStatus(({ jobId, status }) => {
     }
 });
 
-api.onFilesOpened((filePaths) => {
-    ingestPaths(Array.isArray(filePaths) ? filePaths : [filePaths]);
-});
+/** Files for Convert, from wherever they came: shown on Convert if Settings is showing. */
+function ingestFromAnywhere(paths) {
+    if (currentView === "settings") shell?.showView("convert");
+    ingestPaths(paths);
+}
 
-// The page already follows the OS theme through its own prefers-color-scheme
-// listener in index.html. This is the second route: main pushes the change
-// from nativeTheme, so a live switch does not depend on the media query
-// notification arriving. Whichever lands first wins; the other is a no-op.
-api.onThemeChanged((theme) => {
-    document.documentElement.setAttribute("data-bs-theme", theme);
+api.onFilesOpened((filePaths) => {
+    ingestFromAnywhere(Array.isArray(filePaths) ? filePaths : [filePaths]);
 });

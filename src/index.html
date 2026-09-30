@@ -6,56 +6,28 @@
     <title>Diamond File Converter</title>
     <link rel="stylesheet" href="../node_modules/bootstrap/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="../node_modules/material-icons/iconfont/round.css">
-    <link rel="stylesheet" href="styles/tokens.css">
+    <link rel="stylesheet" href="../node_modules/@diamonddigitaldev/electron-kit/css/kit.css">
+    <link rel="stylesheet" href="styles/accent.css">
     <link rel="stylesheet" href="styles.css">
-    <script>
-        (() => {
-            const mql = window.matchMedia("(prefers-color-scheme: dark)");
-            const apply = () => document.documentElement.setAttribute("data-bs-theme", mql.matches ? "dark" : "light");
-            apply();
-            mql.addEventListener("change", apply);
-        })();
-    </script>
+    <!-- Draws the page in the OS theme before the body parses, then follows it. -->
+    <script src="../node_modules/@diamonddigitaldev/electron-kit/page/theme.js"></script>
 </head>
 <body>
 
-    <div class="app-frame">
+    <!-- kit.ui.mountShell() (renderer.js) builds the frame around what's
+         here: the nav rail (Convert and Join, then Settings and Collapse), and
+         the header with the app's title and the toolbar below, over the two
+         sections. Convert and Join are siblings you switch between, not a
+         place you have to back out of; each keeps its own state while hidden.
 
-        <!-- Convert and Join are siblings you switch between, not a place you
-             have to back out of. Each keeps its own state while hidden.
+         Each section's icon is its identity: the same glyph names it in the
+         rail and sits at the top of its empty-state drop zone. -->
 
-             Each section's icon is its identity: the same glyph names it here
-             and sits at the top of its empty-state drop zone. swap_horiz is
-             the source-to-target arrow the cards already draw. -->
-        <nav id="nav-rail" class="nav-rail" aria-label="Sections">
-            <!-- active as well as aria-current: showView only toggles the class
-                 on a switch, so without it the first launch highlights nothing. -->
-            <button class="nav-item active" data-view="convert" type="button" aria-current="page">
-                <span class="material-icons-round nav-icon">swap_horiz</span>
-                <span class="nav-label">Convert</span>
-            </button>
-            <!-- merge_type over merge or call_merge: all three are the same
-                 two-into-one arrow, but this one's fork is asymmetric and stays
-                 legible at the 20px the rail draws it at. -->
-            <button class="nav-item" data-view="join" type="button">
-                <span class="material-icons-round nav-icon">merge_type</span>
-                <span class="nav-label">Join</span>
-            </button>
-            <button id="nav-collapse" class="nav-collapse" type="button" title="Collapse">
-                <span class="material-icons-round nav-icon">chevron_left</span>
-                <span class="nav-label">Collapse</span>
-            </button>
-        </nav>
-
-    <div class="app-shell" data-view="convert">
-
-        <header class="app-header">
-            <h1 class="app-title">Diamond File Converter</h1>
-            <!-- One toolbar for both sections, adding to whichever is showing.
-                 It used to be hidden on Join, which took the buttons' 31px out
-                 of a header whose title is 24px tall — so the title and
-                 everything under it jumped 7px on every switch. -->
-            <div class="d-flex gap-2 align-items-center">
+        <!-- One toolbar for both sections, adding to whichever is showing.
+             It used to be hidden on Join, which took the buttons' 31px out
+             of a header whose title is 24px tall — so the title and
+             everything under it jumped 7px on every switch. -->
+            <div id="toolbar" class="d-flex gap-2 align-items-center">
                 <button id="btn-add-files" class="btn btn-sm btn-secondary d-inline-flex align-items-center gap-1">
                     <span class="material-icons-round" style="font-size:16px">note_add</span>Add Files
                 </button>
@@ -103,14 +75,16 @@
                     </div>
                 </div>
             </div>
-        </header>
+
+        <!-- Convert: its drop target, the selection bar, the grid and the action bar. -->
+        <div id="convert-view" class="convert-view">
 
         <!-- Empty state: the full drop target -->
         <div id="empty-state" class="empty-state">
             <div id="drop-zone" class="drop-zone">
                 <span class="material-icons-round drop-icon">swap_horiz</span>
                 <p class="drop-label mb-1">Drag &amp; Drop Files or Folders Here</p>
-                <p class="text-secondary small mb-2">or</p>
+                <p class="text-body-secondary small mb-2">or</p>
                 <button id="browse-btn" class="btn btn-sm btn-secondary">Select Files</button>
             </div>
         </div>
@@ -120,9 +94,9 @@
             <input type="checkbox" id="bulk-select-all" class="form-check-input card-select" title="Select all">
             <span id="bulk-count" class="fw-semibold"></span>
             <div class="bulk-sep"></div>
-            <label class="small text-secondary" for="bulk-target" id="bulk-target-label">Convert all to</label>
+            <label class="small text-body-secondary" for="bulk-target" id="bulk-target-label">Convert all to</label>
             <select id="bulk-target" class="form-select form-select-sm bulk-select"></select>
-            <span id="bulk-target-note" class="small text-secondary"></span>
+            <span id="bulk-target-note" class="small text-body-secondary"></span>
             <div class="ms-auto d-flex gap-2">
                 <button id="bulk-edit" class="btn btn-sm btn-primary d-inline-flex align-items-center gap-1">
                     <span class="material-icons-round" style="font-size:15px">tune</span>Bulk edit
@@ -133,16 +107,16 @@
         </div>
 
         <!-- The grid -->
-        <main id="grid-scroll" class="grid-scroll d-none">
+        <div id="grid-scroll" class="grid-scroll d-none">
             <div id="job-grid" class="job-grid"></div>
-        </main>
+        </div>
 
         <!-- Footer action bar -->
         <footer id="action-bar" class="action-bar d-none">
             <div class="action-status">
                 <div class="d-flex justify-content-between align-items-baseline mb-1">
                     <span id="queue-summary" class="small"></span>
-                    <span id="queue-detail" class="small text-secondary"></span>
+                    <span id="queue-detail" class="small text-body-secondary"></span>
                 </div>
                 <div class="progress" style="height:6px">
                     <div id="overall-bar" class="progress-bar" style="width:0%"></div>
@@ -155,16 +129,18 @@
             </div>
         </footer>
 
+        </div>
+
         <!-- Join: an ordered list of clips that become one file. Deliberately a
              list and not a canvas — the order is the whole model. -->
-        <main id="join-view" class="join-view">
+        <div id="join-view" class="join-view">
             <!-- The same zone as Convert's, line for line, so the two sections
                  read as one app. Only the icon and the label change. -->
             <div id="join-empty" class="empty-state">
                 <div id="join-drop" class="drop-zone">
                     <span class="material-icons-round drop-icon">merge_type</span>
                     <p class="drop-label mb-1">Drag &amp; Drop Files to Join Here</p>
-                    <p class="text-secondary small mb-2">or</p>
+                    <p class="text-body-secondary small mb-2">or</p>
                     <button id="btn-join-add" class="btn btn-sm btn-secondary">Select Files</button>
                 </div>
             </div>
@@ -205,10 +181,7 @@
                     </div>
                 </aside>
             </div>
-        </main>
-
-    </div>
-    </div>
+        </div>
 
     <!-- New Job dialog. In-page Bootstrap modal per the house pattern: border-0
          header and footer, centred, icon + title in a flex row, neutral cancel
@@ -479,6 +452,7 @@
          plain script. It must come before renderer.js, which reads it off the
          global. -->
     <script src="core/display.js"></script>
+    <script src="../node_modules/@diamonddigitaldev/electron-kit/page/kit.js"></script>
     <script src="renderer.js"></script>
 </body>
 </html>
