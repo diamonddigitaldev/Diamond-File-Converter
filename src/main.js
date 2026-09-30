@@ -62,6 +62,8 @@ if (!gotLock) app.quit();
 // 2.0.0, so what was saved carries over; this file's own store below keeps
 // the window's bounds and the migration's marker beside them.
 const kit = require("@diamonddigitaldev/electron-kit/main").start({
+    // package.json's name is the npm name, which names the userData folder too.
+    name: APP_NAME,
     settings: { defaults: SETTINGS_DEFAULTS },
     credits: {
         lines: [

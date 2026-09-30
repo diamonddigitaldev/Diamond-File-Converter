@@ -40,6 +40,13 @@ test("every one of the app's own handlers goes through kit.ipc.handle()", () => 
     assert.deepEqual(handled.sort(), Object.values(IPC).filter(c => !pushes.includes(c)).sort());
 });
 
+test("the Credits tab is given the app's name, not package.json's npm name", () => {
+    // app.getName() is "diamond-file-converter", which also names the userData folder, so it stays.
+    assert.match(read("main.js"), /\.start\(\{[^]*?name: APP_NAME,/);
+    assert.equal(require("../package.json").name, "diamond-file-converter");
+    assert.ok(!("productName" in require("../package.json")), "a top-level productName would move userData, and every saved setting");
+});
+
 test("the settings defaults are ones the kit takes", () => {
     // kit.start() throws at launch on either; this says so before then.
     assert.ok(!Object.hasOwn(SETTINGS_DEFAULTS, "navCollapsed"), "navCollapsed is the kit's own setting");
