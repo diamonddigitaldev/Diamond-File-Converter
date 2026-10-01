@@ -77,13 +77,17 @@ const mainWindow = () => kit.windows.main();
 
 let runner = null;
 
+// Packaged, ffmpeg and ffprobe are this platform's own, in resources/ffmpeg
+// (package.json's win and linux extraResources); from source, the packages'.
+const EXE = process.platform === "win32" ? ".exe" : "";
+
 function getFfmpegPath() {
-    if (app.isPackaged) return path.join(process.resourcesPath, "ffmpeg", "ffmpeg.exe");
+    if (app.isPackaged) return path.join(process.resourcesPath, "ffmpeg", `ffmpeg${EXE}`);
     return require("ffmpeg-static"); // dev: executable path inside node_modules
 }
 
 function getFfprobePath() {
-    if (app.isPackaged) return path.join(process.resourcesPath, "ffmpeg", "ffprobe.exe");
+    if (app.isPackaged) return path.join(process.resourcesPath, "ffmpeg", `ffprobe${EXE}`);
     return require("ffprobe-static").path;
 }
 

@@ -22,20 +22,12 @@
         "files": [
             "**/*",
             "!test-media",
-            "!test-media/**/*"
+            "!test-media/**/*",
+            "!node_modules/ffmpeg-static/ffmpeg{,.exe}",
+            "!node_modules/ffprobe-static/bin/**"
         ],
         "productName": "Diamond File Converter",
         "artifactName": "Diamond-File-Converter-Setup-${version}.${ext}",
-        "extraResources": [
-            {
-                "from": "node_modules/ffmpeg-static/ffmpeg.exe",
-                "to": "ffmpeg/ffmpeg.exe"
-            },
-            {
-                "from": "node_modules/ffprobe-static/bin/win32/x64/ffprobe.exe",
-                "to": "ffmpeg/ffprobe.exe"
-            }
-        ],
         "fileAssociations": [
             {
                 "ext": [
@@ -84,7 +76,31 @@
             "repo": "Diamond-File-Converter"
         },
         "win": {
-            "icon": "src/assets/diamondfileconverter.ico"
+            "icon": "src/assets/diamondfileconverter.ico",
+            "extraResources": [
+                {
+                    "from": "node_modules/ffmpeg-static/ffmpeg.exe",
+                    "to": "ffmpeg/ffmpeg.exe"
+                },
+                {
+                    "from": "node_modules/ffprobe-static/bin/win32/x64/ffprobe.exe",
+                    "to": "ffmpeg/ffprobe.exe"
+                }
+            ]
+        },
+        "linux": {
+            "icon": "src/assets/diamondfileconverter.png",
+            "category": "AudioVideo",
+            "extraResources": [
+                {
+                    "from": "node_modules/ffmpeg-static/ffmpeg",
+                    "to": "ffmpeg/ffmpeg"
+                },
+                {
+                    "from": "node_modules/ffprobe-static/bin/linux/x64/ffprobe",
+                    "to": "ffmpeg/ffprobe"
+                }
+            ]
         },
         "nsis": {
             "perMachine": true,

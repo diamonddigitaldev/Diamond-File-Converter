@@ -159,3 +159,21 @@ test("every icon is hidden from screen readers, and every icon-only button has a
         assert.ok(renderer.includes(`${name}.setAttribute("aria-hidden", "true");`), `${name} isn't aria-hidden`);
     }
 });
+
+test("ffmpeg and ffprobe are packed per platform, where main.js looks for them, and only once", () => {
+    const { build } = require("../package.json");
+    const main = read("main.js");
+    const exe = { win: ".exe", linux: "" };
+    for (const platform of ["win", "linux"]) {
+        const to = build[platform].extraResources.map((r) => r.to).sort();
+        assert.deepEqual(to, [`ffmpeg/ffmpeg${exe[platform]}`, `ffmpeg/ffprobe${exe[platform]}`], platform);
+    }
+    assert.equal(build.extraResources, undefined, "no extraResources for every platform: each takes its own binaries");
+    assert.match(main, /const EXE = process\.platform === "win32" \? "\.exe" : "";/);
+    assert.match(main, /path\.join\(process\.resourcesPath, "ffmpeg", `ffmpeg\$\{EXE\}`\)/);
+    assert.match(main, /path\.join\(process\.resourcesPath, "ffmpeg", `ffprobe\$\{EXE\}`\)/);
+    // The packages' own binaries (every platform's ffprobe) stay out of app.asar.unpacked: 415 MB in 2.0.0.
+    assert.ok(build.files.includes("!node_modules/ffprobe-static/bin/**"));
+    assert.ok(build.files.includes("!node_modules/ffmpeg-static/ffmpeg{,.exe}"));
+    assert.equal(build.linux.icon, "src/assets/diamondfileconverter.png");
+});
