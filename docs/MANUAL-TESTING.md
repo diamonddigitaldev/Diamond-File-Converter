@@ -2411,7 +2411,8 @@ the app, not in a Windows box, and the Title Case slips are fixed.
 > the app built from source through every step it can (23/23 on Windows,
 > 2026-10-01), and the M1 checks again on a profile 2.0.0 had saved (29/29).
 > What the pass found is under "Found in the pass", at the end of this
-> section. The Linux build is in the next section: not run.
+> section, with what was done about each. The unticked boxes are still to run,
+> before the next beta is released. The Linux build is in the next section: not run.
 
 Test a packaged, installed build. Use files you can lose: the steps write
 outputs next to them.
@@ -2585,6 +2586,32 @@ Wrong or worth a look, in the order they turned up. The pass added no code.
   where they aren't meant for anything; "Check for Updates" showed no "Checking…" state
   for a failing check (the red line was simply there when the screenshot came).
 
+What was done about them, 2026-10-01 (re-run the boxes above to see each one):
+
+- **Skipped:** said as skipped: "5 files skipped." in the toast and "5 files skipped" in
+  the bar; a mix reads "2 files converted, 3 skipped." (the kit's `summarise()` took a
+  skipped count).
+- **The Beta channel:** the cause is the releases, not the app: every pre-release went out
+  with only its installer. With GitHub, electron-builder writes one `latest.yml` whatever
+  the version, and the updater reads it from the newest pre-release on Beta, so **the next
+  beta attaches `latest.yml`, `latest-linux.yml` and the `.blockmap` files** beside the
+  installers. Until a release does, the Update tab now says "Couldn't check for updates.
+  The newest release has no update files yet." in the warning shade, not red.
+- **A failed check is logged:** one warning in `debug.log`: the channel, the reason and the
+  error, redacted.
+- **Settings > Update** was reworked in the kit from the pass's list: two cards ("Version x"
+  with its status and buttons, then Preferences), "Checking for updates…" for a second at
+  least, the switch's help saying what On and Off do, each channel's help saying what it
+  brings, and "Version x" in "Version x is available." a link to its release on GitHub.
+- **Add Files and Add Folder** are hidden on Settings.
+- **GIFs:** timed by their frames, so Advanced Options trims one and shows its first and
+  last frames, and Join's row reads "0:03 · 240×180". Join's own frame previews are still
+  to come (WORKQUEUE item 22).
+- **The file picker** opens where the last pick was made, even after a restart.
+- **The switch Off on an upgraded profile** is as it should be (2.0.0's saved choice is
+  kept); the first Update box needs a clean profile.
+- **The toast over Join's right panel:** not fixed here (WORKQUEUE item 22).
+
 ## Linux — the first build
 
 DFC builds for Linux now: an AppImage, a `.deb` and an `.rpm`, each with
@@ -2595,7 +2622,8 @@ downloads the binary for the machine it's installed on), and named
 
 > **Status: not run by a person; skipped on 2026-10-01.** The Zorin VM couldn't be
 > logged in to (Will was working remotely, with no physical access), so no box
-> below was run and none is ticked. It still stands as the pass to do. An agent
+> below was run and none is ticked. It still stands as the pass to do, before the
+> next beta (which ships these files) is released. An agent
 > drove the built app
 > (`linux-unpacked`, what the AppImage holds) under Xvfb in a Debian 12
 > container: 23/23, and the M1 checks on a profile 2.0.0 had saved, 29/29
