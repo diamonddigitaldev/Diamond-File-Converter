@@ -50,5 +50,12 @@ jobs:
           npm --version
           npm ci
 
+      # ffmpeg-static downloads FFmpeg in an install script, which npm only runs
+      # when package.json's allowScripts approves it. Without the binary, the
+      # tests that need it skip, and electron-builder leaves it out of the build
+      # without a word, so this fails instead.
+      - name: Check FFmpeg and FFprobe are there
+        run: node -e "for (const [name, file] of [['FFmpeg', require('ffmpeg-static')], ['FFprobe', require('ffprobe-static').path]]) { require('fs').accessSync(file); console.log(name + ':', file); }"
+
       - name: Run the tests
         run: npm test
