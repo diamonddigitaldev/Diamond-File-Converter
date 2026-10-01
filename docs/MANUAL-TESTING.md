@@ -24,7 +24,7 @@ sections — the history is useful.
 
 ```
 npm install
-npm test          # expect 196 passing, 0 failing
+npm test          # expect 193 passing, 0 failing
 npm start
 ```
 
@@ -2392,3 +2392,93 @@ nothing checks from a build run from source.
 - [ ] **Check for Updates** with nothing newer says "You're up to date."
 - [ ] With no network, the check says "Couldn't check for updates. Try again
       later." in red, and the app carries on.
+
+## Everything shared from the house kit — prompts, drops, the log, one window
+
+The toasts, the "File Already Exists" prompt, the drop zones, the action bar,
+the progress bars, the key guard, the log, the settings' migration, the
+window's size and position, one instance and "Open with" all come from the
+house kit now. DFC's own versions are gone. "File Already Exists" is asked in
+the app, not in a Windows box, and the Title Case slips are fixed.
+
+> **Status: not yet run by a person.** An agent drove the app built from
+> source through every step it can (23/23 on Windows, 2026-10-01), and the
+> M1 checks again on a profile 2.0.0 had saved (29/29). The packaged runs and
+> the Linux build follow; this line is updated when Will has run it.
+
+Test a packaged, installed build. Use files you can lose: the steps write
+outputs next to them.
+
+### Open with, and a second "Open with"
+
+- [ ] Right-click an audio file in Explorer, **Open with** the app, with the app
+      closed: it opens with the file as a card.
+- [ ] With the app open, **Open with** two more files at once: the app comes to
+      the front, and both arrive together as cards, in one go.
+- [ ] Only one window, ever, and the app opened only once (one taskbar button).
+
+### Drops and the toast's list
+
+- [ ] Drag a supported file and a `.txt` onto the empty Convert view: the
+      dashed box lights while you're over it, and one toast says "Added 1 file,
+      skipped 1." with **Show Them**.
+- [ ] **Show Them** lists `notes.txt — not a supported format`, and says
+      **Hide**; the toast stays until you close it.
+- [ ] With cards on screen, drag more files anywhere over the grid: the grid
+      lights, and they're added.
+- [ ] Drag files onto Join: they're added to Join, not Convert.
+
+### A conversion, and "File Already Exists"
+
+- [ ] Convert a file to MP3: the card's thin bar fills (or slides, for a file
+      whose length isn't known), the bar under the grid says "Converting 1
+      file…" with **Cancel** where **Convert** was, then "1 file converted".
+- [ ] Clear All, add the same file, convert it to MP3 again: a prompt in the
+      app, not a Windows box, says "File Already Exists", with **Cancel All**,
+      **Skip This File**, **Overwrite** and **Save as New** (focused), and
+      **Apply to All Remaining**.
+- [ ] Press Escape: the run is cancelled, nothing is written, and focus is back
+      where it was.
+- [ ] Again, **Save as New**: `name (1).mp3` is written.
+- [ ] Convert five files that all exist, tick **Apply to All Remaining** on the
+      first prompt with **Skip This File**: no more prompts, all five skipped.
+
+### A join
+
+- [ ] Join two WAV files into **MP3** (the first format offered): the plan
+      says they'll be re-encoded, because MP3 isn't their own format, and the
+      join works. (It used to try to copy them, and failed in ffmpeg.)
+- [ ] Join the same two into **WAV**: the plan says they'll be joined without
+      re-encoding, and that works too.
+- [ ] While a long join runs, its bar moves (or slides if the length isn't
+      known), and never says "null%".
+
+### Keys
+
+- [ ] Pick a format on a card, then press Delete with a card selected: the card
+      goes (the select doesn't count as typing).
+- [ ] With a prompt or the Advanced Options dialog open, Delete removes nothing.
+- [ ] Type in Join's file name: Delete and Ctrl+A edit the text, and touch no
+      card.
+
+### Settings, the window and the log
+
+- [ ] Settings > General, Update and Credits look as before. **Will's note
+      (2026-10-01): give Settings > Update a proper look as a person would, and
+      list what to refine in its UI.**
+- [ ] Move and resize the window, close it, reopen it: same place, same size.
+      Unplug a second monitor the window was on: it opens centred on the one
+      you have.
+- [ ] `%APPDATA%\diamond-file-converter\debug.log` starts with
+      `=== Diamond File Converter <version> started at …`, names the files you
+      used by their names only (`…\clip.mp4`), and has no folder in it.
+- [ ] After a second **Open with**, `debug.log` still has the first launch's
+      lines (a second launch used to empty it).
+
+### With a screen reader (NVDA)
+
+- [ ] The rail, the toolbar and each card's controls are read with their names
+      (no "swap_horiz", no "close" read out from an icon).
+- [ ] A toast is read when it shows; a danger toast at once.
+- [ ] "File Already Exists" is read as a dialog with its question, and Tab
+      stays inside it.

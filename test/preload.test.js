@@ -145,13 +145,13 @@ test("main enables context isolation and disables node integration", () => {
     assert.ok(!/nodeIntegration:\s*true/.test(main), "nodeIntegration must not be enabled");
     assert.ok(!/contextIsolation:\s*false/.test(main), "contextIsolation must not be disabled");
 
-    // The one window (Credits is a tab of Settings now) sets all four.
+    // The one window (Credits is a tab of Settings now) is the kit's main
+    // window, which lays the house's sandbox, isolation and no Node over the
+    // app's own web preferences, and throws on anything weaker (the kit's
+    // tests). DFC gives it its preload, and no BrowserWindow of its own.
     const windows = main.match(/webPreferences:\s*\{[^}]*\}/g) ?? [];
     assert.equal(windows.length, 1, "expected exactly the main window");
-    for (const block of windows) {
-        assert.match(block, /preload:/);
-        assert.match(block, /sandbox:\s*true/);
-        assert.match(block, /contextIsolation:\s*true/);
-        assert.match(block, /nodeIntegration:\s*false/);
-    }
+    assert.match(windows[0], /^webPreferences:\s*\{\s*preload:\s*path\.join\(__dirname, "preload\.js"\)\s*\}$/);
+    assert.match(main, /kit\.windows\.createMain\(\{/);
+    assert.ok(!/new BrowserWindow|BrowserWindow\s*\}/.test(main), "main.js makes no window of its own");
 });

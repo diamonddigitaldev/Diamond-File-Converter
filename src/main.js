@@ -1,11 +1,9 @@
-const { app, BrowserWindow, dialog, shell } = require("electron");
-const Store = require("electron-store").default;
-const fs = require("fs");
+const { app, dialog, shell } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 
-const { APP_NAME, IPC, WINDOW, LOG, ARGV_BATCH_DEBOUNCE_MS, SETTINGS_DEFAULTS,
-        LEGACY_STORE_KEYS, SETTINGS_SCHEMA_VERSION, pruneLegacySettings } = require("./constants");
+const { APP_NAME, IPC, WINDOW, SETTINGS_DEFAULTS, LEGACY_STORE_KEYS,
+        SETTINGS_SCHEMA_VERSION, CONFLICT_CHOICES, pruneLegacySettings } = require("./constants");
 const formats = require("./core/formats");
 const { createJob, createJoinJob, validateJob, validateJoin, defaultModeFor, STATUS } = require("./core/job");
 const { JobRunner, defaultConcurrency } = require("./core/runner");
@@ -14,8 +12,6 @@ const probe = require("./core/probe");
 const paths = require("./core/paths");
 const scan = require("./core/scan");
 const { menuItems } = require("./menu");
-
-const LOG_LEVELS = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3 };
 
 // Frame previews are decoration beside a slider, not content.
 const PREVIEW_FRAME_HEIGHT = 144;
@@ -32,39 +28,27 @@ function extensionsOfKind(kind) {
     return Object.values(formats.FORMATS).filter(f => f.kind === kind).map(f => f.ext);
 }
 
-const LOG_LEVEL = LOG_LEVELS[String(process.env.LOG_LEVEL || "INFO").toUpperCase()] ?? LOG_LEVELS.INFO;
-
-const logFile = path.join(app.getPath("userData"), "debug.log");
-fs.writeFileSync(logFile, `=== App started at ${new Date().toISOString()} ===\n`);
-
-function log(level, ...args) {
-    const lvl = String(level).toUpperCase();
-    if ((LOG_LEVELS[lvl] ?? LOG_LEVELS.INFO) > LOG_LEVEL) return;
-    const message = `[${new Date().toISOString()}] [${lvl}] ${args.join(" ")}\n`;
-    fs.appendFileSync(logFile, message);
-    if (lvl === "ERROR") console.error(...args);
-    else if (lvl === "WARN") console.warn(...args);
-    else console.log(...args);
-}
-
-if (process.platform === "win32") {
-    app.setAppUserModelId(app.getName());
-}
-
-// prevent multiple instances
-const gotLock = app.requestSingleInstanceLock();
-if (!gotLock) app.quit();
-
-// The house frame: the shared preload (window.kitAPI) on the app's session,
-// the settings, the Credits tab, the menu, the theme push and the updater
-// (Settings > Update: the channel, automatic downloads, the dot). The settings are
-// the kit's to keep, in the same "settings" key of the same config.json as
-// 2.0.0, so what was saved carries over; this file's own store below keeps
-// the window's bounds and the migration's marker beside them.
+// The house frame (electron-kit): the shared preload (window.kitAPI) on the
+// app's session; the settings, in the same "settings" key of the same
+// config.json as 2.0.0, so what was saved carries over, and migrated once per
+// version; the log, debug.log in userData, redacted (a path keeps its file
+// name only); one instance, and the files it's opened with ("Open with", a
+// second launch, the menu), pushed to the page as files:opened; the main
+// window with its bounds kept (2.0.0's windowBounds); the Credits tab, the
+// menu, the theme push and the updater (Settings > Update).
 const kit = require("@diamonddigitaldev/electron-kit/main").start({
     // package.json's name is the npm name, which names the userData folder too.
     name: APP_NAME,
-    settings: { defaults: SETTINGS_DEFAULTS },
+    settings: {
+        defaults: SETTINGS_DEFAULTS,
+        // Version 2: the settings v1 wrote that 2.0 can't show, and the store
+        // keys whose code is gone, removed once (constants.js says why).
+        version: SETTINGS_SCHEMA_VERSION,
+        migrate: (settings) => pruneLegacySettings(settings).settings,
+        obsoleteKeys: LEGACY_STORE_KEYS,
+    },
+    log: "file",
+    files: true,
     credits: {
         lines: [
             ["Created and maintained by ", { text: "Diamond Digital Development", href: "https://diamonddigital.dev" }, "."],
@@ -79,41 +63,6 @@ const kit = require("@diamonddigitaldev/electron-kit/main").start({
     updates: {},
 });
 
-const store = new Store({
-    defaults: {
-        windowBounds: {
-            width: WINDOW.DEFAULT_WIDTH,
-            height: WINDOW.DEFAULT_HEIGHT,
-        },
-    }
-});
-
-/**
- * One-time cleanup of keys v1 wrote and 2.0 cannot reach. See constants.js for
- * why they have to go rather than simply be ignored.
- *
- * Guarded by a version marker so it runs once. An unconditional prune would eat
- * a value a future preferences screen legitimately wrote, on the very next
- * launch, which is the same class of bug in the opposite direction.
- */
-function migrateStore() {
-    if (store.get("settingsSchema") === SETTINGS_SCHEMA_VERSION) return;
-
-    const { settings, removed } = pruneLegacySettings(store.get("settings"));
-    if (removed.length > 0) {
-        log(LOG.INFO, `Removing settings 2.0 has no screen for: ${removed.join(", ")}`);
-        store.set("settings", settings);
-    }
-    for (const key of LEGACY_STORE_KEYS) {
-        if (store.has(key)) {
-            log(LOG.INFO, `Removing the orphaned store key ${key}`);
-            store.delete(key);
-        }
-    }
-
-    store.set("settingsSchema", SETTINGS_SCHEMA_VERSION);
-}
-
 /**
  * The app-wide settings, with the defaults underneath: the kit reads what's
  * stored merged over SETTINGS_DEFAULTS, so a setting a partial saved object
@@ -123,16 +72,10 @@ function appSettings() {
     return kit.settings.get();
 }
 
-let mainWindow;
-let runner = null;
+/** The main window, or null. */
+const mainWindow = () => kit.windows.main();
 
-function getIconPath() {
-    switch (process.platform) {
-        case "darwin": return path.join(__dirname, "assets", "diamondfileconverter.icns");
-        case "linux":  return path.join(__dirname, "assets", "diamondfileconverter.png");
-        default:       return path.join(__dirname, "assets", "diamondfileconverter.ico");
-    }
-}
+let runner = null;
 
 function getFfmpegPath() {
     if (app.isPackaged) return path.join(process.resourcesPath, "ffmpeg", "ffmpeg.exe");
@@ -145,109 +88,36 @@ function getFfprobePath() {
 }
 
 function createWindow() {
-    const savedBounds = store.get("windowBounds");
-
-    mainWindow = new BrowserWindow({
-        width: savedBounds.width,
-        height: savedBounds.height,
-        x: savedBounds.x,
-        y: savedBounds.y,
-        minWidth: WINDOW.MIN_WIDTH,
-        minHeight: WINDOW.MIN_HEIGHT,
+    const win = kit.windows.createMain({
+        page: path.join(__dirname, "index.html"),
+        size: { width: WINDOW.DEFAULT_WIDTH, height: WINDOW.DEFAULT_HEIGHT },
+        min: { width: WINDOW.MIN_WIDTH, height: WINDOW.MIN_HEIGHT },
         title: APP_NAME,
-        icon: getIconPath(),
-        webPreferences: {
-            preload: path.join(__dirname, "preload.js"),
-            sandbox: true,
-            contextIsolation: true,
-            nodeIntegration: false,
-        }
+        icon: path.join(__dirname, "assets", "diamondfileconverter"),
+        webPreferences: { preload: path.join(__dirname, "preload.js") },
     });
-
-    mainWindow.loadFile(path.join(__dirname, "index.html"));
-
-    // debounced save so we dont spam the disk with updates
-    let saveBoundsTimeout;
-    const saveBounds = () => {
-        clearTimeout(saveBoundsTimeout);
-        saveBoundsTimeout = setTimeout(() => {
-            if (mainWindow && !mainWindow.isDestroyed()) {
-                store.set("windowBounds", mainWindow.getBounds());
-            }
-        }, 500);
-    };
-
-    mainWindow.on("resize", saveBounds);
-    mainWindow.on("move", saveBounds);
-    mainWindow.on("close", () => {
-        if (!mainWindow.isDestroyed()) store.set("windowBounds", mainWindow.getBounds());
-    });
-    mainWindow.on("closed", () => {
-        mainWindow = null;
-    });
-
-    mainWindow.webContents.on("did-finish-load", flushPendingFiles);
+    // A question still open when the window goes has no one to answer it.
+    win.on("closed", () => answerAllConflicts({ choice: "cancelAll", all: false }));
 }
 
 // The menu's own items (menu.js): the kit puts them first in the house menu.
+// What they pick reaches the page as files:opened, as files from "Open with"
+// and a second launch do: the kit gathers those from argv, second-instance
+// and open-file (v1 had none of this, and second-instance threw the paths away).
 
 async function openFiles() {
-    const result = await dialog.showOpenDialog(mainWindow, {
+    const result = await dialog.showOpenDialog(mainWindow(), {
         properties: ["openFile", "multiSelections"],
         filters: FILE_DIALOG_FILTERS,
     });
-    if (!result.canceled && result.filePaths.length > 0) {
-        sendFilesToRenderer(result.filePaths);
-    }
+    if (!result.canceled && result.filePaths.length > 0) kit.files.open(result.filePaths);
 }
 
 async function openFolder() {
-    const result = await dialog.showOpenDialog(mainWindow, {
+    const result = await dialog.showOpenDialog(mainWindow(), {
         properties: ["openDirectory"],
     });
-    if (!result.canceled && result.filePaths.length > 0) {
-        sendFilesToRenderer(result.filePaths);
-    }
-}
-
-// ── Incoming files (file associations, "Open with", Explorer context menu) ───
-//
-// v1 had none of this: no open-file handler, no argv parsing, and
-// second-instance discarded the paths it was handed. Windows launches one
-// process per selected file, so arrivals are batched before being forwarded.
-
-let pendingFiles = [];
-let pendingTimer = null;
-
-function queueIncomingFiles(filePaths) {
-    const usable = filePaths.filter(p => typeof p === "string" && !p.startsWith("-"));
-    if (usable.length === 0) return;
-
-    pendingFiles.push(...usable);
-    clearTimeout(pendingTimer);
-    pendingTimer = setTimeout(flushPendingFiles, ARGV_BATCH_DEBOUNCE_MS);
-}
-
-function flushPendingFiles() {
-    if (pendingFiles.length === 0) return;
-    if (!mainWindow || mainWindow.webContents.isLoading()) return;
-
-    const batch = pendingFiles;
-    pendingFiles = [];
-    sendFilesToRenderer(batch);
-}
-
-function sendFilesToRenderer(filePaths) {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-    mainWindow.webContents.send(IPC.FILES_OPENED, filePaths);
-}
-
-/** Strip Electron's own arguments and keep anything that exists on disk. */
-function filePathsFromArgv(argv) {
-    return argv.slice(app.isPackaged ? 1 : 2).filter((arg) => {
-        if (typeof arg !== "string" || arg.startsWith("-")) return false;
-        try { return fs.existsSync(arg); } catch (_) { return false; }
-    });
+    if (!result.canceled && result.filePaths.length > 0) kit.files.open(result.filePaths);
 }
 
 // ── Conversion ───────────────────────────────────────────────────────────────
@@ -264,15 +134,11 @@ function getRunner() {
     });
 
     runner.on("progress", (payload) => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send(IPC.JOB_PROGRESS, payload);
-        }
+        mainWindow()?.webContents.send(IPC.JOB_PROGRESS, payload);
     });
 
     runner.on("status", (payload) => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send(IPC.JOB_STATUS, payload);
-        }
+        mainWindow()?.webContents.send(IPC.JOB_STATUS, payload);
     });
 
     return runner;
@@ -310,7 +176,7 @@ async function withBatchJob(work) {
     }
 }
 
-// Serialises the output-exists prompts so only one dialog is ever open.
+// Serialises the output-exists prompts so only one is ever open.
 let conflictPromptChain = Promise.resolve();
 
 /** Turn a chosen action into the result the runner expects. */
@@ -330,28 +196,24 @@ function applyConflictChoice(choice, candidatePath, isDirectory) {
 }
 
 /**
- * The output-exists prompt.
- *
- * This departs from v1's button set, which was kept unchanged until now. It had
- * to: the dialog is window-modal, so while it is open Windows blocks every
- * click on the app behind it — including the footer's own "Cancel All", which
- * left a user who wanted to abort a batch with no reachable way to say so.
- * Dragging the dialog aside does not help, because position was never the
- * problem. The abort therefore lives in the only surface that can receive
- * input, and v1's "Cancel" is renamed to "Skip This File", which is what it
- * always did to a single job.
+ * The output-exists prompt: "File Already Exists", asked in the page, as a
+ * modal through the kit (kit.ui.confirm()'s batch form), never a native box
+ * (DESIGN §10). A native box is window-modal: while it was open, Windows
+ * blocked every click on the app behind it, including the footer's own
+ * Cancel All. The abort lives in the prompt itself for the same reason, and
+ * v1's "Cancel" is "Skip This File", which is what it always did to one job.
  *
  * The checkbox matters: jobs run through a concurrency pool, so without a way
  * to answer once for the whole batch, converting fifty files into a folder
- * that already has them would mean fifty dialogs.
+ * that already has them would mean fifty prompts.
  */
 async function resolveConflict(job, candidatePath) {
     const isDirectory = formats.producesDirectory(job.mode);
 
     // Prompts are serialised, one at a time. The concurrency pool brings
     // several jobs here at once, and each used to read conflictChoiceForBatch
-    // (still null) and open its own dialog *before* the first answer came
-    // back — so ticking "apply to all remaining" had no effect on the dialogs
+    // (still null) and open its own prompt *before* the first answer came
+    // back — so ticking "apply to all remaining" had no effect on the prompts
     // already queued behind it, and the user was asked again for every file.
     // Chaining means each prompt re-reads the batch choice after the previous
     // one has settled.
@@ -362,38 +224,55 @@ async function resolveConflict(job, candidatePath) {
     return mine;
 }
 
+// The prompts the page has been asked and hasn't answered: id -> resolve.
+const conflictAsks = new Map();
+let conflictAskId = 0;
+
+/**
+ * Ask the page, and resolve with its answer, { choice, all }. With no window
+ * to ask, or once it closes, the answer is Cancel All: nobody can be asked.
+ */
+function askPage(candidatePath, isDirectory) {
+    const win = mainWindow();
+    if (!win) return Promise.resolve({ choice: "cancelAll", all: false });
+    const id = ++conflictAskId;
+    return new Promise((resolve) => {
+        conflictAsks.set(id, resolve);
+        win.webContents.send(IPC.CONFLICT_ASK, { id, name: path.basename(candidatePath), isDirectory });
+    });
+}
+
+/** Answer every prompt still waiting. */
+function answerAllConflicts(answer) {
+    for (const resolve of conflictAsks.values()) resolve(answer);
+    conflictAsks.clear();
+}
+
+kit.ipc.handle(IPC.CONFLICT_ANSWER, (_event, id, answer) => {
+    const resolve = conflictAsks.get(id);
+    if (!resolve) return false;
+    conflictAsks.delete(id);
+    // Anything but one of the four choices is a dismissed prompt, which is Cancel All, as Escape is.
+    const choice = CONFLICT_CHOICES.includes(answer?.choice) ? answer.choice : "cancelAll";
+    resolve({ choice, all: answer?.all === true });
+    return true;
+});
+
 /** The prompt itself. Only ever called one at a time, via resolveConflict. */
 async function promptForConflict(candidatePath, isDirectory) {
     // Cancel All ends the batch, not just the file it was answered on. The
     // prompts behind this one were chained before the abort and are already
     // past the runner's own cancelled check, so without this each of them
-    // still opened a dialog of its own — six colliding files meant six presses
-    // of a button labelled All. Escape arrives here too: cancelId is 0, which
-    // is that same button.
+    // still opened a prompt of its own — six colliding files meant six presses
+    // of a button labelled All. Escape and dismissing it arrive here too, as
+    // Cancel All.
     if (conflictAbort) return { action: "cancel" };
 
     if (conflictChoiceForBatch) {
         return applyConflictChoice(conflictChoiceForBatch, candidatePath, isDirectory);
     }
 
-    const result = await dialog.showMessageBox(mainWindow, {
-        type: "question",
-        title: "File Already Exists",
-        message: `${path.basename(candidatePath)} already exists.`,
-        detail: isDirectory
-            ? "A folder with this name is already in the destination."
-            : "A file with this name is already in the destination.",
-        buttons: ["Cancel All", "Skip This File", "Overwrite", "Save as New"],
-        defaultId: 3,
-        cancelId: 0,
-        checkboxLabel: "Apply to all remaining files",
-        checkboxChecked: false,
-    });
-
-    // An out-of-range response is a dismissed dialog, which cancelId already
-    // defines as Cancel All, so the fallback matches it rather than inventing a
-    // gentler answer the button set does not offer.
-    const choice = ["cancelAll", "skip", "overwrite", "unique"][result.response] ?? "cancelAll";
+    const { choice, all } = await askPage(candidatePath, isDirectory);
 
     // Cancelling the run is a decision about the batch, not about this file, so
     // it is answered here rather than in applyConflictChoice. It is not kept as
@@ -408,7 +287,7 @@ async function promptForConflict(candidatePath, isDirectory) {
         return { action: "cancel" };
     }
 
-    if (result.checkboxChecked) conflictChoiceForBatch = choice;
+    if (all) conflictChoiceForBatch = choice;
 
     return applyConflictChoice(choice, candidatePath, isDirectory);
 }
@@ -470,13 +349,13 @@ async function runSubmittedJob(spec) {
                 job.mode = defaultModeFor(job.sourceExt, job.output.ext, meta);
             }
         } else {
-            log(LOG.WARN, `Could not probe ${job.inputPath}: ${meta.error}`);
+            kit.log.warn(`Could not probe ${job.inputPath}: ${meta.error}`);
         }
     }
 
     const validation = validateJob(job);
     if (!validation.valid) {
-        log(LOG.ERROR, `Invalid job: ${validation.errors.join(" ")}`);
+        kit.log.error(`Invalid job: ${validation.errors.join(" ")}`);
         return { jobId: job.id, status: STATUS.ERROR, error: validation.errors[0] };
     }
 
@@ -486,7 +365,7 @@ async function runSubmittedJob(spec) {
     // dialog. v1 opened one modal per failed file mid-queue, which with a
     // concurrency pool would stack several at once and halt the whole batch.
     if (result.status === STATUS.ERROR) {
-        log(LOG.ERROR, `Conversion failed for ${job.inputPath}: ${result.error}`);
+        kit.log.error(`Conversion failed for ${job.inputPath}: ${result.error}`);
     }
 
     return result;
@@ -507,13 +386,13 @@ async function runSubmittedJoin(spec) {
 
     const validation = validateJoin(job);
     if (!validation.ok) {
-        log(LOG.ERROR, `Invalid join: ${validation.errors.join(" ")}`);
+        kit.log.error(`Invalid join: ${validation.errors.join(" ")}`);
         return { jobId: job.id, status: STATUS.ERROR, error: validation.errors[0] };
     }
 
     const result = await runJobToCompletion(job);
     if (result.status === STATUS.ERROR) {
-        log(LOG.ERROR, `Join failed: ${result.error}`);
+        kit.log.error(`Join failed: ${result.error}`);
     }
     return result;
 }
@@ -534,7 +413,7 @@ kit.ipc.handle(IPC.PROBE_FILE, (_event, filePath) => probe.probe(filePath));
 kit.ipc.handle(IPC.FS_SCAN, (_event, inputPaths, options) => scan.scanPaths(inputPaths ?? [], options ?? {}));
 
 kit.ipc.handle(IPC.DIALOG_BROWSE_FILES, async () => {
-    const result = await dialog.showOpenDialog(mainWindow, {
+    const result = await dialog.showOpenDialog(mainWindow(), {
         properties: ["openFile", "multiSelections"],
         filters: FILE_DIALOG_FILTERS,
     });
@@ -543,13 +422,13 @@ kit.ipc.handle(IPC.DIALOG_BROWSE_FILES, async () => {
 });
 
 kit.ipc.handle(IPC.DIALOG_BROWSE_FOLDER, async () => {
-    const result = await dialog.showOpenDialog(mainWindow, { properties: ["openDirectory"] });
+    const result = await dialog.showOpenDialog(mainWindow(), { properties: ["openDirectory"] });
     if (result.canceled || result.filePaths.length === 0) return null;
     return result.filePaths;
 });
 
 kit.ipc.handle(IPC.DIALOG_CHOOSE_OUTPUT, async () => {
-    const result = await dialog.showOpenDialog(mainWindow, {
+    const result = await dialog.showOpenDialog(mainWindow(), {
         properties: ["openDirectory", "createDirectory"],
         title: "Choose an output folder",
     });
@@ -647,39 +526,14 @@ kit.ipc.handle(IPC.JOB_PREVIEW, (_event, spec) => {
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 
-// kit.ready: the app is ready, and the kit's preload, menu and theme push are in place.
+// kit.ready: the app is ready, and the kit's preload, menu and theme push are
+// in place. The settings are migrated as the store is first opened, before
+// the page can ask for them. The kit quits the app with its last window, and
+// pushes the files it was opened with once the page has loaded.
 kit.ready.then(() => {
-    log(LOG.INFO, "=== App ready ===");
-    // Before the window, because the renderer asks for settings on load and
-    // should never be handed a value the migration is about to remove.
-    migrateStore();
+    kit.log.info("=== App ready ===");
     probe.setFfprobePath(getFfprobePath());
     createWindow();
-    queueIncomingFiles(filePathsFromArgv(process.argv));
-});
-
-// macOS delivers associated files through this event rather than argv.
-app.on("open-file", (event, filePath) => {
-    event.preventDefault();
-    queueIncomingFiles([filePath]);
-});
-
-app.on("second-instance", (_event, argv) => {
-    if (mainWindow) {
-        if (mainWindow.isMinimized()) mainWindow.restore();
-        mainWindow.focus();
-    }
-    // v1 focused the window but threw the paths away, so "Open with" on an
-    // already-running app did nothing.
-    queueIncomingFiles(filePathsFromArgv(argv));
-});
-
-app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") app.quit();
-});
-
-app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
 
 app.on("will-quit", () => {

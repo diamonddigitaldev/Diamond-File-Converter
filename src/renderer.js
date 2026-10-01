@@ -109,26 +109,9 @@ const SKIP_REASONS = {
     "excluded":     "turned off in folder options",
 };
 
-/** The list behind "Show them", built only if the button is actually pressed. */
-function buildSkippedDetail(skipped) {
-    const list = document.createElement("ul");
-    list.className = "toast-detail";
-
-    for (const item of skipped.slice(0, 50)) {
-        const row = document.createElement("li");
-        const name = document.createElement("span");
-        name.className = "toast-detail-name";
-        name.textContent = p.basename(item.path);
-        row.append(name, document.createTextNode(` — ${SKIP_REASONS[item.reason] ?? item.reason}`));
-        list.appendChild(row);
-    }
-    if (skipped.length > 50) {
-        const more = document.createElement("li");
-        more.className = "toast-detail-more";
-        more.textContent = `and ${display.countOf(skipped.length - 50, "more file")}`;
-        list.appendChild(more);
-    }
-    return list;
+/** The rows behind "Show Them": each file's name, and why it was skipped. The kit shows the first 50. */
+function skippedRows(skipped) {
+    return skipped.map((item) => ({ name: p.basename(item.path), note: SKIP_REASONS[item.reason] ?? item.reason }));
 }
 
 /**
@@ -185,7 +168,7 @@ async function ingestPaths(inputPaths) {
         reportIngest({ added, skipped, duplicates, truncated: result.truncated, found: result.files.length });
 
         for (const err of result.errors ?? []) {
-            toast(`Could not read ${p.basename(err.path)}: ${err.error}`, "danger");
+            kit.ui.toast(`Could not read ${p.basename(err.path)}: ${err.error}`, { type: "danger" });
         }
     } catch (_) {
         // The scan itself failed, so folders cannot be expanded. Queue whatever
@@ -209,10 +192,10 @@ async function ingestPaths(inputPaths) {
  */
 function reportIngest({ added, skipped, duplicates, truncated, found }) {
     const clauses = [];
-    if (added > 0) clauses.push(`Added ${display.countOf(added, "file")}`);
+    if (added > 0) clauses.push(`Added ${kit.format.countOf(added, "file")}`);
     if (skipped.length > 0) clauses.push(`skipped ${skipped.length}`);
     if (duplicates > 0) clauses.push(`${duplicates} already in the list`);
-    if (truncated) clauses.push(`stopped at ${display.countOf(found, "file")} — the folder is very large`);
+    if (truncated) clauses.push(`stopped at ${kit.format.countOf(found, "file")} — the folder is very large`);
 
     if (clauses.length === 0) return;
 
@@ -231,9 +214,10 @@ function reportIngest({ added, skipped, duplicates, truncated, found }) {
         message = `${clauses.join(", ")}.`;
     }
 
-    toast(message, type, 4500, skipped.length > 0
-        ? { actionLabel: "Show them", onAction: () => buildSkippedDetail(skipped) }
-        : {});
+    kit.ui.toast(message, {
+        type,
+        ...(skipped.length > 0 ? { action: { label: "Show Them", items: () => skippedRows(skipped) } } : {}),
+    });
 }
 
 /**
@@ -390,6 +374,9 @@ function render() {
     renderActionBar();
 }
 
+/** Each card's progress bar (kit.ui.progress()). */
+const cardProgress = new WeakMap();
+
 function buildCard(job) {
     const card = document.createElement("div");
     card.className = "job-card";
@@ -413,6 +400,7 @@ function buildCard(job) {
 
     const icon = document.createElement("span");
     icon.className = "material-icons-round kind-icon";
+    icon.setAttribute("aria-hidden", "true");
     icon.textContent = display.iconForKind(job.kind);
 
     const name = document.createElement("span");
@@ -422,9 +410,11 @@ function buildCard(job) {
 
     const configure = document.createElement("button");
     configure.className = "card-configure";
-    configure.title = "Advanced options";
+    configure.title = "Advanced Options";
+    configure.setAttribute("aria-label", "Advanced Options");
     const configureIcon = document.createElement("span");
     configureIcon.className = "material-icons-round";
+    configureIcon.setAttribute("aria-hidden", "true");
     configureIcon.textContent = "tune";
     configure.appendChild(configureIcon);
     configure.addEventListener("click", (e) => {
@@ -435,8 +425,10 @@ function buildCard(job) {
     const remove = document.createElement("button");
     remove.className = "card-remove";
     remove.title = "Remove";
+    remove.setAttribute("aria-label", `Remove ${p.basename(job.filePath)}`);
     const removeIcon = document.createElement("span");
     removeIcon.className = "material-icons-round";
+    removeIcon.setAttribute("aria-hidden", "true");
     removeIcon.textContent = "close";
     remove.appendChild(removeIcon);
     remove.addEventListener("click", (e) => {
@@ -473,10 +465,13 @@ function buildCard(job) {
 
     const arrow = document.createElement("span");
     arrow.className = "material-icons-round card-arrow";
+    arrow.setAttribute("aria-hidden", "true");
     arrow.textContent = "arrow_forward";
 
     const select = document.createElement("select");
     select.className = "form-select form-select-sm card-target";
+    // Its name: axe found the card's format select had none (the arrow beside it is a glyph).
+    select.setAttribute("aria-label", `Convert ${p.basename(job.filePath)} to`);
     fillTargetSelect(select, display.commonTargets([job.ext], TARGETS), job.targetExt);
     select.addEventListener("click", (e) => e.stopPropagation());
     select.addEventListener("change", () => setTarget([job.id], select.value || null));
@@ -492,19 +487,17 @@ function buildCard(job) {
     statusText.className = "status-text";
     status.append(dot, statusText);
 
-    // -- progress
-    const progress = document.createElement("div");
-    progress.className = "card-progress d-none";
-    const bar = document.createElement("div");
-    bar.className = "bar";
-    bar.style.width = "0%";
-    progress.appendChild(bar);
+    // -- progress: the kit's thin bar, named for the file. A percent of null is
+    // an unknown duration, which slides rather than sitting at a frozen 0%.
+    const progress = kit.ui.progress({ label: `Converting ${p.basename(job.filePath)}`, thin: true });
+    progress.element.classList.add("card-progress", "d-none");
+    cardProgress.set(card, progress);
 
     // -- actions (revealed once a job finishes)
     const actions = document.createElement("div");
     actions.className = "card-actions d-none";
 
-    card.append(head, meta, outputLine, settingsLine, convert, status, progress, actions);
+    card.append(head, meta, outputLine, settingsLine, convert, status, progress.element, actions);
     card.addEventListener("click", (e) => handleCardClick(job.id, e));
 
     paintCard(card, job);
@@ -570,12 +563,9 @@ function paintCard(card, job) {
     statusText.title = text;
 
     const running = job.status === "running";
-    const progress = card.querySelector(".card-progress");
-    progress.classList.toggle("d-none", !running);
-    progress.classList.toggle("indeterminate", running && job.progress === null);
-    if (running && typeof job.progress === "number") {
-        progress.querySelector(".bar").style.width = `${job.progress}%`;
-    }
+    const progress = cardProgress.get(card);
+    progress.element.classList.toggle("d-none", !running);
+    if (running) progress.set(typeof job.progress === "number" ? job.progress : null);
 
     // The target select locks while the job is in flight.
     const select = card.querySelector(".card-target");
@@ -595,7 +585,7 @@ function renderCardActions(card, job) {
         buttons.push(makeAction("Cancel", "btn-outline-danger", () => api.cancelJob(job.id)));
     } else if (job.status === "done" && job.outputPath) {
         buttons.push(makeAction(
-            job.isDirectory ? "Open folder" : "Show in folder",
+            job.isDirectory ? "Open Folder" : "Show in Folder",
             "btn-outline-secondary",
             () => (job.isDirectory ? api.openPath(job.outputPath) : api.showInFolder(job.outputPath))
         ));
@@ -676,7 +666,11 @@ function renderSelection() {
         : "";
 }
 
+/** The bar under the grid (kit.ui.actionBar()): made once, in DOMContentLoaded. */
+let actionBar = null;
+
 function renderActionBar() {
+    if (!actionBar) return;
     const total = jobs.length;
     const ready = jobs.filter(j => j.targetExt).length;
     const withoutTarget = total - ready;
@@ -688,41 +682,34 @@ function renderActionBar() {
     // "1 file queued" — describing files that had just been converted as still
     // waiting. And while a run was under way with nothing finished yet, the
     // summary read "Nothing converted", which is true but reads like a failure.
-    if (settled > 0) {
-        $("queue-summary").textContent = display.summarise(jobs);
-    } else if (converting) {
-        $("queue-summary").textContent = `Converting ${display.countOf(ready, "file")}…`;
-    } else {
-        $("queue-summary").textContent = `${display.countOf(total, "file")} queued`;
-    }
+    let summary;
+    if (settled > 0) summary = display.summarise(jobs);
+    else if (converting) summary = `Converting ${kit.format.countOf(ready, "file")}…`;
+    else summary = `${kit.format.countOf(total, "file")} queued`;
 
-    if (converting) {
-        $("queue-detail").textContent = `${running} running`;
-    } else if (withoutTarget > 0) {
-        $("queue-detail").textContent =
-            `${display.countOf(withoutTarget, "file")} still ${display.plural(withoutTarget, "needs", "need")} a format`;
-    } else {
-        // After a finished run "Ready to convert" would be misleading, so the
-        // outcome in the summary is left to speak for itself.
-        $("queue-detail").textContent = settled > 0 ? "" : "Ready to convert";
-    }
-
-    const percent = display.overallProgress(jobs);
-    $("overall-bar").style.width = `${percent}%`;
+    let detail;
+    if (converting) detail = `${running} running`;
+    else if (withoutTarget > 0) detail = `${kit.format.countOf(withoutTarget, "file")} still ${kit.format.plural(withoutTarget, "needs", "need")} a format`;
+    // After a finished run "Ready to convert" would be misleading, so the
+    // outcome in the summary is left to speak for itself.
+    else detail = settled > 0 ? "" : "Ready to convert";
 
     // House pattern: the primary action and its abort share one slot rather
-    // than sitting side by side, so only one is ever visible.
-    $("btn-convert").classList.toggle("d-none", converting);
-    // Enabled only while there is something left to run. `ready` counts cards
-    // that *could* run, including ones already converted, and is what the
-    // "still need a format" copy is derived from — so the button needs its own
-    // count, or it sits enabled doing nothing once a batch has finished.
-    $("btn-convert").disabled = jobs.filter(
-        j => j.targetExt && j.status !== "done"
-    ).length === 0;
+    // than sitting side by side, so only one is ever visible (the kit's bar).
+    // Convert is enabled only while there is something left to run. `ready`
+    // counts cards that *could* run, including ones already converted, and is
+    // what the "still need a format" copy is derived from — so the button
+    // needs its own count, or it sits enabled doing nothing once a batch has
+    // finished.
+    actionBar.update({
+        summary,
+        detail,
+        percent: display.overallProgress(jobs),
+        running: converting,
+        canRun: jobs.some(j => j.targetExt && j.status !== "done"),
+        canClear: !converting,
+    });
     $("bulk-edit").disabled = converting;
-    $("btn-cancel-all").classList.toggle("d-none", !converting);
-    $("btn-clear-all").disabled = converting;
 }
 
 // -- New Job dialog ----------------------------------------------------------
@@ -976,7 +963,7 @@ function renderTrim() {
         thumb.setAttribute("aria-valuemin", "0");
         thumb.setAttribute("aria-valuemax", String(Math.round(duration)));
         thumb.setAttribute("aria-valuenow", String(Math.round(value)));
-        thumb.setAttribute("aria-valuetext", display.formatDuration(value) ?? "");
+        thumb.setAttribute("aria-valuetext", kit.format.formatDuration(value) ?? "");
     }
 }
 
@@ -1137,10 +1124,10 @@ function openJobModal(ids) {
     const scoped = jobs.filter(j => modalScope.includes(j.id));
     const single = scoped.length === 1;
 
-    $("jm-title").textContent = single ? "Advanced options" : "Bulk edit";
+    $("jm-title").textContent = single ? "Advanced Options" : "Bulk Edit";
     $("jm-scope").textContent = single
         ? p.basename(scoped[0].filePath)
-        : `Applies to ${display.countOf(scoped.length, "file")}`;
+        : `Applies to ${kit.format.countOf(scoped.length, "file")}`;
 
     // Target options are the intersection, exactly as the bulk bar computes it.
     const targets = display.commonTargets(scoped.map(j => j.ext), TARGETS);
@@ -1467,83 +1454,7 @@ function applyJobModal() {
 
     jobModal.hide();
     const n = modalScope.length;
-    toast(`Settings applied to ${display.countOf(n, "file")}.`, "success");
-}
-
-// -- Toasts ------------------------------------------------------------------
-
-const TOAST_ICONS = { info: "info", success: "check_circle", warning: "warning", danger: "error" };
-
-/**
- * @param {object} [options]
- * @param {string}   [options.actionLabel] adds a button beside the message
- * @param {() => (Node|null)} [options.onAction] builds what the button reveals,
- *        appended inside this same toast. A toast carrying an action does not
- *        time out by default — an action nobody can reach is not an action.
- *
- * Everything here is set with textContent. A toast reports filenames and
- * ffmpeg's own words, neither of which this app gets to trust as markup.
- */
-function toast(message, type = "info", timeoutMs = 4500, options = {}) {
-    const host = $("toast-host");
-    const { actionLabel = null, onAction = null } = options;
-    if (actionLabel && timeoutMs === 4500) timeoutMs = 0;
-
-    const note = document.createElement("div");
-    note.className = `toast-note toast-${type}`;
-
-    const icon = document.createElement("span");
-    icon.className = "material-icons-round";
-    icon.textContent = TOAST_ICONS[type] ?? "info";
-
-    const body = document.createElement("span");
-    body.className = "toast-body";
-    body.textContent = message;
-
-    if (actionLabel && onAction) {
-        const action = document.createElement("button");
-        action.className = "toast-action";
-        action.type = "button";
-        action.textContent = actionLabel;
-
-        // Both the button and whatever it reveals live inside the body. The
-        // toast itself is a flex row of icon | body | dismiss, so anything
-        // appended to it directly becomes a fourth column instead.
-        let detail = null;
-        action.addEventListener("click", () => {
-            if (detail) {
-                detail.remove();
-                detail = null;
-                action.textContent = actionLabel;
-                return;
-            }
-            detail = onAction();
-            if (!detail) return;
-            body.appendChild(detail);
-            action.textContent = "Hide";
-        });
-        body.append(" ", action);
-    }
-
-    const close = document.createElement("button");
-    close.className = "toast-close material-icons-round";
-    close.textContent = "close";
-    close.title = "Dismiss";
-    close.addEventListener("click", () => dismiss());
-
-    note.append(icon, body, close);
-    host.appendChild(note);
-
-    let timer = null;
-    function dismiss() {
-        if (!note.isConnected) return;
-        clearTimeout(timer);
-        note.classList.add("leaving");
-        setTimeout(() => note.remove(), 200);
-    }
-
-    if (timeoutMs > 0) timer = setTimeout(dismiss, timeoutMs);
-    return dismiss;
+    kit.ui.toast(`Settings applied to ${kit.format.countOf(n, "file")}.`, { type: "success" });
 }
 
 // -- Conversion --------------------------------------------------------------
@@ -1561,11 +1472,11 @@ async function startConversion() {
     // only hint beforehand is a line on the card. Ask once, with the number.
     const frames = runnable.reduce((total, job) => total + frameCountOf(job), 0);
     if (frames >= FRAME_CONFIRM_THRESHOLD) {
-        const ok = await confirmDialog({
-            title: "That is a lot of images",
-            body: `This writes about ${display.countOf(frames, "image")}. Narrow the range in `
-                + `Advanced options if that is more than you meant.`,
-            confirmLabel: "Write them",
+        const ok = await kit.ui.confirm({
+            title: "Large Frame Export",
+            body: `This writes about ${kit.format.countOf(frames, "image")}. Narrow the range in `
+                + `Advanced Options if that is more than you meant.`,
+            confirmLabel: "Write Them",
             variant: "warning",
             icon: "burst_mode",
         });
@@ -1615,63 +1526,17 @@ function announce(results) {
         // One toast, not one blocking dialog per failure. The per-card status
         // carries each individual reason.
         const detail = failed.length === 1 ? ` — ${failed[0].error ?? "unknown error"}` : "";
-        toast(
-            `${display.countOf(failed.length, "file")} failed to convert${detail}`,
-            "danger",
-            0
-        );
+        kit.ui.toast(`${kit.format.countOf(failed.length, "file")} failed to convert${detail}`, { type: "danger", timeout: 0 });
     }
     if (done > 0) {
-        toast(`${display.countOf(done, "file")} converted.`, "success");
+        kit.ui.toast(`${kit.format.countOf(done, "file")} converted.`, { type: "success" });
     } else if (failed.length === 0 && cancelled > 0) {
-        toast("Conversion cancelled.", "info");
+        kit.ui.toast("Conversion cancelled.");
     }
 }
 
 // -- Wiring ------------------------------------------------------------------
 
-
-let confirmModal = null;
-
-/**
- * Promise-wrapped confirm, per the house pattern. Resolves true only on the
- * confirm button; every other way out resolves false, and both listeners are
- * removed in one shared cleanup either way.
- */
-function confirmDialog({ title, body, confirmLabel = "Confirm", variant = "primary", icon = "help_outline" }) {
-    return new Promise((resolve) => {
-        const modalEl = $("confirm-modal");
-        const okBtn = $("confirm-ok");
-
-        $("confirm-title").textContent = title;
-        $("confirm-body").textContent = body;
-        $("confirm-icon").textContent = icon;
-        okBtn.textContent = confirmLabel;
-        okBtn.className = `btn btn-${variant}`;
-
-        if (!confirmModal) confirmModal = new bootstrap.Modal(modalEl);
-
-        let confirmed = false;
-        const cleanup = () => {
-            okBtn.removeEventListener("click", onOk);
-            modalEl.removeEventListener("hidden.bs.modal", onHidden);
-        };
-        const onOk = () => {
-            confirmed = true;
-            cleanup();
-            confirmModal.hide();
-            resolve(true);
-        };
-        const onHidden = () => {
-            cleanup();
-            if (!confirmed) resolve(false);
-        };
-
-        okBtn.addEventListener("click", onOk);
-        modalEl.addEventListener("hidden.bs.modal", onHidden);
-        confirmModal.show();
-    });
-}
 
 // -- Views ---------------------------------------------------------------------
 //
@@ -1730,13 +1595,13 @@ async function addJoinPaths(inputPaths) {
             found: result.files.length,
         });
         for (const err of result.errors ?? []) {
-            toast(`Could not read ${p.basename(err.path)}: ${err.error}`, "danger");
+            kit.ui.toast(`Could not read ${p.basename(err.path)}: ${err.error}`, { type: "danger" });
         }
     } catch (_) {
         // The scan itself failed, so folders cannot be expanded. List whatever
         // was handed over as plain files.
         const added = await addJoinClips(inputPaths);
-        if (added === 0) toast("None of those are files this can join.", "warning");
+        if (added === 0) kit.ui.toast("None of those are files this can join.", { type: "warning" });
     }
 }
 
@@ -1827,10 +1692,10 @@ function buildJoinRow(clip, index) {
     else if (!clip.meta.ok) { meta.textContent = "unreadable"; meta.classList.add("is-bad"); }
     else {
         const span = joinClipSpan(clip);
-        const bits = [display.formatDuration(clip.meta.duration)];
+        const bits = [kit.format.formatDuration(clip.meta.duration)];
         if (clip.meta.video) bits.push(`${clip.meta.video.width}×${clip.meta.video.height}`);
         if (span != null && Math.abs(span - clip.meta.duration) > 0.05) {
-            bits.push(`keeping ${display.formatDuration(span)}`);
+            bits.push(`keeping ${kit.format.formatDuration(span)}`);
         }
         meta.textContent = bits.join(" · ");
     }
@@ -1863,7 +1728,7 @@ function timeInput(clip, which, placeholder) {
     input.type = "text";
     input.placeholder = placeholder;
     input.spellcheck = false;
-    input.value = clip.trim[which] != null ? display.formatDuration(clip.trim[which]) : "";
+    input.value = clip.trim[which] != null ? kit.format.formatDuration(clip.trim[which]) : "";
     input.addEventListener("change", () => {
         clip.trim[which] = parseTime(input.value);
         renderJoin();
@@ -1875,9 +1740,11 @@ function iconButton(icon, title, onClick, disabled = false) {
     const button = document.createElement("button");
     button.type = "button";
     button.title = title;
+    button.setAttribute("aria-label", title);
     button.disabled = disabled;
     const glyph = document.createElement("span");
     glyph.className = "material-icons-round";
+    glyph.setAttribute("aria-hidden", "true");
     glyph.textContent = icon;
     button.appendChild(glyph);
     button.addEventListener("click", onClick);
@@ -1921,7 +1788,7 @@ function renderJoinPlan() {
         return;
     }
 
-    const plan = display.describeJoinPlan(display.compareClips(metas));
+    const plan = display.describeJoinPlan(display.compareClips(metas), { targetExt: $("join-format").value || null, metas });
     box.className = `join-plan is-${plan.strategy === "demuxer" ? "copy" : plan.strategy === "filter" ? "encode" : "blocked"}`;
     box.textContent = "";
     box.appendChild(Object.assign(document.createElement("div"), { textContent: plan.headline }));
@@ -1936,9 +1803,9 @@ function renderJoinPlan() {
 function joinStrategy() {
     const metas = joinMetas();
     if (metas.length < joinClips.length || joinClips.length < 2) return null;
-    const comparison = display.compareClips(metas);
-    if (comparison.blocked) return null;
-    return comparison.compatible ? "demuxer" : "filter";
+    // The plan's own strategy: matching clips are copied only into their own container.
+    const plan = display.describeJoinPlan(display.compareClips(metas), { targetExt: $("join-format").value || null, metas });
+    return plan.strategy === "blocked" ? null : plan.strategy;
 }
 
 function renderJoinActions() {
@@ -1962,7 +1829,7 @@ function renderJoinActions() {
     $("btn-join-run").classList.toggle("d-none", Boolean(joinRunning));
     $("btn-join-cancel").classList.toggle("d-none", !joinRunning);
     $("btn-join-clear").disabled = Boolean(joinRunning);
-    document.querySelector(".join-progress").classList.toggle("d-none", !joinRunning);
+    joinProgress.element.classList.toggle("d-none", !joinRunning);
 }
 
 async function runJoin() {
@@ -1988,7 +1855,7 @@ async function runJoin() {
 
     joinRunning = generateId();
     spec.id = joinRunning;
-    $("join-bar").style.width = "0%";
+    joinProgress.set(0);
     renderJoinActions();
 
     const result = await api.runJoin(spec);
@@ -1996,25 +1863,36 @@ async function runJoin() {
     renderJoinActions();
 
     if (result.status === "done") {
-        toast(`Joined ${display.countOf(joinClips.length, "file")} into ${p.basename(result.outputPath)}.`, "success");
+        kit.ui.toast(`Joined ${kit.format.countOf(joinClips.length, "file")} into ${p.basename(result.outputPath)}.`, { type: "success" });
     } else if (result.status === "cancelled") {
-        toast("Join cancelled.", "info");
+        kit.ui.toast("Join cancelled.");
     } else if (result.status === "skipped") {
-        toast("That file already exists, so the join was skipped.", "warning");
+        kit.ui.toast("That file already exists, so the join was skipped.", { type: "warning" });
     } else {
-        toast(result.error || "The join failed.", "danger");
+        kit.ui.toast(result.error || "The join failed.", { type: "danger" });
     }
 }
 
+/** Join's progress bar (kit.ui.progress()), made in setupJoin. */
+let joinProgress = null;
+
 function setupJoin() {
-    $("btn-join-add").addEventListener("click", browseJoinFiles);
-    $("btn-join-add-more").addEventListener("click", browseJoinFiles);
-    // The whole zone is a click target, as Convert's is — with the same guard,
-    // or the button inside it opens the dialog twice.
-    $("join-drop").addEventListener("click", (e) => {
-        if (e.target.closest("button")) return;
-        browseJoinFiles();
+    joinProgress = kit.ui.progress({ label: "Joining" });
+    joinProgress.element.classList.add("join-progress", "d-none");
+    $("join-progress").replaceWith(joinProgress.element);
+
+    // The same drop zone as Convert's, from the kit, so the two sections read
+    // as one app: only the icon and the label change. Files dropped anywhere
+    // in Join, or picked with its button, join the list.
+    const { zone } = kit.ui.dropZone($("join-view"), {
+        onPaths: addJoinPaths,
+        icon: "merge_type",
+        label: "Drag & Drop Files to Join Here",
+        onBrowse: browseJoinFiles,
     });
+    $("join-empty").append(zone);
+
+    $("btn-join-add-more").addEventListener("click", browseJoinFiles);
     $("btn-join-clear").addEventListener("click", () => { joinClips = []; renderJoin(); });
     $("btn-join-run").addEventListener("click", runJoin);
     $("btn-join-cancel").addEventListener("click", () => { if (joinRunning) api.cancelJob(joinRunning); });
@@ -2023,12 +1901,11 @@ function setupJoin() {
         if (dir) { $("join-dir").value = dir; renderJoinActions(); }
     });
     $("join-name").addEventListener("input", renderJoinActions);
-    $("join-format").addEventListener("change", renderJoinActions);
-
-    const zone = $("join-drop");
-    zone.addEventListener("dragenter", () => zone.classList.add("drag-over"));
-    zone.addEventListener("dragleave", () => zone.classList.remove("drag-over"));
-    zone.addEventListener("drop", () => zone.classList.remove("drag-over"));
+    // The plan says whether this format copies or re-encodes, so it's said again for each.
+    $("join-format").addEventListener("change", () => {
+        renderJoinPlan();
+        renderJoinActions();
+    });
 
     async function browseJoinFiles() {
         const filePaths = await api.browseFiles();
@@ -2036,7 +1913,7 @@ function setupJoin() {
     }
 }
 
-// -- Folder options ----------------------------------------------------------
+// -- Folder Options ----------------------------------------------------------
 
 /**
  * Three checkboxes, saved as they are changed. No save button, and no dialog:
@@ -2127,50 +2004,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     setupScanOptions();
     setupJoin();
 
-    // Drag and drop. The document-level guard stops a stray drop navigating the
-    // window to the file and replacing the app with it.
-    const appShell = document.querySelector(".app-shell");
-    let dragDepth = 0;
-
-    document.addEventListener("dragover", (e) => e.preventDefault());
-    document.addEventListener("drop", (e) => e.preventDefault());
-
-    document.addEventListener("dragenter", (e) => {
-        e.preventDefault();
-        dragDepth++;
-        // The highlight belongs to the grid, so it stays off while Join is
-        // showing — Join's own zone lights itself.
-        if (currentView !== "convert") return;
-        appShell.classList.add("drag-over");
-        if (jobs.length === 0) $("drop-zone").classList.add("drag-over");
+    // Files dropped anywhere in Convert, and the empty grid's drop zone, from
+    // the kit: it counts drags in and out across children (v1's highlight
+    // flickered), takes each File's path one at a time, and guards the page
+    // against a stray drop navigating the window to the file. Join takes its
+    // own (setupJoin). While files are over Convert, it's lit (.drag-over), so
+    // a grid with cards is the target too.
+    const { zone } = kit.ui.dropZone($("convert-view"), {
+        onPaths: (paths) => ingestFromAnywhere(paths),
+        icon: "swap_horiz",
+        label: "Drag & Drop Files or Folders Here",
+        onBrowse: () => browseFiles(),
     });
-    document.addEventListener("dragleave", () => {
-        // dragleave also fires crossing onto child elements, so count depth
-        // rather than clearing on the first one — that is what made the v1
-        // highlight flicker.
-        dragDepth = Math.max(0, dragDepth - 1);
-        if (dragDepth === 0) {
-            appShell.classList.remove("drag-over");
-            $("drop-zone").classList.remove("drag-over");
-        }
-    });
-    document.addEventListener("drop", async (e) => {
-        dragDepth = 0;
-        appShell.classList.remove("drag-over");
-        $("drop-zone").classList.remove("drag-over");
-
-        // Read the paths before any await — dataTransfer does not survive one.
-        // The FileList is iterated here rather than in the preload: it cannot
-        // cross the context bridge, but the individual File objects can.
-        const paths = Array.from(e.dataTransfer?.files ?? [])
-            .map(file => api.getPathForFile(file))
-            .filter(Boolean);
-
-        // A drop means "take these", and where they go is whichever view is
-        // showing. Switching to Convert under someone who is assembling a join
-        // would be the surprising reading of the same gesture.
-        takePaths(paths);
-    });
+    $("empty-state").append(zone);
 
     // The header's Add Files and Add Folder serve both sections, so they take
     // the same reading as a drop: whichever section is showing gets the files.
@@ -2188,21 +2034,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (folders) takePaths(folders);
     }
 
-    $("browse-btn").addEventListener("click", browseFiles);
     $("btn-add-files").addEventListener("click", browseFiles);
     $("btn-add-folder").addEventListener("click", browseFolder);
-    $("drop-zone").addEventListener("click", (e) => {
-        if (e.target.closest("button")) return;
-        browseFiles();
-    });
 
-    $("btn-convert").addEventListener("click", startConversion);
-    $("btn-cancel-all").addEventListener("click", () => api.cancelAll());
-    $("btn-clear-all").addEventListener("click", () => {
-        jobs = [];
-        clearSelection();
-        render();
+    actionBar = kit.ui.actionBar({
+        run: { label: "Convert", onClick: startConversion },
+        abort: { onClick: () => api.cancelAll() },
+        clear: {
+            onClick: () => {
+                jobs = [];
+                clearSelection();
+                render();
+            },
+        },
+        progressLabel: "Converting",
     });
+    $("action-bar").append(actionBar.element);
 
     // An empty value is the placeholder, which clears the target across the
     // selection — pass it through rather than ignoring it.
@@ -2211,7 +2058,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
     $("bulk-remove").addEventListener("click", () => removeJobs([...selection]));
     $("bulk-deselect").addEventListener("click", clearSelection);
-    // Bulk edit lives in the selection bar and follows the same scope rule as
+    // Bulk Edit lives in the selection bar and follows the same scope rule as
     // the format dropdown beside it: the selection, or everything when nothing
     // is selected.
     $("bulk-edit").addEventListener("click", () => {
@@ -2263,27 +2110,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (e.target === $("grid-scroll") || e.target === $("job-grid")) clearSelection();
     });
 
-    document.addEventListener("keydown", (e) => {
-        // Only a control the user can actually type into should swallow these.
-        // This used to include SELECT, and a <select> keeps focus after you
-        // pick an option — so choosing a format on any card silently ate the
-        // next Escape, Delete or Ctrl+A anywhere in the app until you happened
-        // to click something non-focusable. A checkbox is an INPUT too, which
-        // is why the type is tested rather than just the tag.
-        const el = document.activeElement;
-        const tag = el?.tagName ?? "";
-        const typing = tag === "TEXTAREA"
-            || (tag === "INPUT" && !/^(checkbox|radio|button|submit|reset|range|file)$/.test(el.type));
-        if (typing) return;
-
-        // The settings dialog owns the keyboard while it is open, or Delete
-        // would remove the very cards being edited behind it.
-        if (document.querySelector(".modal.show")) return;
-
-        // Card shortcuts belong to the file grid, so they do nothing while
-        // another section is showing.
-        if (currentView !== "convert") return;
-
+    // The grid's own keys, through the kit's guard: never while someone types
+    // in a field (a select or a checkbox isn't one: a select keeps the focus
+    // after a choice, and used to eat the next Escape, Delete or Ctrl+A), never
+    // while a prompt or the settings dialog owns the keyboard (or Delete would
+    // remove the very cards being edited behind it), and only while Convert,
+    // the grid's section, shows.
+    kit.keys.onKey((e) => {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
             e.preventDefault();
             selectAll();
@@ -2293,7 +2126,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         } else if (e.key === "Escape") {
             clearSelection();
         }
-    });
+    }, { view: "convert" });
 
     render();
 });
@@ -2303,7 +2136,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 api.onJobProgress(({ jobId, percent }) => {
     // A join is a job too, and it is the only one with no card to land on.
     if (jobId === joinRunning) {
-        $("join-bar").style.width = `${percent}%`;
+        // null when the length isn't known: the bar slides instead of reading "null%".
+        joinProgress?.set(typeof percent === "number" ? percent : null);
         return;
     }
     const job = jobs.find(j => j.id === jobId);
@@ -2327,6 +2161,30 @@ function ingestFromAnywhere(paths) {
     ingestPaths(paths);
 }
 
-api.onFilesOpened((filePaths) => {
+// "Open with", a second launch, and the menu's Open Files and Open Folder:
+// the kit gathers them and pushes them here (files:opened).
+kitApi.onFilesOpened((filePaths) => {
     ingestFromAnywhere(Array.isArray(filePaths) ? filePaths : [filePaths]);
+});
+
+// "File Already Exists", asked by main mid-batch: a prompt in the page, from
+// the kit (kit.ui.confirm()'s batch form), one at a time. Escape, the backdrop
+// and the close button mean Cancel All, as v1's box did; Save as New is the
+// safe answer, and takes the focus.
+api.onConflictAsk(async ({ id, name, isDirectory }) => {
+    const answer = await kit.ui.confirm({
+        title: "File Already Exists",
+        body: `${name} already exists. ${isDirectory ? "A folder" : "A file"} with this name is already in the destination.`,
+        icon: "file_copy",
+        choices: [
+            { value: "cancelAll", label: "Cancel All" },
+            { value: "skip", label: "Skip This File" },
+            { value: "overwrite", label: "Overwrite" },
+            { value: "unique", label: "Save as New" },
+        ],
+        cancel: "cancelAll",
+        defaultChoice: "unique",
+        applyToAll: true,
+    });
+    api.answerConflict(id, answer);
 });

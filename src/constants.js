@@ -1,16 +1,10 @@
 const APP_NAME = "Diamond File Converter";
 
-const LOG = {
-    ERROR: "ERROR",
-    WARN:  "WARN",
-    INFO:  "INFO",
-    DEBUG: "DEBUG",
-};
-
 // IPC channel names: the app's own, each answered in main.js through
 // kit.ipc.handle(), which answers the app's own page only. The shared ones
 // (app:get-version, settings:get and :set, shell:open-external, theme:changed,
-// view:show) are the kit's, reached through window.kitAPI.
+// view:show, the updater's, files:opened) are the kit's, reached through
+// window.kitAPI.
 //
 // Namespaced by domain. v1 kept a flat map that also carried an
 // electron-updater event name ("update-available") alongside real IPC
@@ -45,9 +39,16 @@ const IPC = {
     SHELL_SHOW_IN_FOLDER: "shell:show-in-folder",
     APP_GET_FORMATS:      "app:get-formats",
 
-    // Pushed from main.
-    FILES_OPENED:  "files:opened",  // push: string[] of paths from menu/argv/shell
+    // "File Already Exists", asked in the page (a kit.ui.confirm() batch
+    // prompt) and answered back: main pushes { id, name, isDirectory }, and the
+    // page answers with (id, { choice, all }). The files the app is opened with
+    // are the kit's files:opened.
+    CONFLICT_ASK:    "conflict:ask",     // push { id, name, isDirectory }
+    CONFLICT_ANSWER: "conflict:answer",  // invoke(id, { choice, all }) -> whether it was waiting
 };
+
+// The answers to "File Already Exists", in the prompt's order, left to right.
+const CONFLICT_CHOICES = Object.freeze(["cancelAll", "skip", "overwrite", "unique"]);
 
 // Window size constraints. Widened for the card grid — the v1 single column
 // was 700px, which fits only two cards per row. Existing users keep their
@@ -62,10 +63,6 @@ const WINDOW = {
     MIN_WIDTH:      880,
     MIN_HEIGHT:     600,
 };
-
-// Windows spawns one process per file when several are selected in Explorer,
-// so incoming paths are collected before being handed to the renderer.
-const ARGV_BATCH_DEBOUNCE_MS = 500;
 
 // The app's settings and their defaults, which the kit keeps (kit.start()'s
 // settings.defaults) under the same "settings" key in config.json that 2.0.0
@@ -132,8 +129,7 @@ module.exports = {
     APP_NAME,
     IPC,
     WINDOW,
-    LOG,
-    ARGV_BATCH_DEBOUNCE_MS,
+    CONFLICT_CHOICES,
     SETTINGS_DEFAULTS,
     LEGACY_SETTINGS_KEYS,
     LEGACY_STORE_KEYS,

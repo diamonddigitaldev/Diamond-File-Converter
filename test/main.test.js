@@ -102,15 +102,13 @@ test("settings: defaults fill the gaps a partial saved object leaves", () => {
 // mean anything on an install that already carries a v1 value, and it must stay
 // version-guarded — an unconditional prune would eat whatever a preferences
 // screen writes, on the very next launch.
-test("settings: main.js still runs the migration, once, before the window", () => {
+test("settings: main.js hands the kit the migration, which runs once per version, before anything reads a setting", () => {
     const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
-    assert.match(main, /migrateStore\(\);\s*probe\.setFfprobePath/,
-        "migrateStore must run before the window is created");
-    assert.match(main, /store\.get\("settingsSchema"\) === SETTINGS_SCHEMA_VERSION/,
-        "the migration must be guarded by the schema version, or it runs every launch");
-    // The kit reads the settings merged over SETTINGS_DEFAULTS; main.js must read them from it.
-    assert.match(main, /settings:\s*\{\s*defaults:\s*SETTINGS_DEFAULTS\s*\}/,
-        "the kit must be given the defaults to merge underneath");
+    // The kit runs it as the store is first opened, and marks settingsSchema (2.0.0's own key), so it runs
+    // once per version: the kit's tests hold it to that.
+    assert.match(main, /settings:\s*\{\s*defaults:\s*SETTINGS_DEFAULTS,[\s\S]*?version:\s*SETTINGS_SCHEMA_VERSION,\s*migrate:\s*\(settings\)\s*=>\s*pruneLegacySettings\(settings\)\.settings,\s*obsoleteKeys:\s*LEGACY_STORE_KEYS,\s*\}/,
+        "the kit must be given the defaults, the schema version, the prune and the orphaned store keys");
+    assert.ok(!/migrateStore|new Store\(/.test(main), "main.js keeps no store or migration of its own");
     assert.match(main, /function appSettings\(\) \{\s*return kit\.settings\.get\(\);/,
         "settings must be read through the kit, with the defaults merged underneath");
 });
@@ -196,15 +194,19 @@ test("preview: the command shown resolves a real destination, not a placeholder"
         "the preview must resolve the destination with the same code the run uses");
 });
 
-test("conflict: the prompt carries the abort, because nothing behind it can be clicked", () => {
-    // The dialog is window-modal: while it is open Windows blocks every click
-    // on the app behind it, so the footer's own "Cancel All" was unreachable.
-    // Position was never the problem, which is why dragging the dialog clear
-    // changed nothing. The only surface that can take the answer is the dialog.
+test("conflict: \"File Already Exists\" is asked in the page, and carries the abort", () => {
+    // It was a native box, window-modal: while it was open Windows blocked
+    // every click on the app behind it, so the footer's own "Cancel All" was
+    // unreachable. It's a prompt in the page now (kit.ui.confirm()'s batch
+    // form, DESIGN §10), and the abort stays in it, since the footer is behind it.
     const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
+    const renderer = fs.readFileSync(path.join(__dirname, "..", "src", "renderer.js"), "utf8");
 
-    assert.match(main, /buttons:\s*\["Cancel All", "Skip This File", "Overwrite", "Save as New"\]/,
-        "the prompt must offer a whole-run abort as well as a per-file answer");
+    assert.ok(!/showMessageBox/.test(main), "no native box: \"File Already Exists\" is asked in the page");
+    assert.match(main, /win\.webContents\.send\(IPC\.CONFLICT_ASK, \{ id, name: path\.basename\(candidatePath\), isDirectory \}\)/,
+        "main asks the page, with the file's name only");
+    assert.match(renderer, /title: "File Already Exists",[\s\S]*?choices: \[\s*\{ value: "cancelAll", label: "Cancel All" \},\s*\{ value: "skip", label: "Skip This File" \},\s*\{ value: "overwrite", label: "Overwrite" \},\s*\{ value: "unique", label: "Save as New" \},\s*\],\s*cancel: "cancelAll",\s*defaultChoice: "unique",\s*applyToAll: true,/,
+        "the prompt must offer a whole-run abort as well as a per-file answer, with Save as New the safe default");
     assert.match(main, /if \(runner\) runner\.cancelAll\(\);/,
         "Cancel All must actually reach the runner");
     assert.match(main, /if \(choice === "skip"\) return \{ action: "skip" \};/,
@@ -219,9 +221,10 @@ test("conflict: Cancel All ends the run, not just the file it was answered on", 
     // which happens whenever a batch goes idle waiting for a later file to
     // finish probing. Both let a fresh dialog open for a run already stopped.
     //
-    // Escape is not a separate path to fix: cancelId picks button 0, which is
+    // Escape is not a separate path to fix: the prompt's cancel choice is
     // Cancel All, so it lands on the same branch.
     const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
+    const renderer = fs.readFileSync(path.join(__dirname, "..", "src", "renderer.js"), "utf8");
 
     assert.match(main, /if \(conflictAbort\) return \{ action: "cancel" \};/,
         "no dialog may open for a batch that has already been aborted");
@@ -231,6 +234,10 @@ test("conflict: Cancel All ends the run, not just the file it was answered on", 
         "the batch is bounded by the job:run calls still outstanding, not by the runner going idle");
     assert.ok(!/runner\.on\("idle",[^)]*conflictChoiceForBatch/.test(main),
         "batch state cannot be scoped to idle: a batch outlives an idle whenever a later file is still being probed");
-    assert.match(main, /cancelId:\s*0,/,
+    assert.match(renderer, /cancel: "cancelAll",/,
         "Escape must resolve to Cancel All, which is what the checklist promises it does");
+    assert.match(main, /CONFLICT_CHOICES\.includes\(answer\?\.choice\) \? answer\.choice : "cancelAll"/,
+        "an answer that isn't one of the four is a dismissed prompt: Cancel All");
+    assert.match(main, /win\.on\("closed", \(\) => answerAllConflicts\(\{ choice: "cancelAll", all: false \}\)\)/,
+        "a prompt still open when the window goes is Cancel All, not a hang");
 });

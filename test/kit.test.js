@@ -35,7 +35,7 @@ test("every one of the app's own handlers goes through kit.ipc.handle()", () => 
     assert.ok(!/ipcMain/.test(main), "main.js must not register a handler straight on ipcMain: it would answer any page");
 
     // Every channel the page invokes has its handler, and pushes have none.
-    const pushes = [IPC.JOB_PROGRESS, IPC.JOB_STATUS, IPC.FILES_OPENED];
+    const pushes = [IPC.JOB_PROGRESS, IPC.JOB_STATUS, IPC.CONFLICT_ASK];
     const handled = [...main.matchAll(/kit\.ipc\.handle\(IPC\.([A-Z_]+)/g)].map(m => IPC[m[1]]);
     assert.deepEqual(handled.sort(), Object.values(IPC).filter(c => !pushes.includes(c)).sort());
 });
@@ -74,7 +74,7 @@ test("the settings defaults are ones the kit takes", () => {
     assert.deepEqual(JSON.parse(JSON.stringify(SETTINGS_DEFAULTS)), SETTINGS_DEFAULTS, "every default is a JSON value");
 });
 
-test("the page links the kit's styles after Bootstrap's and before its own, and loads kit.js before renderer.js", () => {
+test("the page links the kit's styles after Bootstrap's and before its own, and loads kit.js before display.js and renderer.js", () => {
     const html = read("index.html");
     const order = (list) => list.map(needle => {
         const at = html.indexOf(needle);
@@ -89,7 +89,8 @@ test("the page links the kit's styles after Bootstrap's and before its own, and 
         "\"styles.css\"",
     ]);
     assert.deepEqual(styles, [...styles].sort((a, b) => a - b), "Bootstrap, Material Icons, kit.css, accent.css, then styles.css");
-    const scripts = order(["bootstrap.bundle.min.js\"", "src=\"core/display.js\"", "electron-kit/page/kit.js\"", "src=\"renderer.js\""]);
+    // kit.js before display.js, which takes the house's wording from its kit.format.
+    const scripts = order(["bootstrap.bundle.min.js\"", "electron-kit/page/kit.js\"", "src=\"core/display.js\"", "src=\"renderer.js\""]);
     assert.deepEqual(scripts, [...scripts].sort((a, b) => a - b));
     assert.ok(!/styles\/tokens\.css/.test(html), "the kit's kit.css holds the tokens now");
 });
@@ -112,4 +113,49 @@ test("the app's styles leave the kit's shell alone", () => {
     }
     // The fill as text fails AA in one theme: text in the accent uses its text shade.
     assert.ok(!/(^|[\s{;])color:\s*var\(--accent\)/m.test(css), "accent text uses var(--accent-text)");
+});
+
+test("the shared parts are the kit's: no toast, prompt, drop zone, action bar or progress bar of DFC's own", () => {
+    const renderer = read("renderer.js");
+    const html = read("index.html");
+    const css = read("styles.css");
+    for (const own of ["function toast(", "function confirmDialog(", "dragDepth", "getPathForFile"]) {
+        assert.ok(!renderer.includes(own), `renderer.js has ${own}`);
+    }
+    for (const call of ["kit.ui.toast(", "kit.ui.confirm(", "kit.ui.dropZone(", "kit.ui.actionBar(", "kit.ui.progress(", "kit.keys.onKey(", "kit.format.countOf("]) {
+        assert.ok(renderer.includes(call), `renderer.js uses ${call}`);
+    }
+    for (const markup of ["confirm-modal", "toast-host", "drop-zone", "join-drop", "overall-bar", "btn-convert"]) {
+        assert.ok(!html.includes(markup), `index.html has ${markup}`);
+    }
+    for (const rule of [".toast-", ".drop-zone", ".drop-label", ".action-status", ".card-progress .bar", "@keyframes slide"]) {
+        assert.ok(!css.includes(rule), `styles.css has ${rule}`);
+    }
+});
+
+test("the Title Case slips DESIGN.md lists are fixed: buttons and titles are Title Case", () => {
+    const text = read("renderer.js") + read("index.html");
+    for (const slip of ["Bulk edit", "Add more", "Write them", "Show in folder", "Open folder", "Show them", "Advanced options", "That is a lot of images", "Folder options"]) {
+        assert.ok(!text.includes(slip), `"${slip}" is still sentence case`);
+    }
+});
+
+test("progress of null is \"not known\": a card's and Join's bars slide, never sit at 0% or read null%", () => {
+    const renderer = read("renderer.js");
+    assert.match(renderer, /progress\.set\(typeof job\.progress === "number" \? job\.progress : null\)/);
+    assert.match(renderer, /joinProgress\?\.set\(typeof percent === "number" \? percent : null\)/);
+    assert.ok(!/style\.width = `\$\{percent\}%`/.test(renderer), "Join's bar used to read \"null%\"");
+});
+
+test("every icon is hidden from screen readers, and every icon-only button has a name", () => {
+    const html = read("index.html");
+    const spans = html.match(/<span class="material-icons-round[^>]*>/g) ?? [];
+    assert.ok(spans.length > 0);
+    for (const span of spans) assert.match(span, /aria-hidden="true"/, span);
+    const renderer = read("renderer.js");
+    const made = renderer.match(/(\w+)\.className = "material-icons-round[^"]*";/g) ?? [];
+    for (const line of made) {
+        const name = line.split(".")[0];
+        assert.ok(renderer.includes(`${name}.setAttribute("aria-hidden", "true");`), `${name} isn't aria-hidden`);
+    }
 });
