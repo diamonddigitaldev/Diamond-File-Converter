@@ -1,5 +1,6 @@
 const { app, dialog, shell } = require("electron");
 const { spawn } = require("child_process");
+const fs = require("fs");
 const path = require("path");
 
 const { APP_NAME, IPC, WINDOW, SETTINGS_DEFAULTS, LEGACY_STORE_KEYS,
@@ -109,19 +110,34 @@ function createWindow() {
 // and a second launch do: the kit gathers those from argv, second-instance
 // and open-file (v1 had none of this, and second-instance threw the paths away).
 
-async function openFiles() {
+/**
+ * The open dialog for files or a folder, opening where the last pick was made
+ * (lastOpenFolder, kept between launches) rather than at the system's choice.
+ * After files, their folder is kept; after a folder, the folder it's in, so
+ * the next folder pick opens beside it. Returns the paths, or null.
+ * @param {"files" | "folder"} what
+ */
+async function pickToOpen(what) {
+    const last = kit.settings.get().lastOpenFolder;
     const result = await dialog.showOpenDialog(mainWindow(), {
-        properties: ["openFile", "multiSelections"],
-        filters: FILE_DIALOG_FILTERS,
+        ...(what === "files"
+            ? { properties: ["openFile", "multiSelections"], filters: FILE_DIALOG_FILTERS }
+            : { properties: ["openDirectory"] }),
+        ...(typeof last === "string" && fs.existsSync(last) ? { defaultPath: last } : {}),
     });
-    if (!result.canceled && result.filePaths.length > 0) kit.files.open(result.filePaths);
+    if (result.canceled || result.filePaths.length === 0) return null;
+    kit.settings.set({ lastOpenFolder: path.dirname(result.filePaths[0]) });
+    return result.filePaths;
+}
+
+async function openFiles() {
+    const picked = await pickToOpen("files");
+    if (picked) kit.files.open(picked);
 }
 
 async function openFolder() {
-    const result = await dialog.showOpenDialog(mainWindow(), {
-        properties: ["openDirectory"],
-    });
-    if (!result.canceled && result.filePaths.length > 0) kit.files.open(result.filePaths);
+    const picked = await pickToOpen("folder");
+    if (picked) kit.files.open(picked);
 }
 
 // ── Conversion ───────────────────────────────────────────────────────────────
@@ -416,20 +432,9 @@ kit.ipc.handle(IPC.PROBE_FILE, (_event, filePath) => probe.probe(filePath));
 
 kit.ipc.handle(IPC.FS_SCAN, (_event, inputPaths, options) => scan.scanPaths(inputPaths ?? [], options ?? {}));
 
-kit.ipc.handle(IPC.DIALOG_BROWSE_FILES, async () => {
-    const result = await dialog.showOpenDialog(mainWindow(), {
-        properties: ["openFile", "multiSelections"],
-        filters: FILE_DIALOG_FILTERS,
-    });
-    if (result.canceled || result.filePaths.length === 0) return null;
-    return result.filePaths;
-});
+kit.ipc.handle(IPC.DIALOG_BROWSE_FILES, () => pickToOpen("files"));
 
-kit.ipc.handle(IPC.DIALOG_BROWSE_FOLDER, async () => {
-    const result = await dialog.showOpenDialog(mainWindow(), { properties: ["openDirectory"] });
-    if (result.canceled || result.filePaths.length === 0) return null;
-    return result.filePaths;
-});
+kit.ipc.handle(IPC.DIALOG_BROWSE_FOLDER, () => pickToOpen("folder"));
 
 kit.ipc.handle(IPC.DIALOG_CHOOSE_OUTPUT, async () => {
     const result = await dialog.showOpenDialog(mainWindow(), {

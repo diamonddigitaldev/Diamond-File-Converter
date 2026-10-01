@@ -76,6 +76,9 @@ const SETTINGS_DEFAULTS = {
     concurrency:     null,   // null = derive from the CPU count
     nameTemplate:    "{name}",
     lastTargetByKind: {},
+    // Where Add Files, Add Folder and Open last picked from, so the picker
+    // opens there next time (null: the system's own choice).
+    lastOpenFolder:  null,
     // Folder ingest. maxDepth and maxFiles are deliberately not here: they are
     // safety rails rather than preferences, and the toast that fires when one
     // bites explains itself at the moment it matters.
