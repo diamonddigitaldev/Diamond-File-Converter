@@ -468,12 +468,17 @@ test("scan: deduplicates and reports unreadable paths without throwing", async (
 });
 
 test("scan: common root finds the shared ancestor for mirrored output", () => {
-    const a = path.join("C:", "media", "a", "one.mp4");
-    const b = path.join("C:", "media", "b", "two.mp4");
-    assert.equal(commonRoot([a, b]), path.join("C:", "media"));
-    assert.equal(commonRoot([a]), path.join("C:", "media", "a"));
+    // An absolute root on this platform: a drive's on Windows, / elsewhere
+    // (DFC builds for Linux too, so these run there as well).
+    const root = process.platform === "win32" ? "C:\\" : "/";
+    const a = path.join(root, "media", "a", "one.mp4");
+    const b = path.join(root, "media", "b", "two.mp4");
+    assert.equal(commonRoot([a, b]), path.join(root, "media"));
+    assert.equal(commonRoot([a]), path.join(root, "media", "a"));
     assert.equal(commonRoot([]), null);
+});
 
+test("scan: common root across drives is none, and a drive's own root is a path (Windows)", { skip: process.platform !== "win32" && "drives are Windows' only" }, () => {
     // Separate drives have no shared root at all. resolveOutputDir treats null
     // as plain fixed output rather than throwing, so this must be null and not
     // something creative.
