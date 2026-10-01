@@ -7,7 +7,7 @@
 // or passed in as an argument. test/display.test.js enforces this.
 //
 // The house's wording for counts, sizes and times (plural, countOf,
-// formatDuration, formatBytes, formatEta) is electron-kit's kit.format: in the
+// formatDuration, formatBytes, formatEta) is the house kit's kit.format: in the
 // page, from kit.js (loaded before this file); under Node, from the kit's
 // format export, which runs the same code. This file holds the converter's own.
 

@@ -28,7 +28,7 @@ function extensionsOfKind(kind) {
     return Object.values(formats.FORMATS).filter(f => f.kind === kind).map(f => f.ext);
 }
 
-// The house frame (electron-kit): the shared preload (window.kitAPI) on the
+// The house frame (the kit): the shared preload (window.kitAPI) on the
 // app's session; the settings, in the same "settings" key of the same
 // config.json as 2.0.0, so what was saved carries over, and migrated once per
 // version; the log, debug.log in userData, redacted (a path keeps its file
