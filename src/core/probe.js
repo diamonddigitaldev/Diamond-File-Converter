@@ -9,7 +9,7 @@
 // duration, resolution and codecs when this resolves.
 
 const { execFile } = require("child_process");
-const { buildProbeArgs } = require("./ffmpeg-args");
+const { buildProbeArgs, buildFrameCountArgs } = require("./ffmpeg-args");
 
 const PROBE_TIMEOUT_MS = 30000;
 const MAX_BUFFER = 8 * 1024 * 1024;
@@ -44,14 +44,55 @@ function probe(inputPath) {
                     resolve({ ok: false, error: err.message, inputPath });
                     return;
                 }
+                let result;
                 try {
-                    resolve(normalise(JSON.parse(stdout), inputPath));
+                    result = normalise(JSON.parse(stdout), inputPath);
                 } catch (parseErr) {
                     resolve({ ok: false, error: `Could not parse ffprobe output: ${parseErr.message}`, inputPath });
+                    return;
+                }
+                // A moving picture with no duration (an animated GIF): count its frames.
+                if (result.ok && result.hasVideo && !result.isStill && result.duration == null) {
+                    countedDuration(inputPath).then((duration) => resolve({ ...result, duration }));
+                } else {
+                    resolve(result);
                 }
             }
         );
     });
+}
+
+/**
+ * How long a moving picture lasts, from its frames over its frame rate, for
+ * a file whose container gives no duration. The bundled ffprobe gives an
+ * animated GIF none, so it could not be trimmed or timed in Join. Always
+ * resolves: null when it can't be counted.
+ */
+function countedDuration(inputPath) {
+    return new Promise((resolve) => {
+        execFile(
+            ffprobePath,
+            buildFrameCountArgs(inputPath),
+            { timeout: PROBE_TIMEOUT_MS, maxBuffer: MAX_BUFFER, windowsHide: true },
+            (err, stdout) => {
+                if (err) return resolve(null);
+                try {
+                    resolve(durationFromCount(JSON.parse(stdout)));
+                } catch {
+                    resolve(null);
+                }
+            }
+        );
+    });
+}
+
+/** The count probe's frames over its frame rate, in seconds; null when either is missing. */
+function durationFromCount(raw) {
+    const stream = Array.isArray(raw?.streams) ? raw.streams[0] : null;
+    const frames = toNumber(stream?.nb_read_packets);
+    const fps = parseFrameRate(stream?.avg_frame_rate) ?? parseFrameRate(stream?.r_frame_rate);
+    if (!(frames > 0) || !(fps > 0)) return null;
+    return frames / fps;
 }
 
 /** Flatten ffprobe's raw JSON into the shape the UI actually binds to. */
@@ -199,4 +240,5 @@ module.exports = {
     normalise,
     parseFrameRate,
     parseRational,
+    durationFromCount,
 };

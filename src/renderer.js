@@ -1702,7 +1702,8 @@ function buildJoinRow(clip, index) {
         if (span != null && Math.abs(span - clip.meta.duration) > 0.05) {
             bits.push(`keeping ${kit.format.formatDuration(span)}`);
         }
-        meta.textContent = bits.join(" · ");
+        // A length that can't be known leaves no empty part before the first dot.
+        meta.textContent = bits.filter(Boolean).join(" · ");
     }
     main.append(name, meta);
 

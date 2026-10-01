@@ -581,6 +581,34 @@ test("probe: rational frame rates parse, degenerate ones do not", () => {
     assert.equal(probe.parseFrameRate("N/A"), null);
 });
 
+test("probe: a moving picture with no container duration is timed by its frames over its frame rate", () => {
+    const count = (packets, avg, r) => ({ streams: [{ nb_read_packets: packets, avg_frame_rate: avg, r_frame_rate: r }] });
+    assert.equal(probe.durationFromCount(count("30", "10/1")), 3);
+    assert.equal(probe.durationFromCount(count("48", "0/0", "24/1")), 2, "r_frame_rate when there's no average");
+    assert.equal(probe.durationFromCount(count("N/A", "10/1")), null);
+    assert.equal(probe.durationFromCount(count("30", "0/0", "0/0")), null);
+    assert.equal(probe.durationFromCount({}), null);
+});
+
+test("probe: a real animated GIF has a duration (the bundled ffprobe gives its container none)", async (t) => {
+    const ffmpeg = require("ffmpeg-static");
+    const ffprobe = require("ffprobe-static").path;
+    if (!ffmpeg || !fs.existsSync(ffmpeg) || !fs.existsSync(ffprobe)) return t.skip("no bundled ffmpeg or ffprobe");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dfc-gif-"));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const gif = path.join(dir, "anim.gif");
+    // 30 frames at 10 per second: 3 seconds.
+    require("child_process").execFileSync(ffmpeg, ["-v", "error", "-f", "lavfi", "-i", "testsrc=size=64x48:rate=10:duration=3", gif], { windowsHide: true });
+    const before = probe.getFfprobePath();
+    probe.setFfprobePath(ffprobe);
+    t.after(() => probe.setFfprobePath(before));
+    const meta = await probe.probe(gif);
+    assert.equal(meta.ok, true);
+    assert.equal(meta.hasVideo, true);
+    assert.equal(meta.isStill, false);
+    assert.ok(Math.abs(meta.duration - 3) < 0.01, `3 seconds, not ${meta.duration}`);
+});
+
 test("probe: an unconfigured binary degrades instead of throwing", async () => {
     const before = probe.getFfprobePath();
     probe.setFfprobePath(null);
