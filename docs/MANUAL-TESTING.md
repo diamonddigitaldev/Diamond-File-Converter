@@ -2508,13 +2508,14 @@ outputs next to them.
 
 ### Settings, the window and the log
 
-- [ ] Settings > General, Update and Credits look as before. **Will's note
+- [ ] Settings > Update and Credits look as before. **Will's note
       (2026-10-01): give Settings > Update a proper look as a person would, and
       list what to refine in its UI.**
-      Looked at 2026-10-01 as a person would: **there is no General tab.** Settings has
-      Update and Credits, and the source has no General either, so these two words (here
-      and in the Linux section) are stale. What the Update tab looked like, and what to
-      refine, went onto the kit's own backlog. Will's own look is still his.
+      Looked at 2026-10-01 as a person would. (This box and the Linux one said "General":
+      Settings has no General tab, so both now read "Update and Credits".) What the Update
+      tab looked like, and what to refine, went onto the kit's own backlog, and the kit
+      reworked the tab from it (two cards, a reason for a failed check, the version linked
+      to its release). Will's own look at the new tab is still his.
 - [ ] Move and resize the window, close it, reopen it: same place, same size.
       Unplug a second monitor the window was on: it opens centred on the one
       you have.
@@ -2622,7 +2623,7 @@ Run it in the Linux VM, on a desktop.
 - [ ] Convert a file to MP3, then again to see "File Already Exists" in the
       app, and **Save as New**: `name (1).mp3` is written.
 - [ ] Join two files: it works, in MP3 and in their own format.
-- [ ] Settings: General, Update and Credits, the rail collapsed and expanded.
+- [ ] Settings: Update and Credits, the rail collapsed and expanded.
       Close and reopen: the window is where you left it.
 - [ ] `~/.config/diamond-file-converter/debug.log` names files by their names
       only, with no folder.
