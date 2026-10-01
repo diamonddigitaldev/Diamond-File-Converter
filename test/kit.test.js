@@ -177,3 +177,11 @@ test("ffmpeg and ffprobe are packed per platform, where main.js looks for them, 
     assert.ok(build.files.includes("!node_modules/ffmpeg-static/ffmpeg{,.exe}"));
     assert.equal(build.linux.icon, "src/assets/diamondfileconverter.png");
 });
+
+test("the Windows installer is the one called Setup: Linux's files are named for the app and version only", () => {
+    const { build } = require("../package.json");
+    assert.equal(build.artifactName, "Diamond-File-Converter-${version}.${ext}");
+    // The installer's name is what its update files point at: unchanged from 2.0.0.
+    assert.equal(build.nsis.artifactName, "Diamond-File-Converter-Setup-${version}.${ext}");
+    assert.equal(build.linux.artifactName, undefined, "Linux takes the top-level name");
+});

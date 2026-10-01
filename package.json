@@ -27,7 +27,7 @@
             "!node_modules/ffprobe-static/bin/**"
         ],
         "productName": "Diamond File Converter",
-        "artifactName": "Diamond-File-Converter-Setup-${version}.${ext}",
+        "artifactName": "Diamond-File-Converter-${version}.${ext}",
         "fileAssociations": [
             {
                 "ext": [
@@ -103,6 +103,7 @@
             ]
         },
         "nsis": {
+            "artifactName": "Diamond-File-Converter-Setup-${version}.${ext}",
             "perMachine": true,
             "createDesktopShortcut": true,
             "include": "installer.nsh"

@@ -2482,3 +2482,43 @@ outputs next to them.
 - [ ] A toast is read when it shows; a danger toast at once.
 - [ ] "File Already Exists" is read as a dialog with its question, and Tab
       stays inside it.
+
+## Linux — the first build
+
+DFC builds for Linux now: an AppImage, a `.deb` and an `.rpm`, each with
+Linux's own ffmpeg and ffprobe. They're built on Linux (ffmpeg-static
+downloads the binary for the machine it's installed on), and named
+`Diamond-File-Converter-<version>.<ext>`: only the Windows installer is a
+`Setup`.
+
+> **Status: not yet run by a person.** An agent drove the built app
+> (`linux-unpacked`, what the AppImage holds) under Xvfb in a Debian 12
+> container: 23/23, and the M1 checks on a profile 2.0.0 had saved, 29/29
+> (2026-10-01). Its `.deb` and `.rpm` hold `resources/ffmpeg/ffmpeg` and
+> `ffprobe`, executable, and name Diamond Digital Development
+> <will.knowles@diamonddigital.dev> as the maintainer.
+
+Run it in the Linux VM, on a desktop.
+
+### Install and run
+
+- [ ] `sudo apt install ./Diamond-File-Converter-<version>.deb`: it installs,
+      and **Diamond File Converter** is in the applications menu under Sound &
+      Video. It opens, in the desktop's light or dark theme.
+- [ ] The AppImage (`chmod +x`, then run it) opens the same app.
+- [ ] Known until M6: the dock may show a generic icon for the running window
+      (no `desktopName` yet), and DFC isn't offered in "Open with" for media
+      files (no MimeType yet). Note it, don't fail it.
+
+### The same pass as Windows
+
+- [ ] From a terminal, `diamond-file-converter ~/Music/a.wav`: the app opens
+      with it as a card. Run the same with another file while it's open: it
+      comes to the front with the file added, and there's still one window.
+- [ ] Convert a file to MP3, then again to see "File Already Exists" in the
+      app, and **Save as New**: `name (1).mp3` is written.
+- [ ] Join two files: it works, in MP3 and in their own format.
+- [ ] Settings: General, Update and Credits, the rail collapsed and expanded.
+      Close and reopen: the window is where you left it.
+- [ ] `~/.config/diamond-file-converter/debug.log` names files by their names
+      only, with no folder.
