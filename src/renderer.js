@@ -1474,8 +1474,8 @@ async function startConversion() {
     if (frames >= FRAME_CONFIRM_THRESHOLD) {
         const ok = await kit.ui.confirm({
             title: "Large Frame Export",
-            body: `This writes about ${kit.format.countOf(frames, "image")}. Narrow the range in `
-                + `Advanced Options if that is more than you meant.`,
+            body: `This writes about ${kit.format.countOf(frames, "image")}.`,
+            detail: "Narrow the range in Advanced Options if that is more than you meant.",
             confirmLabel: "Write Them",
             variant: "warning",
             icon: "burst_mode",
@@ -2174,7 +2174,8 @@ kitApi.onFilesOpened((filePaths) => {
 api.onConflictAsk(async ({ id, name, isDirectory }) => {
     const answer = await kit.ui.confirm({
         title: "File Already Exists",
-        body: `${name} already exists. ${isDirectory ? "A folder" : "A file"} with this name is already in the destination.`,
+        body: `${name} already exists.`,
+        detail: `${isDirectory ? "A folder" : "A file"} with this name is already in the destination.`,
         icon: "file_copy",
         choices: [
             { value: "cancelAll", label: "Cancel All" },
