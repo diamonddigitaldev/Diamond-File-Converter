@@ -2350,8 +2350,9 @@ picture).
 > A computer-use agent cannot send Escape. Leave these boxes unticked and say
 > so. Only a person at the keyboard can run them.
 
-- [ ] Type a refused value in End, then press **Escape**. The dialog closes and
+- [x] Type a refused value in End, then press **Escape**. The dialog closes and
       nothing is applied. Reopen it: the trim is what it was before.
+      Verified by Will at the keyboard, 2026-10-01 (M4's gate).
 
 ## Settings > Update — channels and automatic downloads
 
@@ -2411,39 +2412,46 @@ the app, not in a Windows box, and the Title Case slips are fixed.
 > the app built from source through every step it can (23/23 on Windows,
 > 2026-10-01), and the M1 checks again on a profile 2.0.0 had saved (29/29).
 > What the pass found is under "Found in the pass", at the end of this
-> section, with what was done about each. The unticked boxes are still to run,
-> before the next beta is released. The Linux build is in the next section: not run.
+> section, with what was done about each.
+>
+> **Then run by Will, 2026-10-01, before the next beta (M4's gate):** every
+> box left for a person (the three "Open with", the second-Open-with log, the
+> Explorer drags, the Escapes, the second monitor, and his own look at the
+> reworked Settings > Update), all as written. NVDA stays skipped. The Linux
+> build was passed the same day: the next section.
 
 Test a packaged, installed build. Use files you can lose: the steps write
 outputs next to them.
 
 ### Open with, and a second "Open with"
 
-- [ ] Right-click an audio file in Explorer, **Open with** the app, with the app
+- [x] Right-click an audio file in Explorer, **Open with** the app, with the app
       closed: it opens with the file as a card.
-      Not run: Explorer is click-only for the agent. Will's to run.
-- [ ] With the app open, **Open with** two more files at once: the app comes to
+      Verified by Will, 2026-10-01.
+- [x] With the app open, **Open with** two more files at once: the app comes to
       the front, and both arrive together as cards, in one go.
-- [ ] Only one window, ever, and the app opened only once (one taskbar button).
+      Verified by Will, 2026-10-01.
+- [x] Only one window, ever, and the app opened only once (one taskbar button).
+      Verified by Will, 2026-10-01.
 
 ### Drops and the toast's list
 
-- [ ] Drag a supported file and a `.txt` onto the empty Convert view: the
+- [x] Drag a supported file and a `.txt` onto the empty Convert view: the
       dashed box lights while you're over it, and one toast says "Added 1 file,
       skipped 1." with **Show Them**.
-      Not run (a drag). The toast itself was seen the other way: Add Folder on a
-      folder holding a WAV and a notes.txt gave "Added 1 file, skipped 1." with
-      **Show Them**. The dashed box lighting up while you drag is Will's to see.
+      The toast was first seen the other way: Add Folder on a folder holding a WAV
+      and a notes.txt gave "Added 1 file, skipped 1." with **Show Them**. The drag
+      itself, with the dashed box lighting, verified by Will, 2026-10-01.
 - [x] **Show Them** lists `notes.txt — not a supported format`, and says
       **Hide**; the toast stays until you close it.
       Verified 2026-10-01, through Add Folder rather than a drag: it listed
       `notes.txt — not a supported format`, the link read **Hide**, and the toast
       was still there 12 seconds later.
-- [ ] With cards on screen, drag more files anywhere over the grid: the grid
+- [x] With cards on screen, drag more files anywhere over the grid: the grid
       lights, and they're added.
-      Not run (a drag). Will's to run.
-- [ ] Drag files onto Join: they're added to Join, not Convert.
-      Not run (a drag). Will's to run.
+      Verified by Will, 2026-10-01.
+- [x] Drag files onto Join: they're added to Join, not Convert.
+      Verified by Will, 2026-10-01.
 
 ### A conversion, and "File Already Exists"
 
@@ -2461,11 +2469,11 @@ outputs next to them.
       Verified 2026-10-01: an in-app prompt titled "File Already Exists" with **Cancel
       All**, **Skip This File**, **Overwrite** and **Save as New**, the last with a
       visible focus ring. **Apply to All Remaining** is a checkbox above the buttons.
-- [ ] Press Escape: the run is cancelled, nothing is written, and focus is back
+- [x] Press Escape: the run is cancelled, nothing is written, and focus is back
       where it was.
-      Not run: an agent can't send Escape. Will's to run. (The prompt's **Cancel All**
-      button was checked instead: the run stopped, the cards read Cancelled, and
-      nothing was written.)
+      Verified by Will at the keyboard, 2026-10-01. (The agent's pass had checked the
+      prompt's **Cancel All** button instead: the run stopped, the cards read
+      Cancelled, and nothing was written.)
 - [x] Again, **Save as New**: `name (1).mp3` is written.
       Verified 2026-10-01: `tone-a (1).mp3` was written beside `tone-a.mp3`.
 - [x] Convert five files that all exist, tick **Apply to All Remaining** on the
@@ -2509,20 +2517,20 @@ outputs next to them.
 
 ### Settings, the window and the log
 
-- [ ] Settings > Update and Credits look as before. **Will's note
+- [x] Settings > Update and Credits look as before. **Will's note
       (2026-10-01): give Settings > Update a proper look as a person would, and
       list what to refine in its UI.**
       Looked at 2026-10-01 as a person would. (This box and the Linux one said "General":
       Settings has no General tab, so both now read "Update and Credits".) What the Update
       tab looked like, and what to refine, went onto the kit's own backlog, and the kit
       reworked the tab from it (two cards, a reason for a failed check, the version linked
-      to its release). Will's own look at the new tab is still his.
-- [ ] Move and resize the window, close it, reopen it: same place, same size.
+      to its release). Will looked at the new tab himself, 2026-10-01: good.
+- [x] Move and resize the window, close it, reopen it: same place, same size.
       Unplug a second monitor the window was on: it opens centred on the one
       you have.
       First half verified 2026-10-01: moved and resized (left edge dragged in), closed,
       reopened by name: same place, same size, and `config.json` held the bounds. The
-      second monitor was not unplugged: Will's to run.
+      second monitor, unplugged, verified by Will, 2026-10-01.
 - [x] `%APPDATA%\diamond-file-converter\debug.log` starts with
       `=== Diamond File Converter <version> started at …`, names the files you
       used by their names only (`…\clip.mp4`), and has no folder in it.
@@ -2532,10 +2540,10 @@ outputs next to them.
       with the file's name and a leading ellipsis where its folder was, in the ffprobe
       command too. **Worth knowing:** only warnings and errors are written, so a clean
       session's log is two lines, and a failed update check writes nothing at all.
-- [ ] After a second **Open with**, `debug.log` still has the first launch's
+- [x] After a second **Open with**, `debug.log` still has the first launch's
       lines (a second launch used to empty it).
-      Not run: needs Open with. (A plain close and reopen does start a fresh log, as it
-      should: the header's time changed.)
+      Verified by Will, 2026-10-01. (A plain close and reopen does start a fresh log, as
+      it should: the header's time changed.)
 
 ### With a screen reader (NVDA)
 
@@ -2620,38 +2628,37 @@ downloads the binary for the machine it's installed on), and named
 `Diamond-File-Converter-<version>.<ext>`: only the Windows installer is a
 `Setup`.
 
-> **Status: not run by a person; skipped on 2026-10-01.** The Zorin VM couldn't be
-> logged in to (Will was working remotely, with no physical access), so no box
-> below was run and none is ticked. It still stands as the pass to do, before the
-> next beta (which ships these files) is released. An agent
-> drove the built app
-> (`linux-unpacked`, what the AppImage holds) under Xvfb in a Debian 12
-> container: 23/23, and the M1 checks on a profile 2.0.0 had saved, 29/29
-> (2026-10-01). Its `.deb` and `.rpm` hold `resources/ffmpeg/ffmpeg` and
-> `ffprobe`, executable, and name Diamond Digital Development
-> <will.knowles@diamonddigital.dev> as the maintainer.
+> **Status: run by Will in the Linux VM, 2026-10-01 (M4's gate): every box
+> below passed.** Orca wasn't part of it (optional). It had been skipped earlier
+> the same day (the Zorin VM couldn't be logged in to while Will was remote).
+> Before that, an agent drove the built app (`linux-unpacked`, what the
+> AppImage holds) under Xvfb in a Debian 12 container: 23/23, and the M1
+> checks on a profile 2.0.0 had saved, 29/29 (2026-10-01). Its `.deb` and
+> `.rpm` hold `resources/ffmpeg/ffmpeg` and `ffprobe`, executable, and name
+> Diamond Digital Development <will.knowles@diamonddigital.dev> as the
+> maintainer.
 
 Run it in the Linux VM, on a desktop.
 
 ### Install and run
 
-- [ ] `sudo apt install ./Diamond-File-Converter-<version>.deb`: it installs,
+- [x] `sudo apt install ./Diamond-File-Converter-<version>.deb`: it installs,
       and **Diamond File Converter** is in the applications menu under Sound &
       Video. It opens, in the desktop's light or dark theme.
-- [ ] The AppImage (`chmod +x`, then run it) opens the same app.
-- [ ] Known until M6: the dock may show a generic icon for the running window
+- [x] The AppImage (`chmod +x`, then run it) opens the same app.
+- [x] Known until M6: the dock may show a generic icon for the running window
       (no `desktopName` yet), and DFC isn't offered in "Open with" for media
       files (no MimeType yet). Note it, don't fail it.
 
 ### The same pass as Windows
 
-- [ ] From a terminal, `diamond-file-converter ~/Music/a.wav`: the app opens
+- [x] From a terminal, `diamond-file-converter ~/Music/a.wav`: the app opens
       with it as a card. Run the same with another file while it's open: it
       comes to the front with the file added, and there's still one window.
-- [ ] Convert a file to MP3, then again to see "File Already Exists" in the
+- [x] Convert a file to MP3, then again to see "File Already Exists" in the
       app, and **Save as New**: `name (1).mp3` is written.
-- [ ] Join two files: it works, in MP3 and in their own format.
-- [ ] Settings: Update and Credits, the rail collapsed and expanded.
+- [x] Join two files: it works, in MP3 and in their own format.
+- [x] Settings: Update and Credits, the rail collapsed and expanded.
       Close and reopen: the window is where you left it.
-- [ ] `~/.config/diamond-file-converter/debug.log` names files by their names
+- [x] `~/.config/diamond-file-converter/debug.log` names files by their names
       only, with no folder.
