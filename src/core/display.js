@@ -200,13 +200,14 @@
         }
     }
 
-    /** "3 files converted, 1 failed" — the post-run summary, in the kit's words. */
+    /** "3 files converted, 1 failed, 2 skipped" — the post-run summary, in the kit's words. Skipped is told from cancelled. */
     function summarise(jobs) {
         const tally = (status) => jobs.filter(j => j.status === status).length;
         return format.summarise({
             done: tally(STATUS.DONE),
             failed: tally(STATUS.ERROR),
-            cancelled: tally(STATUS.CANCELLED) + tally(STATUS.SKIPPED),
+            skipped: tally(STATUS.SKIPPED),
+            cancelled: tally(STATUS.CANCELLED),
         }, { one: "file", done: "converted" });
     }
 

@@ -188,7 +188,9 @@ test("display: summary counts every outcome", () => {
         { status: STATUS.ERROR },
         { status: STATUS.CANCELLED }, { status: STATUS.SKIPPED },
     ];
-    assert.equal(d.summarise(jobs), "2 files converted, 1 failed, 2 cancelled");
+    assert.equal(d.summarise(jobs), "2 files converted, 1 failed, 1 skipped, 1 cancelled");
+    // Skipping every file (Apply to All Remaining with Skip) isn't cancelling.
+    assert.equal(d.summarise(Array(5).fill({ status: STATUS.SKIPPED })), "5 files skipped");
     assert.equal(d.summarise([{ status: STATUS.DONE }]), "1 file converted");
     assert.equal(d.summarise([]), "Nothing converted");
 });

@@ -1520,7 +1520,8 @@ function applyResult(job, result) {
 function announce(results) {
     const failed = results.filter(r => r.status === "error");
     const done = results.filter(r => r.status === "done").length;
-    const cancelled = results.filter(r => r.status === "cancelled" || r.status === "skipped").length;
+    const skipped = results.filter(r => r.status === "skipped").length;
+    const cancelled = results.filter(r => r.status === "cancelled").length;
 
     if (failed.length > 0) {
         // One toast, not one blocking dialog per failure. The per-card status
@@ -1528,10 +1529,14 @@ function announce(results) {
         const detail = failed.length === 1 ? ` — ${failed[0].error ?? "unknown error"}` : "";
         kit.ui.toast(`${kit.format.countOf(failed.length, "file")} failed to convert${detail}`, { type: "danger", timeout: 0 });
     }
+    // Skipped files were left out by choice ("File Already Exists"), so they're said as skipped, not cancelled.
     if (done > 0) {
-        kit.ui.toast(`${kit.format.countOf(done, "file")} converted.`, { type: "success" });
+        const also = skipped > 0 ? `, ${kit.format.groupDigits(skipped)} skipped` : "";
+        kit.ui.toast(`${kit.format.countOf(done, "file")} converted${also}.`, { type: "success" });
     } else if (failed.length === 0 && cancelled > 0) {
         kit.ui.toast("Conversion cancelled.");
+    } else if (failed.length === 0 && skipped > 0) {
+        kit.ui.toast(`${kit.format.countOf(skipped, "file")} skipped.`);
     }
 }
 
