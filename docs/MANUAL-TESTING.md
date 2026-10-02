@@ -24,7 +24,7 @@ sections — the history is useful.
 
 ```
 npm install
-npm test          # expect 196 passing, 0 failing
+npm test          # expect 193 passing, 0 failing
 npm start
 ```
 
@@ -2350,5 +2350,315 @@ picture).
 > A computer-use agent cannot send Escape. Leave these boxes unticked and say
 > so. Only a person at the keyboard can run them.
 
-- [ ] Type a refused value in End, then press **Escape**. The dialog closes and
+- [x] Type a refused value in End, then press **Escape**. The dialog closes and
       nothing is applied. Reopen it: the trim is what it was before.
+      Verified by Will at the keyboard, 2026-10-01 (M4's gate).
+
+## Settings > Update — channels and automatic downloads
+
+The update boxes are gone. Updates live in **Settings > Update**, and the menu's
+**Check for Updates** opens that tab and checks. Test against a packaged build:
+nothing checks from a build run from source.
+
+### The tab
+
+- [ ] Settings > Update shows `Diamond File Converter <version>`, **Check for
+      Updates** with a status line under it, the **Download updates
+      automatically** switch (on), and the **Update channel** select.
+- [ ] On a beta build with nothing saved, the channel is **Beta**, with the help
+      line "Betas and finished releases." Change it to **Stable**: the line
+      changes, and a check runs.
+- [ ] Close and reopen: the switch and the channel are as you left them.
+
+### Automatic downloads on
+
+- [ ] With a newer release in the channel, about 5 seconds after launch one
+      toast says "Version X has downloaded and will be installed when you close
+      Diamond File Converter." No box asks anything.
+- [ ] The Update tab says the same. Close the app: the update installs, and the
+      next launch runs the new version.
+
+### Automatic downloads off
+
+- [ ] A yellow dot shows on the rail's Settings (on the corner of its icon when
+      the rail is collapsed) and on the Update tab, which says "Version X is
+      available." with **Download Update**. Nothing downloads by itself.
+- [ ] **Download Update** downloads it, with no toast. The dot stays. Close the
+      app: it installs, and the dot is gone on the new version.
+
+### Never the wrong release
+
+- [ ] On **Stable**, running a beta, nothing older than the beta is offered, and
+      no pre-release is either.
+- [ ] **Check for Updates** with nothing newer says "You're up to date."
+- [ ] With no network, the check says "Couldn't check for updates. Try again
+      later." in red, and the app carries on.
+
+## Everything shared from the house kit — prompts, drops, the log, one window
+
+The toasts, the "File Already Exists" prompt, the drop zones, the action bar,
+the progress bars, the key guard, the log, the settings' migration, the
+window's size and position, one instance and "Open with" all come from the
+house kit now. DFC's own versions are gone. "File Already Exists" is asked in
+the app, not in a Windows box, and the Title Case slips are fixed.
+
+> **Status: run on Windows on 2026-10-01, on Will's installed 2.0.0-beta.2
+> (per machine), by an agent driving the real app while Will watched.** Boxes
+> ticked below were seen working; each says how. **Not run, so left unticked:**
+> every "Open with" and every drag from Explorer (Explorer is click-only for
+> the agent: no right-click, no drag), every Escape (an agent can't send it),
+> unplugging a monitor, and `debug.log` after a second "Open with". NVDA was
+> skipped: it isn't installed on Will's machine. An agent had earlier driven
+> the app built from source through every step it can (23/23 on Windows,
+> 2026-10-01), and the M1 checks again on a profile 2.0.0 had saved (29/29).
+> What the pass found is under "Found in the pass", at the end of this
+> section, with what was done about each.
+>
+> **Then run by Will, 2026-10-01, before the next beta (M4's gate):** every
+> box left for a person (the three "Open with", the second-Open-with log, the
+> Explorer drags, the Escapes, the second monitor, and his own look at the
+> reworked Settings > Update), all as written. NVDA stays skipped. The Linux
+> build was passed the same day: the next section.
+
+Test a packaged, installed build. Use files you can lose: the steps write
+outputs next to them.
+
+### Open with, and a second "Open with"
+
+- [x] Right-click an audio file in Explorer, **Open with** the app, with the app
+      closed: it opens with the file as a card.
+      Verified by Will, 2026-10-01.
+- [x] With the app open, **Open with** two more files at once: the app comes to
+      the front, and both arrive together as cards, in one go.
+      Verified by Will, 2026-10-01.
+- [x] Only one window, ever, and the app opened only once (one taskbar button).
+      Verified by Will, 2026-10-01.
+
+### Drops and the toast's list
+
+- [x] Drag a supported file and a `.txt` onto the empty Convert view: the
+      dashed box lights while you're over it, and one toast says "Added 1 file,
+      skipped 1." with **Show Them**.
+      The toast was first seen the other way: Add Folder on a folder holding a WAV
+      and a notes.txt gave "Added 1 file, skipped 1." with **Show Them**. The drag
+      itself, with the dashed box lighting, verified by Will, 2026-10-01.
+- [x] **Show Them** lists `notes.txt — not a supported format`, and says
+      **Hide**; the toast stays until you close it.
+      Verified 2026-10-01, through Add Folder rather than a drag: it listed
+      `notes.txt — not a supported format`, the link read **Hide**, and the toast
+      was still there 12 seconds later.
+- [x] With cards on screen, drag more files anywhere over the grid: the grid
+      lights, and they're added.
+      Verified by Will, 2026-10-01.
+- [x] Drag files onto Join: they're added to Join, not Convert.
+      Verified by Will, 2026-10-01.
+
+### A conversion, and "File Already Exists"
+
+- [ ] Convert a file to MP3: the card's thin bar fills (or slides, for a file
+      whose length isn't known), the bar under the grid says "Converting 1
+      file…" with **Cancel** where **Convert** was, then "1 file converted".
+      Partly seen 2026-10-01: the bar under the grid said "Converting 1 file…" with
+      a red **Cancel** where **Convert** was, then "1 file converted". Not seen: the
+      card's own thin bar. A 4-second WAV finishes before a screenshot can catch it.
+      Try a longer file.
+- [x] Clear All, add the same file, convert it to MP3 again: a prompt in the
+      app, not a Windows box, says "File Already Exists", with **Cancel All**,
+      **Skip This File**, **Overwrite** and **Save as New** (focused), and
+      **Apply to All Remaining**.
+      Verified 2026-10-01: an in-app prompt titled "File Already Exists" with **Cancel
+      All**, **Skip This File**, **Overwrite** and **Save as New**, the last with a
+      visible focus ring. **Apply to All Remaining** is a checkbox above the buttons.
+- [x] Press Escape: the run is cancelled, nothing is written, and focus is back
+      where it was.
+      Verified by Will at the keyboard, 2026-10-01. (The agent's pass had checked the
+      prompt's **Cancel All** button instead: the run stopped, the cards read
+      Cancelled, and nothing was written.)
+- [x] Again, **Save as New**: `name (1).mp3` is written.
+      Verified 2026-10-01: `tone-a (1).mp3` was written beside `tone-a.mp3`.
+- [x] Convert five files that all exist, tick **Apply to All Remaining** on the
+      first prompt with **Skip This File**: no more prompts, all five skipped.
+      Verified 2026-10-01 for the behaviour: all five cards read Skipped and no
+      second prompt came. **But the result says the wrong thing:** the toast read
+      "Conversion cancelled." and the bar under the grid "5 cancelled". Skipped
+      files are counted as cancelled (`announce()` in renderer.js). See "Found".
+
+### A join
+
+- [x] Join two WAV files into **MP3** (the first format offered): the plan
+      says they'll be re-encoded, because MP3 isn't their own format, and the
+      join works. (It used to try to copy them, and failed in ffmpeg.)
+      Verified 2026-10-01: the plan read "These match, but they are joined into MP3,
+      not their own format, so they will be re-encoded. It takes longer and the result
+      is not identical to the sources.", and `joined.mp3` came out at 8.05 s (two 4 s
+      WAVs).
+- [x] Join the same two into **WAV**: the plan says they'll be joined without
+      re-encoding, and that works too.
+      Verified 2026-10-01: "…joined without re-encoding — quick, and no quality is
+      lost.", and `joined.wav` was written.
+- [x] While a long join runs, its bar moves (or slides if the length isn't
+      known), and never says "null%".
+      Verified 2026-10-01 with two 25-minute 8 kHz WAVs into MP3: the bar grew across
+      about three screenshots and **Cancel** replaced **Join** meanwhile. The bar
+      carries no number, so there was no "null%" to see.
+
+### Keys
+
+- [x] Pick a format on a card, then press Delete with a card selected: the card
+      goes (the select doesn't count as typing).
+      Verified 2026-10-01: with one card ticked and its format just changed from the
+      card's own select, Delete removed that card and no other.
+- [x] With a prompt or the Advanced Options dialog open, Delete removes nothing.
+      Verified 2026-10-01 for both: every card was still there afterwards.
+- [x] Type in Join's file name: Delete and Ctrl+A edit the text, and touch no
+      card.
+      Verified 2026-10-01: Ctrl+A, Delete and Backspace edited the name and both clips
+      stayed. An empty name showed "Give the joined file a name." in red.
+
+### Settings, the window and the log
+
+- [x] Settings > Update and Credits look as before. **Will's note
+      (2026-10-01): give Settings > Update a proper look as a person would, and
+      list what to refine in its UI.**
+      Looked at 2026-10-01 as a person would. (This box and the Linux one said "General":
+      Settings has no General tab, so both now read "Update and Credits".) What the Update
+      tab looked like, and what to refine, went onto the kit's own backlog, and the kit
+      reworked the tab from it (two cards, a reason for a failed check, the version linked
+      to its release). Will looked at the new tab himself, 2026-10-01: good.
+- [x] Move and resize the window, close it, reopen it: same place, same size.
+      Unplug a second monitor the window was on: it opens centred on the one
+      you have.
+      First half verified 2026-10-01: moved and resized (left edge dragged in), closed,
+      reopened by name: same place, same size, and `config.json` held the bounds. The
+      second monitor, unplugged, verified by Will, 2026-10-01.
+- [x] `%APPDATA%\diamond-file-converter\debug.log` starts with
+      `=== Diamond File Converter <version> started at …`, names the files you
+      used by their names only (`…\clip.mp4`), and has no folder in it.
+      Verified 2026-10-01: line 1 `=== Diamond File Converter 2.0.0-beta.2 started at
+      2026-10-01T10:45:53.011Z ===`. A corrupt `broken.mp4` logged "Could not probe
+      …/broken.mp4" and "Conversion failed for …/broken.mp4: moov atom not found",
+      with the file's name and a leading ellipsis where its folder was, in the ffprobe
+      command too. **Worth knowing:** only warnings and errors are written, so a clean
+      session's log is two lines, and a failed update check writes nothing at all.
+- [x] After a second **Open with**, `debug.log` still has the first launch's
+      lines (a second launch used to empty it).
+      Verified by Will, 2026-10-01. (A plain close and reopen does start a fresh log, as
+      it should: the header's time changed.)
+
+### With a screen reader (NVDA)
+
+- [ ] The rail, the toolbar and each card's controls are read with their names
+      (no "swap_horiz", no "close" read out from an icon).
+      Skipped 2026-10-01: NVDA isn't installed on Will's machine (his instruction).
+- [ ] A toast is read when it shows; a danger toast at once.
+      Skipped, as above.
+- [ ] "File Already Exists" is read as a dialog with its question, and Tab
+      stays inside it.
+      Skipped, as above.
+
+### Found in the pass, 2026-10-01
+
+Wrong or worth a look, in the order they turned up. The pass added no code.
+
+- **Skipping every file reads as cancelling.** After **Apply to All Remaining** with
+  **Skip This File**, the cards read Skipped but the toast says "Conversion cancelled."
+  and the bar "5 cancelled". `announce()` counts `skipped` with `cancelled`
+  (renderer.js). Say "Skipped" in both, or name each ("2 converted, 3 skipped").
+- **The Beta channel can't check, so Settings > Update opens on a red "Couldn't check for
+  updates. Try again later."** on a machine that is online. On **Stable** the same check
+  says "You're up to date." The Beta check reads a `beta.yml` from the latest
+  pre-release, and none of the published pre-releases lists one (only the installer;
+  checked from GitHub's list of releases), and `dist/` held only a `latest.yml` for this
+  beta build. Not an app bug as such, but the next beta must publish the files its own
+  channel reads, or Beta users see this error.
+- **A failed check leaves no trace.** The updater turns the error into the red line and
+  writes nothing to `debug.log`, so there's nothing to read when it happens. Log the
+  reason (redacted like the rest).
+- **The switch was Off on this profile** though the default is On. `config.json` held
+  `autoDownloadUpdates: false`, carried over from what 2.0.0 saved. So the first box in
+  "Settings > Update" (switch on) can't be judged here: it needs a clean profile.
+- **The toast overlaps the Join page's right panel.** After a join, "Joined 2 files into
+  joined.mp3." sat across the left edge of the right-hand panel instead of over the clip
+  list. Seen on Windows; Will's note.
+- **GIFs get no trim and no frame previews in Convert's Advanced Options.** A 3-second,
+  30-frame animated GIF reads "Duration is not known for this file, so it cannot be
+  trimmed." (`trimScopeDuration()` wants `meta.duration`; a GIF has no container
+  duration with the bundled ffprobe, as a comment in job.js says). The start and end
+  frames are only for things that have them, and a GIF has. To judge: count the frames
+  and divide by the frame rate when the container gives no duration.
+- **Join takes a GIF as a clip but can't say how long it is.** The row reads "· 240×180"
+  with nothing before the dot (no duration), and has From and To boxes that can't mean
+  anything without a length. Join has no frame previews yet at all.
+- **Smaller:** the file picker opens at Downloads every time rather than where the last
+  one was; the Add Files and Add Folder buttons stay in the header on the Settings page,
+  where they aren't meant for anything; "Check for Updates" showed no "Checking…" state
+  for a failing check (the red line was simply there when the screenshot came).
+
+What was done about them, 2026-10-01 (re-run the boxes above to see each one):
+
+- **Skipped:** said as skipped: "5 files skipped." in the toast and "5 files skipped" in
+  the bar; a mix reads "2 files converted, 3 skipped." (the kit's `summarise()` took a
+  skipped count).
+- **The Beta channel:** the cause is the releases, not the app: every pre-release went out
+  with only its installer. With GitHub, electron-builder writes one `latest.yml` whatever
+  the version, and the updater reads it from the newest pre-release on Beta, so **the next
+  beta attaches `latest.yml`, `latest-linux.yml` and the `.blockmap` files** beside the
+  installers. Until a release does, the Update tab now says "Couldn't check for updates.
+  The newest release has no update files yet." in the warning shade, not red.
+- **A failed check is logged:** one warning in `debug.log`: the channel, the reason and the
+  error, redacted.
+- **Settings > Update** was reworked in the kit from the pass's list: two cards ("Version x"
+  with its status and buttons, then Preferences), "Checking for updates…" for a second at
+  least, the switch's help saying what On and Off do, each channel's help saying what it
+  brings, and "Version x" in "Version x is available." a link to its release on GitHub.
+- **Add Files and Add Folder** are hidden on Settings.
+- **GIFs:** timed by their frames, so Advanced Options trims one and shows its first and
+  last frames, and Join's row reads "0:03 · 240×180". Join's own frame previews are still
+  to come (WORKQUEUE item 22).
+- **The file picker** opens where the last pick was made, even after a restart.
+- **The switch Off on an upgraded profile** is as it should be (2.0.0's saved choice is
+  kept); the first Update box needs a clean profile.
+- **The toast over Join's right panel:** not fixed here (WORKQUEUE item 22).
+
+## Linux — the first build
+
+DFC builds for Linux now: an AppImage, a `.deb` and an `.rpm`, each with
+Linux's own ffmpeg and ffprobe. They're built on Linux (ffmpeg-static
+downloads the binary for the machine it's installed on), and named
+`Diamond-File-Converter-<version>.<ext>`: only the Windows installer is a
+`Setup`.
+
+> **Status: run by Will in the Linux VM, 2026-10-01 (M4's gate): every box
+> below passed.** Orca wasn't part of it (optional). It had been skipped earlier
+> the same day (the Zorin VM couldn't be logged in to while Will was remote).
+> Before that, an agent drove the built app (`linux-unpacked`, what the
+> AppImage holds) under Xvfb in a Debian 12 container: 23/23, and the M1
+> checks on a profile 2.0.0 had saved, 29/29 (2026-10-01). Its `.deb` and
+> `.rpm` hold `resources/ffmpeg/ffmpeg` and `ffprobe`, executable, and name
+> Diamond Digital Development <will.knowles@diamonddigital.dev> as the
+> maintainer.
+
+Run it in the Linux VM, on a desktop.
+
+### Install and run
+
+- [x] `sudo apt install ./Diamond-File-Converter-<version>.deb`: it installs,
+      and **Diamond File Converter** is in the applications menu under Sound &
+      Video. It opens, in the desktop's light or dark theme.
+- [x] The AppImage (`chmod +x`, then run it) opens the same app.
+- [x] Known until M6: the dock may show a generic icon for the running window
+      (no `desktopName` yet), and DFC isn't offered in "Open with" for media
+      files (no MimeType yet). Note it, don't fail it.
+
+### The same pass as Windows
+
+- [x] From a terminal, `diamond-file-converter ~/Music/a.wav`: the app opens
+      with it as a card. Run the same with another file while it's open: it
+      comes to the front with the file added, and there's still one window.
+- [x] Convert a file to MP3, then again to see "File Already Exists" in the
+      app, and **Save as New**: `name (1).mp3` is written.
+- [x] Join two files: it works, in MP3 and in their own format.
+- [x] Settings: Update and Credits, the rail collapsed and expanded.
+      Close and reopen: the window is where you left it.
+- [x] `~/.config/diamond-file-converter/debug.log` names files by their names
+      only, with no folder.

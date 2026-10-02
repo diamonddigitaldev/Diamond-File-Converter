@@ -20,16 +20,6 @@ const TARGETS = Object.fromEntries(
 // formatting
 // ---------------------------------------------------------------------------
 
-test("display: durations read as clocks, and unknown stays unknown", () => {
-    assert.equal(d.formatDuration(0), "0:00");
-    assert.equal(d.formatDuration(65), "1:05");
-    assert.equal(d.formatDuration(3723), "1:02:03");
-    assert.equal(d.formatDuration(59.6), "1:00", "rounds rather than truncating");
-    assert.equal(d.formatDuration(null), null);
-    assert.equal(d.formatDuration(-1), null);
-    assert.equal(d.formatDuration(NaN), null);
-});
-
 test("display: a timecode keeps the fraction a duration rounds away", () => {
     assert.equal(d.formatTimecode(65), "1:05");
     assert.equal(d.formatTimecode(65.04), "1:05.04");
@@ -132,23 +122,6 @@ test("trim: the end of a clip that is not a whole number of seconds is still rea
     assert.equal(d.placeTrimHandle("start", 12.48, state), 11, "and the start stays on a whole second below it");
 });
 
-test("display: byte sizes stay short", () => {
-    assert.equal(d.formatBytes(0), "0 B");
-    assert.equal(d.formatBytes(512), "512 B");
-    assert.equal(d.formatBytes(1024), "1.0 KB");
-    assert.equal(d.formatBytes(1536), "1.5 KB");
-    assert.equal(d.formatBytes(1048576), "1.0 MB");
-    assert.equal(d.formatBytes(15 * 1048576), "15 MB", "drops the decimal above 10");
-    assert.equal(d.formatBytes(null), null);
-});
-
-test("display: eta is terse", () => {
-    assert.equal(d.formatEta(45), "45s");
-    assert.equal(d.formatEta(125), "2m 05s");
-    assert.equal(d.formatEta(3700), "1h 01m");
-    assert.equal(d.formatEta(null), null);
-});
-
 // ---------------------------------------------------------------------------
 // card content
 // ---------------------------------------------------------------------------
@@ -215,7 +188,9 @@ test("display: summary counts every outcome", () => {
         { status: STATUS.ERROR },
         { status: STATUS.CANCELLED }, { status: STATUS.SKIPPED },
     ];
-    assert.equal(d.summarise(jobs), "2 files converted, 1 failed, 2 cancelled");
+    assert.equal(d.summarise(jobs), "2 files converted, 1 failed, 1 skipped, 1 cancelled");
+    // Skipping every file (Apply to All Remaining with Skip) isn't cancelling.
+    assert.equal(d.summarise(Array(5).fill({ status: STATUS.SKIPPED })), "5 files skipped");
     assert.equal(d.summarise([{ status: STATUS.DONE }]), "1 file converted");
     assert.equal(d.summarise([]), "Nothing converted");
 });
@@ -340,13 +315,21 @@ test("display: kind icons cover every kind and fall back safely", () => {
 
 const DISPLAY_SRC = fs.readFileSync(path.join(__dirname, "..", "src", "core", "display.js"), "utf8");
 
-test("display.js has no requires, so it can load as a plain browser script", () => {
+test("display.js requires nothing but the kit's format, under Node only, so it can load as a plain browser script", () => {
     const code = DISPLAY_SRC
         .replace(/\/\*[\s\S]*?\*\//g, "")
         .replace(/(^|[^:])\/\/.*$/gm, "$1");
-    assert.ok(!/\brequire\s*\(/.test(code), "display.js must not call require()");
-    assert.match(DISPLAY_SRC, /module\.exports\s*=\s*factory\(\)/, "must still export for Node");
-    assert.match(DISPLAY_SRC, /root\.display\s*=\s*factory\(\)/, "must still attach to window for the renderer");
+    const requires = [...code.matchAll(/\brequire\s*\(\s*"([^"]+)"\s*\)/g)].map(([, name]) => name);
+    assert.deepEqual(requires, ["@diamonddigitaldev/electron-kit/format"]);
+    assert.match(DISPLAY_SRC, /module\.exports\s*=\s*factory\(require\("@diamonddigitaldev\/electron-kit\/format"\)\)/, "must still export for Node, with the kit's format");
+    assert.match(DISPLAY_SRC, /root\.display\s*=\s*factory\(root\.kit\.format\)/, "must still attach to window for the renderer, with kit.js's format");
+});
+
+test("the house's wording is the kit's: display.js keeps no copy of it", () => {
+    for (const name of ["plural", "countOf", "groupDigits", "formatDuration", "formatBytes", "formatEta"]) {
+        assert.ok(!new RegExp(`function ${name}\\b`).test(DISPLAY_SRC), `display.js defines ${name}`);
+        assert.equal(d[name], undefined, `display.js exports ${name}`);
+    }
 });
 
 test("display.js STATUS mirrors core/job.js exactly", () => {
@@ -389,28 +372,6 @@ test("every target the grid can offer carries what the UI needs to render it", (
 // "1 still need a format" and "1 frames" both shipped because each call site
 // wrote its own ternary. Everything counted now goes through these helpers.
 // ---------------------------------------------------------------------------
-
-test("plural: picks the singular only at exactly one", () => {
-    assert.equal(d.plural(1, "file"), "file");
-    assert.equal(d.plural(0, "file"), "files");
-    assert.equal(d.plural(2, "file"), "files");
-    assert.equal(d.plural(100, "file"), "files");
-});
-
-test("plural: takes an explicit plural for irregular words", () => {
-    assert.equal(d.plural(1, "needs", "need"), "needs");
-    assert.equal(d.plural(3, "needs", "need"), "need");
-    assert.equal(d.plural(1, "was", "were"), "was");
-    assert.equal(d.plural(0, "was", "were"), "were");
-});
-
-test("countOf: pairs the number with the agreeing noun", () => {
-    assert.equal(d.countOf(1, "file"), "1 file");
-    assert.equal(d.countOf(3, "file"), "3 files");
-    assert.equal(d.countOf(0, "file"), "0 files");
-    assert.equal(d.countOf(1, "unsupported file"), "1 unsupported file");
-    assert.equal(d.countOf(2, "unsupported file"), "2 unsupported files");
-});
 
 test("a single extracted frame is '1 frame', not '1 frames'", () => {
     assert.equal(d.describeStatus({ status: STATUS.DONE, isDirectory: true, fileCount: 1 }).text, "1 frame");
@@ -669,26 +630,18 @@ test("dialog: a compacted spec keeps zero, which is a real value", () => {
 // alpha.2 test-pass regressions
 // ---------------------------------------------------------------------------
 
-test("keys: a focused <select> must not be treated as typing", () => {
-    // A <select> keeps focus after an option is picked, so counting it as
-    // "typing" made choosing a format on any card silently swallow the next
-    // Escape, Delete or Ctrl+A anywhere in the app.
+test("keys: the grid's keys go through the kit's guard, for Convert only, and no keydown handler of its own", () => {
+    // The kit's guard (kit.keys.onKey()) is what keeps a focused <select> from
+    // counting as typing (it keeps focus after an option is picked, and used to
+    // swallow the next Escape, Delete or Ctrl+A anywhere in the app), a
+    // checkbox from counting as one either, and a prompt or the settings dialog
+    // owning the keyboard while it's open (Delete must not remove the very
+    // cards being edited behind it). The kit's tests hold it to all three.
     const renderer = stripSource(fs.readFileSync(path.join(__dirname, "..", "src", "renderer.js"), "utf8"));
-    const guard = renderer.match(/const typing = [\s\S]{0,220}?;/);
-    assert.ok(guard, "expected a typing guard in the global keydown handler");
-    assert.ok(!/SELECT/.test(guard[0]),
-        "SELECT must not count as typing — it swallows Escape/Delete/Ctrl+A after a format is chosen");
-    assert.match(guard[0], /TEXTAREA/);
-
-    // A checkbox is an INPUT too, so the tag alone is not enough.
-    assert.match(guard[0], /el\.type/,
-        "INPUT must be narrowed by type, or a focused checkbox swallows the same keys");
-});
-
-test("keys: the settings dialog owns the keyboard while it is open", () => {
-    const renderer = stripSource(fs.readFileSync(path.join(__dirname, "..", "src", "renderer.js"), "utf8"));
-    assert.match(renderer, /\.modal\.show/,
-        "Delete must not remove the very cards being edited behind the dialog");
+    assert.match(renderer, /kit\.keys\.onKey\(\(e\) => \{[\s\S]*?\}, \{ view: "convert" \}\);/,
+        "the grid's Ctrl+A, Delete and Escape must go through kit.keys.onKey(), for Convert only");
+    assert.ok(!/document\.addEventListener\("keydown"/.test(renderer.replace(/document\.addEventListener\("keydown", \(e\) => \{\s*if \(e\.key === "Escape" && isOpen\(\)\)/, "")),
+        "the grid must not have a keydown handler of its own beside the kit's (the folder popover's Escape is its own)");
 });
 
 test("convert: an already-converted card is not resubmitted", () => {
@@ -864,4 +817,22 @@ test("join: GIF is never offered as a destination", () => {
 test("join: one clip needs no comparison", () => {
     assert.equal(d.compareClips([clip()]).compatible, true);
     assert.equal(d.compareClips([]).compatible, true);
+});
+
+test("join: matching clips are copied only into their own container, else re-encoded", () => {
+    // Two WAVs copied into an MP3 is PCM in a file that can't hold it: ffmpeg
+    // refused it ("Could not write header"), found by the M3 agent pass, as
+    // MP3 is the first format Join offers for audio.
+    const wav = { ok: true, hasVideo: false, hasAudio: true, duration: 2, formatName: "wav", audio: { codec: "pcm_s16le", sampleRate: 44100, channels: 1 } };
+    const comparison = d.compareClips([wav, wav]);
+    assert.equal(comparison.compatible, true);
+    assert.equal(d.describeJoinPlan(comparison, { targetExt: "wav", metas: [wav, wav] }).strategy, "demuxer");
+    const intoMp3 = d.describeJoinPlan(comparison, { targetExt: "mp3", metas: [wav, wav] });
+    assert.equal(intoMp3.strategy, "filter");
+    assert.match(intoMp3.headline, /joined into MP3, not their own format, so they will be re-encoded/);
+    const mp4 = { ...wav, formatName: "mov,mp4,m4a,3gp,3g2,mj2" };
+    assert.equal(d.joinCopiesInto([mp4, mp4], "mp4"), true);
+    assert.equal(d.joinCopiesInto([mp4, mp4], "mkv"), false);
+    // With no target named, the comparison alone decides, as before.
+    assert.equal(d.describeJoinPlan(comparison).strategy, "demuxer");
 });

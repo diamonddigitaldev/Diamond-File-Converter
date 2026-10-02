@@ -448,9 +448,26 @@ function buildProbeArgs(inputPath) {
     ];
 }
 
+/**
+ * A second probe for a moving picture whose container gives no duration (an
+ * animated GIF, with the bundled ffprobe): its first video stream's packets,
+ * counted without decoding, and its frame rate. Each GIF packet is a frame.
+ */
+function buildFrameCountArgs(inputPath) {
+    return [
+        "-v", "quiet",
+        "-print_format", "json",
+        "-count_packets",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=nb_read_packets,avg_frame_rate,r_frame_rate",
+        inputPath,
+    ];
+}
+
 module.exports = {
     buildArgs,
     buildJoinArgs,
+    buildFrameCountArgs,
     buildConcatList,
     buildProbeArgs,
     buildVideoFilters,

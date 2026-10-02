@@ -1,5 +1,7 @@
-/* App-specific styles. Shared house tokens live in styles/tokens.css, which
-   must be linked before this file. */
+/* App-specific styles. The house tokens, the shell (the frame, the nav rail,
+   the header and the Settings view) and Bootstrap's controls are the kit's
+   kit.css, and the accent is styles/accent.css; both are linked before this
+   file, which never restyles the kit's own components. */
 
 html {
     height: 100%;
@@ -31,140 +33,20 @@ a {
 }
 
 .accent {
-    color: var(--accent);
+    color: var(--accent-text);
 }
 
-/* base styles for modal/secondary windows (credits, settings, etc.)
-   add class="popup-window" to the <body> of those pages */
-body.popup-window {
-    background-color: var(--bs-body-bg);
-    color: var(--bs-body-color);
-    padding: 20px;
-    height: auto;
-    overflow: auto;
-}
+/* ── Convert ───────────────────────────────────────────────────────────────── */
 
-body.popup-window h1 {
-    font-size: 24px;
-    margin-bottom: 20px;
-    text-align: center;
-}
-
-body.popup-window hr {
-    margin: 20px 0;
-    border: none;
-    border-top: 1px solid var(--bs-border-color);
-}
-
-body.popup-window .btn {
-    display: block;
-    width: 100%;
-    padding: 10px;
-    margin-top: 20px;
-    font-size: 16px;
-    background-color: var(--bs-secondary-bg);
-    color: var(--bs-body-color);
-    border: none;
-    border-radius: var(--radius-control);
-    transition: background-color var(--dur-default);
-    cursor: pointer;
-}
-
-body.popup-window .btn:hover {
-    background-color: var(--bs-tertiary-bg);
-}
-
-body.popup-window span {
-    color: var(--accent-muted);
-    text-decoration: none;
-    cursor: pointer;
-    transition: all var(--dur-default);
-}
-
-body.popup-window span:hover {
-    color: var(--accent);
-    text-decoration: underline;
-}
-
-/* ── Drop zone ───────────────────────────────────────────────────────────── */
-
-.drop-zone {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    width: min(520px, 100%);
-    min-height: 200px;
-    border: 2px dashed var(--bs-border-color);
-    border-radius: var(--radius-zone);
-    padding: 2rem;
-    cursor: pointer;
-    transition: border-color var(--dur-state) var(--ease-state),
-                background-color var(--dur-state) var(--ease-state);
-    text-align: center;
-}
-
-.drop-zone:hover:not(:has(button:hover)),
-.drop-zone.drag-over {
-    border-color: rgba(var(--accent-rgb), var(--wash-hover-border));
-    background-color: rgba(var(--accent-rgb), var(--wash-hover-fill));
-}
-
-.drop-zone.drag-over {
-    border-color: rgba(var(--accent-rgb), var(--wash-active-border));
-    background-color: rgba(var(--accent-rgb), var(--wash-active-fill));
-}
-
-.drop-icon {
-    font-size: 48px;
-    color: var(--accent);
-    opacity: var(--opacity-muted);
-}
-
-.drop-label {
-    color: var(--bs-secondary-color);
-    font-size: 1.05rem;
-    margin: 0.75rem 0 0;
-}
-
-/* ── App shell ───────────────────────────────────────────────────────────── */
-
-/* The rail sits outside the padded content column so it can reach the window
-   edge, which is why the shell is no longer the outermost element. */
-.app-frame {
-    display: flex;
-    height: 100vh;
-    overflow: hidden;
-}
-
-.app-shell {
+/* The Convert view: its drop target, the selection bar, the grid and the
+   action bar, one column in the kit's content area. The grid scrolls, not the
+   view, so the bars stay put. */
+.convert-view {
     display: flex;
     flex-direction: column;
     flex: 1 1 auto;
-    height: 100%;
-    /* Without this a long filename stretches the column and the whole window
-       scrolls sideways. */
-    min-width: 0;
-    padding: 1rem 1.25rem;
+    min-height: 0;
     gap: 0.75rem;
-}
-
-/* The toolbar on the right is shared by both sections and never hidden, which
-   is what keeps this the same height on every view. The title is shorter than
-   the buttons, so hiding them would drop the header by 7px and everything
-   under it with it. */
-.app-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-shrink: 0;
-}
-
-.app-title {
-    font-size: 1.25rem;
-    font-weight: 600;
-    margin: 0;
 }
 
 /* ── Folder options ──────────────────────────────────────────────────────── */
@@ -243,8 +125,9 @@ body.popup-window span:hover {
 }
 
 /* Once there are cards the whole grid area is the drop target, so there is no
-   separate zone to aim at. */
-.app-shell.drag-over .grid-scroll {
+   separate zone to aim at: lit while files are over Convert (.drag-over, the
+   kit's, on its drop area). */
+.convert-view.drag-over .grid-scroll {
     border-color: rgba(var(--accent-rgb), var(--wash-active-border));
     background-color: rgba(var(--accent-rgb), var(--wash-active-fill));
 }
@@ -344,16 +227,6 @@ body.popup-window span:hover {
     margin: 0;
     cursor: pointer;
     --bs-form-check-bg: var(--bs-body-bg);
-}
-
-.card-select:checked {
-    background-color: var(--accent);
-    border-color: var(--accent);
-}
-
-.card-select:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 0.2rem rgba(var(--accent-rgb), 0.25);
 }
 
 .card-head .kind-icon {
@@ -469,13 +342,13 @@ body.popup-window span:hover {
 .tone-ready   .status-dot { background-color: var(--accent); }
 .tone-ready   .status-text { color: var(--bs-secondary-color); }
 .tone-warning .status-dot { background-color: var(--bs-warning); }
-.tone-warning .status-text { color: var(--bs-warning); }
+.tone-warning .status-text { color: var(--bs-warning-text-emphasis); }
 .tone-danger  .status-dot { background-color: var(--bs-danger); }
-.tone-danger  .status-text { color: var(--bs-danger); }
+.tone-danger  .status-text { color: var(--bs-danger-text-emphasis); }
 .tone-success .status-dot { background-color: var(--bs-success); }
-.tone-success .status-text { color: var(--bs-success); }
+.tone-success .status-text { color: var(--bs-success-text-emphasis); }
 .tone-muted   .status-dot { background-color: var(--bs-secondary-color); opacity: var(--opacity-muted); }
-.tone-muted   .status-text { color: var(--bs-secondary-color); opacity: var(--opacity-muted); }
+.tone-muted   .status-text { color: var(--bs-secondary-color); }
 
 /* Work-in-progress pulses, matching the house status-card pattern. */
 @keyframes status-pulse {
@@ -489,33 +362,7 @@ body.popup-window span:hover {
     animation: status-pulse var(--dur-ambient) infinite var(--ease-state);
 }
 
-.tone-running .status-text { color: var(--accent); }
-
-.card-progress {
-    height: 4px;
-    border-radius: 2px;
-    background-color: var(--bs-secondary-bg);
-    overflow: hidden;
-}
-
-.card-progress .bar {
-    height: 100%;
-    background-color: var(--accent);
-    border-radius: 2px;
-    transition: width var(--dur-state) linear;
-}
-
-/* Unknown duration: motion instead of a frozen bar. */
-.card-progress.indeterminate .bar {
-    width: 40% !important;
-    animation: slide 1.1s ease-in-out infinite;
-    transition: none;
-}
-
-@keyframes slide {
-    0%   { margin-left: -40%; }
-    100% { margin-left: 100%; }
-}
+.tone-running .status-text { color: var(--accent-text); }
 
 .card-actions {
     display: flex;
@@ -526,32 +373,6 @@ body.popup-window span:hover {
     --bs-btn-padding-y: 0.1rem;
     --bs-btn-padding-x: 0.45rem;
     --bs-btn-font-size: 0.72rem;
-}
-
-/* ── Action bar ──────────────────────────────────────────────────────────── */
-
-.action-bar {
-    display: flex;
-    align-items: center;
-    gap: 1.25rem;
-    flex-shrink: 0;
-    padding-top: 0.25rem;
-}
-
-.action-status {
-    flex: 1 1 auto;
-    min-width: 0;
-}
-
-/* ── Spinner ─────────────────────────────────────────────────────────────── */
-
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to   { transform: rotate(360deg); }
-}
-
-.converting-spin {
-    animation: spin 1.4s linear infinite;
 }
 
 /* ── New Job dialog ──────────────────────────────────────────────────────── */
@@ -637,12 +458,12 @@ body.popup-window span:hover {
     transition: color var(--dur-micro) var(--ease-micro);
 }
 
-.card-configure:hover { color: var(--accent); }
+.card-configure:hover { color: var(--accent-text); }
 .card-configure .material-icons-round { font-size: 16px; line-height: 1; display: block; }
 
 .card-settings {
     font-size: 0.72rem;
-    color: var(--accent);
+    color: var(--accent-text);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -751,227 +572,6 @@ body.popup-window span:hover {
 
 /* Held Shift means a finer drag; the cursor says so. */
 .trim-slider.fine .trim-thumb:active { cursor: crosshair; }
-
-/* ── Toast ───────────────────────────────────────────────────────────────── */
-
-/* The house spec puts this at top:16px, which suits a web page whose content
-   starts below the fold. Here that sits directly on top of the app header and
-   hides the title and toolbar, so it clears the header instead. */
-.toast-host {
-    position: fixed;
-    top: 60px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 1080;
-    width: min(720px, calc(100% - 2rem));
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    pointer-events: none;
-}
-
-.toast-note {
-    border-left: 4px solid;
-    border-radius: 6px;
-    padding: 0.7rem 1rem;
-    font-size: 0.875rem;
-    box-shadow: var(--bs-box-shadow);
-    pointer-events: auto;
-    display: flex;
-    align-items: flex-start;
-    gap: 0.5rem;
-    animation: toast-in var(--dur-state) var(--ease-state);
-}
-
-@keyframes toast-in {
-    from { opacity: 0; transform: translateY(-8px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-
-.toast-note.leaving {
-    opacity: 0;
-    transform: translateY(-8px);
-    transition: opacity var(--dur-state), transform var(--dur-state);
-}
-
-/* The icon and the dismiss button must centre on the FIRST line of the body,
-   not on the whole toast — a wrapped message would otherwise drag them down.
-   align-items: flex-start alone is not enough: material-icons ships
-   line-height: 1, so an 18px glyph box shares its top edge with the body's
-   21px line box and ends up 1.5px high. Giving both the same height as that
-   line box and centring within it lines the glyph up exactly. */
-.toast-note .material-icons-round {
-    font-size: 18px;
-    flex-shrink: 0;
-    height: calc(0.875rem * 1.5);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.toast-note .toast-body { flex: 1 1 auto; min-width: 0; }
-
-.toast-note .toast-close {
-    background: none; border: none; padding: 0; cursor: pointer;
-    color: inherit; opacity: 0.7; flex-shrink: 0;
-}
-.toast-note .toast-close:hover { opacity: 1; }
-
-/* An action inside the message, for a toast that has more to say than fits in
-   a sentence. Inherits the toast's own colour rather than picking one, because
-   the four toast variants sit on four different backgrounds. */
-.toast-note .toast-action {
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    color: inherit;
-    font: inherit;
-    font-weight: 600;
-    text-decoration: underline;
-}
-.toast-note .toast-action:hover { opacity: 0.8; }
-
-.toast-detail {
-    max-height: 12rem;
-    overflow-y: auto;
-    margin: 0.4rem 0 0;
-    padding: 0.4rem 0.6rem;
-    list-style: none;
-    font-size: 0.8rem;
-    border-radius: 4px;
-    /* The toast backgrounds are solid brand colours, so a tint of the text
-       colour is the only inset that works on all four of them. */
-    background-color: rgb(0 0 0 / 0.08);
-}
-.toast-detail li { padding: 0.1rem 0; }
-.toast-detail-more { opacity: 0.75; font-style: italic; }
-
-/* Filenames are the reason this list exists, so they are the one thing here
-   worth copying — and body sets user-select: none for everything. */
-.toast-detail-name { user-select: text; font-weight: 600; }
-
-.toast-info    { background-color: var(--bs-info);    border-left-color: var(--bs-info);    color: #000; }
-.toast-success { background-color: var(--bs-success); border-left-color: var(--bs-success); color: #fff; }
-.toast-warning { background-color: var(--bs-warning); border-left-color: var(--bs-warning); color: #000; }
-.toast-danger  { background-color: var(--bs-danger);  border-left-color: var(--bs-danger);  color: #fff; }
-
-/* ── Credits logo ────────────────────────────────────────────────────────── */
-
-#credits-logo {
-    margin: 0;
-    width: 24px;
-    height: 24px;
-    pointer-events: none;
-    vertical-align: middle;
-    margin-top: 5px;
-    margin-right: 10px;
-}
-
-/* ── Navigation rail ─────────────────────────────────────────────────────── */
-
-.nav-rail {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    flex-shrink: 0;
-    width: 168px;
-    padding: 1rem 0.5rem;
-    background-color: var(--bs-tertiary-bg);
-    border-right: 1px solid var(--bs-border-color);
-    transition: width var(--dur-state) var(--ease-state);
-}
-
-.nav-rail.collapsed {
-    width: 56px;
-}
-
-.nav-item,
-.nav-collapse {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    width: 100%;
-    padding: 0.5rem 0.6rem;
-    border: 1px solid transparent;
-    border-radius: var(--radius-control);
-    background: none;
-    color: var(--bs-body-color);
-    font-size: 0.9rem;
-    /* The label's line box is what sets the item's height, and Bootstrap's 1.5
-       makes it 21.6px against a 20px icon. Collapsing hides the label, the
-       item shrinks by that 1.6px, and every icon below it creeps up. Pinning
-       the line box to the icon's own height makes both states identical. */
-    line-height: 20px;
-    text-align: left;
-    white-space: nowrap;
-    overflow: hidden;
-    cursor: pointer;
-    transition: background-color var(--dur-state) var(--ease-state),
-                border-color var(--dur-state) var(--ease-state);
-}
-
-.nav-item:hover,
-.nav-collapse:hover {
-    border-color: rgba(var(--accent-rgb), var(--wash-hover-border));
-    background-color: rgba(var(--accent-rgb), var(--wash-hover-fill));
-}
-
-.nav-item.active {
-    border-color: rgba(var(--accent-rgb), var(--wash-active-border));
-    background-color: rgba(var(--accent-rgb), var(--wash-active-fill));
-    color: var(--accent);
-}
-
-.nav-item:focus-visible,
-.nav-collapse:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 0.2rem rgba(var(--accent-rgb), 0.35);
-}
-
-.nav-icon {
-    font-size: 20px;
-    flex-shrink: 0;
-}
-
-/* Collapsing is not a destination, so it sits apart from the two that are. */
-.nav-collapse {
-    margin-top: auto;
-    color: var(--bs-secondary-color);
-}
-
-.nav-rail.collapsed .nav-label {
-    display: none;
-}
-
-.nav-collapse .nav-icon {
-    transition: transform var(--dur-state) var(--ease-state);
-}
-
-.nav-rail.collapsed .nav-collapse .nav-icon {
-    transform: rotate(180deg);
-}
-
-/* ── View switching ──────────────────────────────────────────────────────── */
-
-/* render() and renderSelection() own d-none on the convert elements and know
-   nothing about which view is showing, so these must force-hide with
-   !important rather than compete with them. Each view then keeps its own state
-   while hidden and returns to it intact rather than being rebuilt.
-
-   Four elements, not three: #bulk-bar is toggled by renderSelection rather
-   than by render. The header's Add Files / Add Folder group is deliberately
-   not here — it serves both sections, and hiding it moved the header. */
-.app-shell[data-view="join"] #empty-state,
-.app-shell[data-view="join"] #grid-scroll,
-.app-shell[data-view="join"] #action-bar,
-.app-shell[data-view="join"] #bulk-bar {
-    display: none !important;
-}
-
-.app-shell[data-view="convert"] #join-view {
-    display: none !important;
-}
 
 /* ── Join ────────────────────────────────────────────────────────────────── */
 

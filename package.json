@@ -1,6 +1,6 @@
 {
     "name": "diamond-file-converter",
-    "version": "2.0.0-beta.2",
+    "version": "2.0.0-beta.3",
     "description": "An Electron-based Windows app for converting audio, video, and image files.",
     "main": "src/main.js",
     "funding": {
@@ -17,24 +17,17 @@
         "url": "https://github.com/diamonddigitaldev/Diamond-File-Converter"
     },
     "build": {
+        "extends": "@diamonddigitaldev/electron-kit/builder/base.json",
         "appId": "com.diamonddigitaldev.diamondfileconverter",
         "files": [
             "**/*",
             "!test-media",
-            "!test-media/**/*"
+            "!test-media/**/*",
+            "!node_modules/ffmpeg-static/ffmpeg{,.exe}",
+            "!node_modules/ffprobe-static/bin/**"
         ],
         "productName": "Diamond File Converter",
-        "artifactName": "Diamond-File-Converter-Setup-${version}.${ext}",
-        "extraResources": [
-            {
-                "from": "node_modules/ffmpeg-static/ffmpeg.exe",
-                "to": "ffmpeg/ffmpeg.exe"
-            },
-            {
-                "from": "node_modules/ffprobe-static/bin/win32/x64/ffprobe.exe",
-                "to": "ffmpeg/ffprobe.exe"
-            }
-        ],
+        "artifactName": "Diamond-File-Converter-${version}.${ext}",
         "fileAssociations": [
             {
                 "ext": [
@@ -83,15 +76,36 @@
             "repo": "Diamond-File-Converter"
         },
         "win": {
-            "target": [
-                "nsis"
-            ],
-            "icon": "src/assets/diamondfileconverter.ico"
+            "icon": "src/assets/diamondfileconverter.ico",
+            "extraResources": [
+                {
+                    "from": "node_modules/ffmpeg-static/ffmpeg.exe",
+                    "to": "ffmpeg/ffmpeg.exe"
+                },
+                {
+                    "from": "node_modules/ffprobe-static/bin/win32/x64/ffprobe.exe",
+                    "to": "ffmpeg/ffprobe.exe"
+                }
+            ]
+        },
+        "linux": {
+            "icon": "src/assets/diamondfileconverter.png",
+            "category": "AudioVideo",
+            "extraResources": [
+                {
+                    "from": "node_modules/ffmpeg-static/ffmpeg",
+                    "to": "ffmpeg/ffmpeg"
+                },
+                {
+                    "from": "node_modules/ffprobe-static/bin/linux/x64/ffprobe",
+                    "to": "ffmpeg/ffprobe"
+                }
+            ]
         },
         "nsis": {
+            "artifactName": "Diamond-File-Converter-Setup-${version}.${ext}",
             "perMachine": true,
             "createDesktopShortcut": true,
-            "menuCategory": "Diamond Digital Development",
             "include": "installer.nsh"
         }
     },
@@ -103,6 +117,7 @@
         "electron-builder": "^26.15.3"
     },
     "dependencies": {
+        "@diamonddigitaldev/electron-kit": "0.1.0-beta.1",
         "bootstrap": "^5.3.3",
         "electron-store": "^11.0.2",
         "electron-updater": "^6.8.9",
@@ -111,8 +126,7 @@
         "material-icons": "^1.13.14"
     },
     "allowScripts": {
-        "electron@44.0.0": true,
-        "ffmpeg-static@5.3.0": true,
-        "electron-winstaller@5.4.0": true
+        "ffmpeg-static": true,
+        "electron-winstaller": true
     }
 }

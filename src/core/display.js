@@ -5,12 +5,19 @@
 // other core modules — the renderer runs sandboxed with no Node access, and
 // functions cannot cross the IPC bridge. Everything it needs is either inlined
 // or passed in as an argument. test/display.test.js enforces this.
+//
+// The house's wording for counts, sizes and times (plural, countOf,
+// formatDuration, formatBytes, formatEta) is the house kit's kit.format: in the
+// page, from kit.js (loaded before this file); under Node, from the kit's
+// format export, which runs the same code. This file holds the converter's own.
 
 (function (root, factory) {
-    if (typeof module === "object" && module.exports) module.exports = factory();
-    else root.display = factory();
-})(typeof self !== "undefined" ? self : this, function () {
+    if (typeof module === "object" && module.exports) module.exports = factory(require("@diamonddigitaldev/electron-kit/format"));
+    else root.display = factory(root.kit.format);
+})(typeof self !== "undefined" ? self : this, function (format) {
     "use strict";
+
+    const { countOf, formatDuration, formatBytes } = format;
 
     // Mirrors STATUS in core/job.js. Inlined because this file cannot require
     // it; display.test.js asserts the two stay in step.
@@ -22,49 +29,6 @@
         CANCELLED: "cancelled",
         SKIPPED: "skipped",
     };
-
-    // -- Pluralisation -------------------------------------------------------
-    //
-    // Every count shown in the UI goes through these, rather than each call
-    // site writing its own ternary. Doing it inline is how "1 still need a
-    // format" and "1 frames" got shipped.
-
-    /**
-     * The wording that agrees with a count. `one` is used when n is exactly 1;
-     * `many` defaults to `one` with an "s" appended.
-     *
-     *   plural(1, "file")            -> "file"
-     *   plural(3, "file")            -> "files"
-     *   plural(1, "needs", "need")   -> "needs"
-     */
-    function plural(n, one, many) {
-        return n === 1 ? one : (many === undefined ? one + "s" : many);
-    }
-
-    /** The count with its agreeing noun: "1 file", "3 files". */
-    function countOf(n, one, many) {
-        return `${groupDigits(n)} ${plural(n, one, many)}`;
-    }
-
-    /** 18000 -> "18,000". Frame counts get large enough to be unreadable raw. */
-    function groupDigits(n) {
-        const num = Number(n);
-        if (!Number.isFinite(num)) return String(n);
-        const sign = num < 0 ? "-" : "";
-        const digits = String(Math.trunc(Math.abs(num)));
-        return sign + digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-    }
-
-    /** Seconds to a compact clock: 9:05, 1:02:03. Null for unknown. */
-    function formatDuration(seconds) {
-        if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return null;
-        const total = Math.round(seconds);
-        const h = Math.floor(total / 3600);
-        const m = Math.floor((total % 3600) / 60);
-        const s = total % 60;
-        const pad = (n) => String(n).padStart(2, "0");
-        return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
-    }
 
     /**
      * Seconds to a clock that keeps any fraction: 1:05, 1:05.04, 1:02:03.5.
@@ -183,31 +147,6 @@
         return { value };
     }
 
-    /** Bytes to a short human size. Binary units, one decimal below 10. */
-    function formatBytes(bytes) {
-        if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return null;
-        if (bytes < 1024) return `${bytes} B`;
-        const units = ["KB", "MB", "GB", "TB"];
-        let value = bytes / 1024;
-        let i = 0;
-        while (value >= 1024 && i < units.length - 1) {
-            value /= 1024;
-            i++;
-        }
-        return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[i]}`;
-    }
-
-    /** Remaining seconds to a terse "2m 05s" / "45s". Null for unknown. */
-    function formatEta(seconds) {
-        if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return null;
-        const total = Math.round(seconds);
-        if (total < 60) return `${total}s`;
-        const m = Math.floor(total / 60);
-        const s = total % 60;
-        if (m < 60) return `${m}m ${String(s).padStart(2, "0")}s`;
-        return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
-    }
-
     /**
      * The one-line metadata summary under a card's filename.
      * Null until the probe lands, so the card can show a placeholder.
@@ -261,20 +200,15 @@
         }
     }
 
-    /** "3 files converted, 1 failed" — the post-run summary. */
+    /** "3 files converted, 1 failed, 2 skipped" — the post-run summary, in the kit's words. Skipped is told from cancelled. */
     function summarise(jobs) {
         const tally = (status) => jobs.filter(j => j.status === status).length;
-        const done = tally(STATUS.DONE);
-        const failed = tally(STATUS.ERROR);
-        const cancelled = tally(STATUS.CANCELLED) + tally(STATUS.SKIPPED);
-
-        const parts = [];
-        if (done > 0) parts.push(`${countOf(done, "file")} converted`);
-        if (failed > 0) parts.push(`${failed} failed`);
-        if (cancelled > 0) parts.push(`${cancelled} cancelled`);
-
-        if (parts.length === 0) return "Nothing converted";
-        return parts.join(", ");
+        return format.summarise({
+            done: tally(STATUS.DONE),
+            failed: tally(STATUS.ERROR),
+            skipped: tally(STATUS.SKIPPED),
+            cancelled: tally(STATUS.CANCELLED),
+        }, { one: "file", done: "converted" });
     }
 
     /** Aggregate percent across a set of jobs, for the overall progress bar. */
@@ -766,18 +700,38 @@
     };
 
     /**
+     * Whether matching clips can be joined by copying their streams into this
+     * target: only into their own container, which every clip's probe names
+     * (an .mp4's is "mov,mp4,m4a,3gp,3g2,mj2", a WAV's "wav"). Into anything
+     * else the streams may not fit, so they are re-encoded.
+     */
+    function joinCopiesInto(metas, targetExt) {
+        return (metas ?? []).length > 0 && metas.every(m => sameContainer(m && m.formatName, targetExt));
+    }
+
+    /**
      * What is about to happen, in the app's own words. The whole point of
      * showing this is that "instant and lossless" and "re-encodes everything"
      * are wildly different things to press the same button for.
      */
-    function describeJoinPlan(comparison) {
+    function describeJoinPlan(comparison, { targetExt = null, metas = [] } = {}) {
         if (comparison.blocked) {
             return { strategy: "blocked", headline: JOIN_BLOCKED[comparison.blocked], reasons: [] };
         }
-        if (comparison.compatible) {
+        if (comparison.compatible && (targetExt === null || joinCopiesInto(metas, targetExt))) {
             return {
                 strategy: "demuxer",
                 headline: "These match, so they will be joined without re-encoding — quick, and no quality is lost.",
+                reasons: [],
+            };
+        }
+        if (comparison.compatible) {
+            // Matching clips are only copied into their own container: two WAVs
+            // copied into an MP3 is PCM in a file that can't hold it, which
+            // ffmpeg refuses ("Could not write header"). Found by the M3 agent pass.
+            return {
+                strategy: "filter",
+                headline: `These match, but they are joined into ${String(targetExt).toUpperCase()}, not their own format, so they will be re-encoded. It takes longer and the result is not identical to the sources.`,
                 reasons: [],
             };
         }
@@ -804,11 +758,10 @@
 
     return {
         STATUS,
-        plural,
-        countOf,
         sameContainer,
         compareClips,
         describeJoinPlan,
+        joinCopiesInto,
         joinTargets,
         applicableSections,
         effectiveMode,
@@ -820,15 +773,12 @@
         summariseSettings,
         compactSettings,
         CODEC_LABELS,
-        formatDuration,
         formatTimecode,
         parseTimecode,
         trimStep,
         snapToStep,
         placeTrimHandle,
         checkTrimEntry,
-        formatBytes,
-        formatEta,
         describeMeta,
         describeStatus,
         summarise,

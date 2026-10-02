@@ -1,111 +1,14 @@
 "use strict";
 
+// Wiring guards for main.js: the conflict policy, the settings migration,
+// Credits, the theme, the menu and the preview. (Version comparison and the
+// updater are the kit's now, with their tests; test/kit.test.js checks DFC
+// takes them.)
+
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
-
-const v = require("../src/core/version");
-
-test("version: parses plain and pre-release versions", () => {
-    assert.deepEqual(v.parse("1.2.3"), { major: 1, minor: 2, patch: 3, prerelease: [] });
-    assert.deepEqual(v.parse("2.0.0-alpha.1"), { major: 2, minor: 0, patch: 0, prerelease: ["alpha", "1"] });
-    assert.deepEqual(v.parse("v1.0.0"), { major: 1, minor: 0, patch: 0, prerelease: [] });
-    assert.equal(v.parse("not-a-version"), null);
-    assert.equal(v.parse(null), null);
-});
-
-test("version: identifies pre-releases", () => {
-    assert.equal(v.isPrerelease("2.0.0-alpha.1"), true);
-    assert.equal(v.isPrerelease("2.0.0-beta"), true);
-    assert.equal(v.isPrerelease("2.0.0-rc.2"), true);
-    assert.equal(v.isPrerelease("2.0.0"), false);
-    assert.equal(v.isPrerelease("1.0.0"), false);
-});
-
-test("version: orders by major, minor, patch", () => {
-    assert.equal(v.compare("1.0.0", "2.0.0"), -1);
-    assert.equal(v.compare("2.0.0", "1.0.0"), 1);
-    assert.equal(v.compare("1.2.0", "1.10.0"), -1, "compares numerically, not as strings");
-    assert.equal(v.compare("1.0.10", "1.0.9"), 1);
-    assert.equal(v.compare("1.0.0", "1.0.0"), 0);
-});
-
-test("version: a pre-release precedes its own release", () => {
-    assert.equal(v.compare("2.0.0-alpha.1", "2.0.0"), -1);
-    assert.equal(v.compare("2.0.0", "2.0.0-alpha.1"), 1);
-    assert.equal(v.compare("2.0.0-alpha.1", "2.0.0-alpha.2"), -1);
-    assert.equal(v.compare("2.0.0-alpha.2", "2.0.0-beta.1"), -1);
-    assert.equal(v.compare("2.0.0-alpha.1", "2.0.0-alpha.1"), 0);
-    // A longer pre-release chain is greater when the prefix matches.
-    assert.equal(v.compare("2.0.0-alpha", "2.0.0-alpha.1"), -1);
-});
-
-test("version: numeric pre-release parts rank below alphanumeric ones", () => {
-    assert.equal(v.compare("1.0.0-1", "1.0.0-alpha"), -1);
-});
-
-// ---------------------------------------------------------------------------
-// The rule the updater enforces
-// ---------------------------------------------------------------------------
-
-test("update: a newer stable release is offered", () => {
-    assert.equal(v.isOfferableUpdate("1.1.0", "1.0.0"), true);
-    assert.equal(v.isOfferableUpdate("2.0.0", "1.0.0"), true);
-});
-
-test("update: a pre-release is NEVER offered, whatever the user is running", () => {
-    assert.equal(v.isOfferableUpdate("2.0.0-alpha.1", "1.0.0"), false, "stable user");
-    assert.equal(v.isOfferableUpdate("2.0.0-alpha.2", "2.0.0-alpha.1"), false, "pre-release user");
-    assert.equal(v.isOfferableUpdate("3.0.0-rc.1", "2.0.0"), false, "even a much newer one");
-});
-
-test("update: someone on a pre-release is offered the stable that supersedes it", () => {
-    // 2.0.0 final supersedes 2.0.0-alpha.1, so it IS offered.
-    assert.equal(v.isOfferableUpdate("2.0.0", "2.0.0-alpha.1"), true);
-});
-
-test("update: an older stable is not offered to a pre-release user", () => {
-    // The case that silently did nothing: running 2.0.0-alpha.1 while the
-    // latest stable is 1.0.0. That is a downgrade and must be refused.
-    assert.equal(v.isOfferableUpdate("1.0.0", "2.0.0-alpha.1"), false);
-});
-
-test("update: the same version is not an update", () => {
-    assert.equal(v.isOfferableUpdate("1.0.0", "1.0.0"), false);
-    assert.equal(v.isOfferableUpdate("2.0.0-alpha.1", "2.0.0-alpha.1"), false);
-});
-
-test("update: garbage is never offered", () => {
-    assert.equal(v.isOfferableUpdate(null, "1.0.0"), false);
-    assert.equal(v.isOfferableUpdate("", "1.0.0"), false);
-    assert.equal(v.isOfferableUpdate("latest", "1.0.0"), false);
-});
-
-// ---------------------------------------------------------------------------
-// The updater configuration itself
-// ---------------------------------------------------------------------------
-
-test("updater: pre-releases are explicitly disallowed in main.js", () => {
-    const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
-
-    // electron-updater turns allowPrerelease ON BY ITSELF when the running
-    // version is a pre-release, which would make an alpha update to the next
-    // alpha. It has to be pinned off explicitly.
-    assert.match(main, /allowPrerelease\s*=\s*false/,
-        "main.js must set autoUpdater.allowPrerelease = false");
-    assert.match(main, /allowDowngrade\s*=\s*false/,
-        "main.js must set autoUpdater.allowDowngrade = false");
-    assert.match(main, /channel\s*=\s*"latest"/,
-        "main.js must pin the updater to the latest stable channel");
-    assert.ok(!/allowPrerelease\s*=\s*true/.test(main),
-        "main.js must never enable pre-release updates");
-});
-
-test("updater: the version currently shipping matches package.json", () => {
-    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
-    assert.ok(v.parse(pkg.version), `package.json version "${pkg.version}" is not valid semver`);
-});
 
 // ---------------------------------------------------------------------------
 // Conflict policy wiring
@@ -199,42 +102,29 @@ test("settings: defaults fill the gaps a partial saved object leaves", () => {
 // mean anything on an install that already carries a v1 value, and it must stay
 // version-guarded — an unconditional prune would eat whatever a preferences
 // screen writes, on the very next launch.
-test("settings: main.js still runs the migration, once, before the window", () => {
+test("settings: main.js hands the kit the migration, which runs once per version, before anything reads a setting", () => {
     const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
-    assert.match(main, /migrateStore\(\);\s*probe\.setFfprobePath/,
-        "migrateStore must run before the window is created");
-    assert.match(main, /store\.get\("settingsSchema"\) === SETTINGS_SCHEMA_VERSION/,
-        "the migration must be guarded by the schema version, or it runs every launch");
-    assert.match(main, /\{ \.\.\.SETTINGS_DEFAULTS, \.\.\.\(store\.get\("settings"\) \?\? \{\}\) \}/,
-        "settings must be read with the defaults merged underneath");
+    // The kit runs it as the store is first opened, and marks settingsSchema (2.0.0's own key), so it runs
+    // once per version: the kit's tests hold it to that.
+    assert.match(main, /settings:\s*\{\s*defaults:\s*SETTINGS_DEFAULTS,[\s\S]*?version:\s*SETTINGS_SCHEMA_VERSION,\s*migrate:\s*\(settings\)\s*=>\s*pruneLegacySettings\(settings\)\.settings,\s*obsoleteKeys:\s*LEGACY_STORE_KEYS,\s*\}/,
+        "the kit must be given the defaults, the schema version, the prune and the orphaned store keys");
+    assert.ok(!/migrateStore|new Store\(/.test(main), "main.js keeps no store or migration of its own");
+    assert.match(main, /function appSettings\(\) \{\s*return kit\.settings\.get\(\);/,
+        "settings must be read through the kit, with the defaults merged underneath");
 });
 
-test("credits: Escape is handled in the main process, not the page", () => {
+// Credits used to be a window of its own, with a guard against a second one,
+// Escape handled in main, and a top-level Credits menu item. It's the last tab
+// of the kit's Settings view now, from kit.start()'s credits.
+test("credits: a tab of Settings, not a window or a menu item", () => {
     const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
-    assert.match(main, /before-input-event/,
-        "Escape must be handled via before-input-event, which does not depend on the page script");
-    assert.match(main, /input\.key === "Escape"/);
+    assert.ok(!fs.existsSync(path.join(__dirname, "..", "src", "credits.html")), "credits.html is gone");
+    assert.ok(!/credits\.html|createCreditsWindow/.test(main), "main.js opens no Credits window");
+    assert.match(main, /credits:\s*\{\s*lines:/, "the Credits tab gets DFC's credit lines");
+    assert.match(main, /donate:\s*"https:\/\/buymeacoff\.ee\/willtda"/);
 
-    // The page-level handler was the fragile version that failed when packaged.
-    const credits = fs.readFileSync(path.join(__dirname, "..", "src", "credits.html"), "utf8");
-    assert.ok(!/addEventListener\(\s*["']keydown["']/.test(credits),
-        "credits.html should no longer rely on its own keydown listener");
-});
-
-// ---------------------------------------------------------------------------
-// alpha.2 test-pass regressions (main process)
-// ---------------------------------------------------------------------------
-
-test("credits: only one Credits window can ever be open", () => {
-    // Every menu click used to build another modal. Escape closed the top one
-    // and uncovered an identical window behind it, which reads as Escape doing
-    // nothing at all — the before-input-event handler was never at fault.
-    const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
-    const fn = main.slice(main.indexOf("function createCreditsWindow"));
-    assert.match(fn.slice(0, 400), /if \(creditsWindow && !creditsWindow\.isDestroyed\(\)\)/,
-        "an existing Credits window must be focused rather than duplicated");
-    assert.match(fn.slice(0, 2000), /creditsWindow\.on\("closed"/,
-        "the reference must be cleared, or Credits can never be reopened");
+    const menu = fs.readFileSync(path.join(__dirname, "..", "src", "menu.js"), "utf8");
+    assert.ok(!/label:\s*"Credits"/.test(menu + main), "no Credits menu item");
 });
 
 // Prompt serialisation used to be asserted here by matching three identifiers
@@ -244,24 +134,23 @@ test("credits: only one Credits window can ever be open", () => {
 // "Apply to all remaining files" cases in docs/MANUAL-TESTING.md. What the
 // pool does around those prompts is covered properly in test/runner.test.js.
 
-test("theme: an OS theme change is pushed to the windows, not only observed", () => {
+// The kit pushes an OS theme change to every window (theme:changed from
+// nativeTheme), and its theme.js applies it, beside the media query.
+test("theme: the page follows the OS theme through the kit, not code of its own", () => {
     const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
-    assert.match(main, /nativeTheme\.on\("updated"/,
-        "a live OS theme change must reach the renderer without a restart");
-    assert.match(main, /IPC\.THEME_CHANGED/);
+    assert.ok(!/nativeTheme|broadcastTheme/.test(main), "main.js leaves the theme push to the kit");
 
-    // The media query listener in the page stays as the first route.
     const html = fs.readFileSync(path.join(__dirname, "..", "src", "index.html"), "utf8");
-    assert.match(html, /addEventListener\("change", apply\)/,
-        "the prefers-color-scheme listener must remain");
+    const head = html.slice(0, html.indexOf("</head>"));
+    assert.match(head, /<script src="\.\.\/node_modules\/@diamonddigitaldev\/electron-kit\/page\/theme\.js"><\/script>/,
+        "the kit's theme.js must be in <head>, so the first paint is already in the OS theme");
+    assert.ok(!/<script>/.test(head), "no inline theme script of its own");
 });
 
-test("menu: replacing the default menu must not take DevTools with it", () => {
-    // Electron's F12 accelerator comes from the default application menu, so a
-    // fully custom template silently removed it — leaving no way to open the
-    // console. devTools was never disabled in webPreferences.
+test("menu: DevTools is never disabled", () => {
+    // The kit's menu has Toggle Developer Tools (F12) on a pre-release such as
+    // 2.0.0-beta.2; devTools was never meant to be off in webPreferences.
     const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
-    assert.match(main, /role:\s*"toggleDevTools"/, "DevTools must be reachable");
     assert.ok(!/devTools:\s*false/.test(main),
         "devTools is not meant to be disabled; the loss was an accident of the custom menu");
 });
@@ -282,7 +171,8 @@ test("menu: an accelerator with no modifier steals every keystroke of that lette
     // Written as a scan rather than a check for the one binding, because the
     // same mistake is sitting in two sibling apps and would come back here the
     // moment a menu item is added without thinking about focus.
-    const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
+    // The app's items are in menu.js; the kit builds the rest of the menu, and refuses a bare one itself.
+    const main = ["main.js", "menu.js"].map(f => fs.readFileSync(path.join(__dirname, "..", "src", f), "utf8")).join("\n");
 
     const bare = [...main.matchAll(/accelerator:\s*"([^"]+)"/g)]
         .map(m => m[1])
@@ -304,15 +194,19 @@ test("preview: the command shown resolves a real destination, not a placeholder"
         "the preview must resolve the destination with the same code the run uses");
 });
 
-test("conflict: the prompt carries the abort, because nothing behind it can be clicked", () => {
-    // The dialog is window-modal: while it is open Windows blocks every click
-    // on the app behind it, so the footer's own "Cancel All" was unreachable.
-    // Position was never the problem, which is why dragging the dialog clear
-    // changed nothing. The only surface that can take the answer is the dialog.
+test("conflict: \"File Already Exists\" is asked in the page, and carries the abort", () => {
+    // It was a native box, window-modal: while it was open Windows blocked
+    // every click on the app behind it, so the footer's own "Cancel All" was
+    // unreachable. It's a prompt in the page now (kit.ui.confirm()'s batch
+    // form, DESIGN §10), and the abort stays in it, since the footer is behind it.
     const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
+    const renderer = fs.readFileSync(path.join(__dirname, "..", "src", "renderer.js"), "utf8");
 
-    assert.match(main, /buttons:\s*\["Cancel All", "Skip This File", "Overwrite", "Save as New"\]/,
-        "the prompt must offer a whole-run abort as well as a per-file answer");
+    assert.ok(!/showMessageBox/.test(main), "no native box: \"File Already Exists\" is asked in the page");
+    assert.match(main, /win\.webContents\.send\(IPC\.CONFLICT_ASK, \{ id, name: path\.basename\(candidatePath\), isDirectory \}\)/,
+        "main asks the page, with the file's name only");
+    assert.match(renderer, /title: "File Already Exists",[\s\S]*?choices: \[\s*\{ value: "cancelAll", label: "Cancel All" \},\s*\{ value: "skip", label: "Skip This File" \},\s*\{ value: "overwrite", label: "Overwrite" \},\s*\{ value: "unique", label: "Save as New" \},\s*\],\s*cancel: "cancelAll",\s*defaultChoice: "unique",\s*applyToAll: true,/,
+        "the prompt must offer a whole-run abort as well as a per-file answer, with Save as New the safe default");
     assert.match(main, /if \(runner\) runner\.cancelAll\(\);/,
         "Cancel All must actually reach the runner");
     assert.match(main, /if \(choice === "skip"\) return \{ action: "skip" \};/,
@@ -327,9 +221,10 @@ test("conflict: Cancel All ends the run, not just the file it was answered on", 
     // which happens whenever a batch goes idle waiting for a later file to
     // finish probing. Both let a fresh dialog open for a run already stopped.
     //
-    // Escape is not a separate path to fix: cancelId picks button 0, which is
+    // Escape is not a separate path to fix: the prompt's cancel choice is
     // Cancel All, so it lands on the same branch.
     const main = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
+    const renderer = fs.readFileSync(path.join(__dirname, "..", "src", "renderer.js"), "utf8");
 
     assert.match(main, /if \(conflictAbort\) return \{ action: "cancel" \};/,
         "no dialog may open for a batch that has already been aborted");
@@ -339,6 +234,10 @@ test("conflict: Cancel All ends the run, not just the file it was answered on", 
         "the batch is bounded by the job:run calls still outstanding, not by the runner going idle");
     assert.ok(!/runner\.on\("idle",[^)]*conflictChoiceForBatch/.test(main),
         "batch state cannot be scoped to idle: a batch outlives an idle whenever a later file is still being probed");
-    assert.match(main, /cancelId:\s*0,/,
+    assert.match(renderer, /cancel: "cancelAll",/,
         "Escape must resolve to Cancel All, which is what the checklist promises it does");
+    assert.match(main, /CONFLICT_CHOICES\.includes\(answer\?\.choice\) \? answer\.choice : "cancelAll"/,
+        "an answer that isn't one of the four is a dismissed prompt: Cancel All");
+    assert.match(main, /win\.on\("closed", \(\) => answerAllConflicts\(\{ choice: "cancelAll", all: false \}\)\)/,
+        "a prompt still open when the window goes is Cancel All, not a hang");
 });

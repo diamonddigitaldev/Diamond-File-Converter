@@ -16,6 +16,7 @@ const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
 
+const { loadPreload } = require("@diamonddigitaldev/electron-kit/testing");
 const { IPC } = require("../src/constants");
 
 const PRELOAD_PATH = path.join(__dirname, "..", "src", "preload.js");
@@ -40,11 +41,40 @@ test("preload only requires modules a sandboxed preload can load", () => {
 test("every channel the preload uses exists in the IPC map", () => {
     // The channels declared in the preload's CH table.
     const declared = [...source.matchAll(/^\s*[A-Z_]+:\s*["']([^"']+)["'],/gm)].map(m => m[1]);
-    assert.ok(declared.length >= 20, `expected the full channel table, found ${declared.length}`);
+    assert.ok(declared.length >= 15, `expected the full channel table, found ${declared.length}`);
 
     const known = new Set(Object.values(IPC));
     for (const channel of declared) {
         assert.ok(known.has(channel), `preload uses channel "${channel}", which is not in constants.js IPC`);
+    }
+});
+
+// The kit's loadPreload() runs the preload as a sandboxed renderer would, so
+// this follows each call of the bridge to the channel it really uses, rather
+// than reading the table.
+test("the preload runs sandboxed, and every call of the bridge reaches a channel in the IPC map", () => {
+    const { required, exposed, calls } = loadPreload(PRELOAD_PATH);
+    assert.deepEqual([...new Set(required)], ["electron"]);
+
+    const known = new Set(Object.values(IPC));
+    for (const [name, fn] of Object.entries(exposed.electronAPI)) {
+        if (name === "getPathForFile") continue; // no IPC: webUtils, in the preload itself
+        const before = calls.length;
+        fn(() => {});
+        const made = calls.slice(before);
+        assert.equal(made.length, 1, `electronAPI.${name}() makes one IPC call`);
+        assert.ok(known.has(made[0].channel), `electronAPI.${name}() uses "${made[0].channel}", which is not in constants.js IPC`);
+    }
+    // And every channel in the map is one the bridge uses.
+    const used = new Set(calls.map(c => c.channel));
+    for (const channel of known) assert.ok(used.has(channel), `nothing in the preload uses "${channel}"`);
+});
+
+test("the preload leaves the kit's shared channels to the kit's own bridge", () => {
+    // window.kitAPI has these; the kit answers them, and kit.ipc.handle() refuses to.
+    for (const channel of ["app:get-version", "app:get-info", "settings:get", "settings:set", "shell:open-external", "theme:changed", "view:show"]) {
+        assert.ok(!Object.values(IPC).includes(channel), `${channel} is the kit's`);
+        assert.ok(!source.includes(`"${channel}"`), `the preload must not use ${channel}`);
     }
 });
 
@@ -104,13 +134,9 @@ test("the renderer reaches Node only through the bridge", () => {
     assert.ok(!/\brequire\s*\(/.test(renderer), "renderer.js must not call require()");
     assert.ok(!/\bwindow\.process\b/.test(renderer), "renderer.js must not reach for process");
 
-    const credits = stripComments(fs.readFileSync(path.join(__dirname, "..", "src", "credits.html"), "utf8"));
-    assert.ok(!/\brequire\s*\(/.test(credits), "credits.html must not call require()");
-    assert.ok(!/onclick=/.test(credits), "credits.html should not use inline onclick handlers");
-
-    // Both pages must actually go through the bridge.
+    // The page goes through its own bridge, and the kit's for the settings.
     assert.match(renderer, /window\.electronAPI/);
-    assert.match(credits, /window\.electronAPI/);
+    assert.match(renderer, /window\.kitAPI/);
 });
 
 test("main enables context isolation and disables node integration", () => {
@@ -119,12 +145,13 @@ test("main enables context isolation and disables node integration", () => {
     assert.ok(!/nodeIntegration:\s*true/.test(main), "nodeIntegration must not be enabled");
     assert.ok(!/contextIsolation:\s*false/.test(main), "contextIsolation must not be disabled");
 
-    // Both windows must set all three, or one of them silently regresses.
+    // The one window (Credits is a tab of Settings now) is the kit's main
+    // window, which lays the house's sandbox, isolation and no Node over the
+    // app's own web preferences, and throws on anything weaker (the kit's
+    // tests). DFC gives it its preload, and no BrowserWindow of its own.
     const windows = main.match(/webPreferences:\s*\{[^}]*\}/g) ?? [];
-    assert.equal(windows.length, 2, "expected exactly the main and credits windows");
-    for (const block of windows) {
-        assert.match(block, /preload:/);
-        assert.match(block, /contextIsolation:\s*true/);
-        assert.match(block, /nodeIntegration:\s*false/);
-    }
+    assert.equal(windows.length, 1, "expected exactly the main window");
+    assert.match(windows[0], /^webPreferences:\s*\{\s*preload:\s*path\.join\(__dirname, "preload\.js"\)\s*\}$/);
+    assert.match(main, /kit\.windows\.createMain\(\{/);
+    assert.ok(!/new BrowserWindow|BrowserWindow\s*\}/.test(main), "main.js makes no window of its own");
 });
