@@ -20,6 +20,14 @@ let jobs = [];
 let selection = new Set();
 let selectionAnchor = null;
 let converting = false;
+// Jobs handed to main and not yet back. Their format and settings were sent
+// when Convert was pressed, so nothing edited on them now would take effect.
+let inFlight = new Set();
+
+/** Is this job part of the conversion that is running, queued or not? */
+function isLocked(job) {
+    return inFlight.has(job.id);
+}
 
 // Loaded as a plain script by index.html — the renderer has no Node access,
 // and functions cannot cross the IPC bridge, so it cannot be required.
@@ -324,8 +332,8 @@ function setTarget(ids, targetExt) {
     for (const job of jobs) {
         if (!set.has(job.id)) continue;
         // The per-card select is disabled mid-run, but the bulk bar can still
-        // reach a running job.
-        if (job.status === "running") continue;
+        // reach a job in the batch.
+        if (isLocked(job)) continue;
         // Guard against a stale bulk option: never assign a format the source
         // cannot produce. Does not apply when clearing.
         if (next !== null && !canTarget(job, next)) continue;
@@ -567,9 +575,13 @@ function paintCard(card, job) {
     progress.element.classList.toggle("d-none", !running);
     if (running) progress.set(typeof job.progress === "number" ? job.progress : null);
 
-    // The target select locks while the job is in flight.
+    // The format and the options lock while the job is in flight, queued as
+    // well as running: both were sent to main when Convert was pressed.
+    const locked = isLocked(job);
     const select = card.querySelector(".card-target");
-    select.disabled = running;
+    select.disabled = locked;
+    card.querySelector(".card-configure").disabled = locked;
+    outputLine.disabled = locked;
     if (select.value !== (job.targetExt ?? "")) select.value = job.targetExt ?? "";
 
     renderCardActions(card, job);
@@ -577,6 +589,13 @@ function paintCard(card, job) {
 
 function renderCardActions(card, job) {
     const actions = card.querySelector(".card-actions");
+
+    // Repainted on every progress tick, so the buttons are only rebuilt when
+    // what they are changes. Rebuilding them each time swapped the Cancel
+    // button out from under the pointer, and its hover flickered as it ran.
+    const key = `${job.status}|${job.outputPath ?? ""}|${job.isDirectory === true}`;
+    if (actions.dataset.key === key) return;
+    actions.dataset.key = key;
     actions.innerHTML = "";
 
     const buttons = [];
@@ -1118,7 +1137,7 @@ function fillSelect(select, options, current, placeholder) {
 
 /** Open the dialog for a set of job ids. */
 function openJobModal(ids) {
-    modalScope = ids.filter(id => jobs.some(j => j.id === id));
+    modalScope = ids.filter(id => jobs.some(j => j.id === id && !isLocked(j)));
     if (modalScope.length === 0) return;
 
     const scoped = jobs.filter(j => modalScope.includes(j.id));
@@ -1441,19 +1460,23 @@ function applyJobModal() {
     // chosen format takes setTarget's early return and kept its settings.
     if (target) setTarget(modalScope, target);
 
+    let n = 0;
     for (const job of jobs) {
         if (!modalScope.includes(job.id)) continue;
-        if (job.status === "running") continue;
+        // Opening it on a job in flight is refused, but one can start
+        // converting while the dialog is open.
+        if (isLocked(job)) continue;
 
         // Each card gets its own copy. One shared object across a bulk edit
         // works only for as long as nothing ever edits a single card's settings
         // in place, which is not a property worth relying on.
         job.settings = structuredClone(settings);
         updateCard(job);
+        n++;
     }
 
     jobModal.hide();
-    const n = modalScope.length;
+    if (n === 0) return;
     kit.ui.toast(`Settings applied to ${kit.format.countOf(n, "file")}.`, { type: "success" });
 }
 
@@ -1484,6 +1507,7 @@ async function startConversion() {
     }
 
     converting = true;
+    inFlight = new Set(runnable.map(j => j.id));
     for (const job of runnable) {
         job.status = "pending";
         job.progress = 0;
@@ -1508,6 +1532,7 @@ async function startConversion() {
 }
 
 function applyResult(job, result) {
+    inFlight.delete(job.id);
     job.status = result.status;
     job.error = result.error ?? null;
     job.outputPath = result.outputPath ?? null;

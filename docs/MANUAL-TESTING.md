@@ -24,7 +24,7 @@ sections — the history is useful.
 
 ```
 npm install
-npm test          # expect 193 passing, 0 failing
+npm test          # expect 198 passing, 0 failing
 npm start
 ```
 
@@ -2662,3 +2662,57 @@ Run it in the Linux VM, on a desktop.
       Close and reopen: the window is where you left it.
 - [x] `~/.config/diamond-file-converter/debug.log` names files by their names
       only, with no folder.
+
+---
+
+## 2.0.0-beta.5: card fixes (2026-10-05)
+
+Three bugs Will found on beta.4, all in the app itself (electron-kit has no
+part in any of them):
+
+- **Cancel flickered under the pointer.** Every progress tick rebuilt the
+  card's buttons, so the Cancel being hovered was swapped for a fresh one many
+  times a second. The buttons are now only rebuilt when they change.
+- **The Last frame box stayed empty.** A file's container can run a moment past
+  its video's last frame when the audio is longer (`visualiser.mp4` here: the
+  container ends at 3:10.334, the picture at 3:10.284). A seek into that gap
+  decodes nothing. The preview now steps back until it finds a picture.
+- **Advanced Options opened, and "applied", on a card being converted.**
+  Nothing changed (the settings were sent when Convert was pressed), but the
+  dialog said it had. A card in the batch, queued or running, now locks its
+  options button, its image-count line and its format.
+
+> **Status: not yet run.**
+
+Use a video long enough to convert for ten seconds or more (a few minutes of
+1080p to WebM is plenty), plus a second file to queue behind it.
+
+### Cancel
+
+- [ ] Convert the long video. While it runs, rest the pointer on its
+      **Cancel** button without moving it: the hover colour holds steady, with
+      no flicker, in both light and dark themes.
+- [ ] Click it: the job cancels and the card shows Cancelled, with no Cancel
+      button left behind.
+
+### Last frame
+
+- [ ] Add `visualiser.mp4` (or any video whose audio runs past its picture),
+      choose WebM, open **Advanced Options**. Under Trim, **Last frame** shows
+      a picture, not an empty grey box.
+- [ ] Drag the end handle back a few seconds and then right to the end: the
+      picture updates each time and is never left blank.
+- [ ] A normal video still shows the right first and last frames.
+
+### Locked while converting
+
+- [ ] Add two files, set both to a format, select neither, and press
+      **Convert**. While the first runs, both cards' **tune** icons are dimmed
+      and do nothing when clicked, and both format selects are disabled. The
+      second is still queued, so its are too.
+- [ ] On a frames conversion (a video to PNG), the orange "about N images"
+      line is not clickable while the job is in the batch.
+- [ ] When the batch finishes, the tune icon, the image-count line and the
+      format select all work again. Advanced Options opens, and Apply says
+      **Settings applied to 1 file.**
+- [ ] Bulk Edit still works on a selection when nothing is converting.
