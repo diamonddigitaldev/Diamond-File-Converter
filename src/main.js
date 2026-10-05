@@ -17,6 +17,8 @@ const { menuItems } = require("./menu");
 // Frame previews are decoration beside a slider, not content.
 const PREVIEW_FRAME_HEIGHT = 144;
 const PREVIEW_FRAME_TIMEOUT_MS = 5000;
+// How far back to step, in seconds, when a seek lands after the last picture.
+const PREVIEW_FRAME_BACKOFF = [0.25, 1, 5];
 
 const FILE_DIALOG_FILTERS = [
     { name: "Supported Files", extensions: formats.SUPPORTED_EXTENSIONS },
@@ -453,11 +455,29 @@ kit.ipc.handle(IPC.SHELL_SHOW_IN_FOLDER, (_event, target) => { shell.showItemInF
  * to null and the dialog shows nothing. A missing preview must never be able to
  * block choosing a frame.
  */
-kit.ipc.handle(IPC.PREVIEW_FRAME, (_event, request) => {
+kit.ipc.handle(IPC.PREVIEW_FRAME, async (_event, request) => {
     const inputPath = request && request.inputPath;
     const timestamp = Number(request && request.timestamp) || 0;
     if (!inputPath) return null;
 
+    // The container's duration is often a little past the video's last frame,
+    // because the audio runs on longer. A seek into that gap decodes nothing and
+    // exits cleanly, which left the end preview blank; the frame worth showing
+    // there is the last one, a moment earlier.
+    let result = await grabFrame(inputPath, timestamp);
+    for (const back of PREVIEW_FRAME_BACKOFF) {
+        if (result !== "empty" || timestamp <= 0) break;
+        result = await grabFrame(inputPath, Math.max(0, timestamp - back));
+    }
+    return result === "empty" ? null : result;
+});
+
+/**
+ * One frame at `timestamp` as a JPEG data URL. "empty" when ffmpeg ran cleanly
+ * and found no picture there, which is worth stepping back from; null when it
+ * failed, which is not.
+ */
+function grabFrame(inputPath, timestamp) {
     return new Promise((resolve) => {
         const child = spawn(getFfmpegPath(), [
             "-hide_banner", "-loglevel", "error",
@@ -486,11 +506,12 @@ kit.ipc.handle(IPC.PREVIEW_FRAME, (_event, request) => {
         child.stdout.on("data", (chunk) => chunks.push(chunk));
         child.on("error", () => finish(null));
         child.on("close", (code) => {
-            if (code !== 0 || chunks.length === 0) return finish(null);
+            if (code !== 0) return finish(null);
+            if (chunks.length === 0) return finish("empty");
             finish(`data:image/jpeg;base64,${Buffer.concat(chunks).toString("base64")}`);
         });
     });
-});
+}
 
 kit.ipc.handle(IPC.APP_GET_FORMATS, () => ({
     conversionMap: formats.buildLegacyConversionMap(),

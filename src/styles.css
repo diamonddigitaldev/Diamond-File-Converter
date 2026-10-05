@@ -458,7 +458,9 @@ a {
     transition: color var(--dur-micro) var(--ease-micro);
 }
 
-.card-configure:hover { color: var(--accent-text); }
+.card-configure:hover:not(:disabled) { color: var(--accent-text); }
+/* Locked while its conversion is in flight. */
+.card-configure:disabled { opacity: 0.4; cursor: default; }
 .card-configure .material-icons-round { font-size: 16px; line-height: 1; display: block; }
 
 .card-settings {
@@ -760,9 +762,11 @@ a {
     cursor: pointer;
 }
 
-.card-output:hover {
+.card-output:hover:not(:disabled) {
     text-decoration: underline;
 }
+
+.card-output:disabled { cursor: default; }
 
 .card-output:focus-visible {
     outline: none;
