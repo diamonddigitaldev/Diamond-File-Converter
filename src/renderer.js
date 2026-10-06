@@ -1518,16 +1518,21 @@ async function startConversion() {
 
     // Every job is submitted at once; the runner's pool decides how many
     // actually run in parallel. v1 awaited them one at a time.
-    const results = await Promise.all(runnable.map(async (job) => {
-        const result = await api.runJob(
-            { id: job.id, inputPath: job.filePath, targetExt: job.targetExt, ...(job.settings ?? {}),
-              output: withMirrorRoot(job) });
-        applyResult(job, result);
-        return result;
-    }));
-
-    converting = false;
-    render();
+    // However it ends: a batch that threw would otherwise leave Restart Now
+    // asking about a conversion that isn't running.
+    let results;
+    try {
+        results = await Promise.all(runnable.map(async (job) => {
+            const result = await api.runJob(
+                { id: job.id, inputPath: job.filePath, targetExt: job.targetExt, ...(job.settings ?? {}),
+                  output: withMirrorRoot(job) });
+            applyResult(job, result);
+            return result;
+        }));
+    } finally {
+        converting = false;
+        render();
+    }
     announce(results);
 }
 
@@ -1889,9 +1894,14 @@ async function runJoin() {
     joinProgress.set(0);
     renderJoinActions();
 
-    const result = await api.runJoin(spec);
-    joinRunning = null;
-    renderJoinActions();
+    // However it ends, as a conversion's.
+    let result;
+    try {
+        result = await api.runJoin(spec);
+    } finally {
+        joinRunning = null;
+        renderJoinActions();
+    }
 
     if (result.status === "done") {
         kit.ui.toast(`Joined ${kit.format.countOf(joinClips.length, "file")} into ${p.basename(result.outputPath)}.`, { type: "success" });
