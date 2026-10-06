@@ -1,0 +1,81 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>Toggle Switch</title>
+<style>
+:root{
+  --accent:#9740fb; --accent-hover:#b06cff; --accent-muted:#c796ff; --accent-rgb:151,64,251;
+  --bg:#212529; --surface:#2b3035; --surface-2:#343a40; --border:#495057;
+  --text:#dee2e6; --text-dim:rgba(222,226,230,.75); --text-faint:rgba(222,226,230,.5);
+  --success:#198754; --warning:#ffc107; --danger:#dc3545; --info:#0dcaf0;
+  --success-rgb:25,135,84; --warning-rgb:255,193,7; --danger-rgb:220,53,69;
+  --radius-control:5px; --radius-card:8px; --radius-zone:12px;
+  --dur-micro:120ms; --dur-state:.2s; --dur-default:.3s;
+  --ease-standard:cubic-bezier(.4,0,.2,1);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;padding:40px;background:var(--bg);color:var(--text);
+  font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;font-size:16px;line-height:1.5;
+}
+h1{font-size:24px;margin:0 0 6px;font-weight:600;letter-spacing:-.01em}
+.sub{color:var(--text-dim);font-size:14px;margin:0 0 32px;max-width:70ch}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-faint);
+   margin:36px 0 14px;font-weight:600}
+h2:first-of-type{margin-top:0}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.stack{display:flex;flex-direction:column;gap:10px}
+.grid{display:grid;gap:14px}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);padding:18px}
+code,.mono{font-family:Consolas,'Courier New',monospace;font-size:12.5px}
+code{background:rgba(255,255,255,.07);padding:2px 6px;border-radius:4px;color:var(--accent-muted)}
+.note{font-size:13px;color:var(--text-dim);margin-top:10px;max-width:74ch}
+.note b{color:var(--text);font-weight:600}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{text-align:left;color:var(--text-faint);font-weight:600;font-size:11px;
+   text-transform:uppercase;letter-spacing:.08em;padding:0 14px 8px 0;border-bottom:1px solid var(--border)}
+td{padding:9px 14px 9px 0;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.swatch{width:26px;height:26px;border-radius:5px;border:1px solid rgba(255,255,255,.16);display:inline-block;vertical-align:middle}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:50rem;
+     background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border)}
+.caption{font-size:11.5px;color:var(--text-faint);margin-top:8px}
+</style>
+</head><body>
+<h1>Toggle Switch</h1>
+<p class="sub">The one genuinely custom control in the house style. Currently Media Player only — worth promoting to the shared layer.</p>
+
+<style>
+.ts{position:relative;display:inline-block;width:48px;height:28px;vertical-align:middle}
+.ts input{opacity:0;width:0;height:0;position:absolute}
+.slider{position:absolute;inset:0;background:var(--surface-2);border-radius:34px;
+  cursor:pointer;transition:background-color var(--dur-default)}
+.slider::before{content:"";position:absolute;height:20px;width:20px;left:4px;top:4px;background:#fff;
+  border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.15);transition:transform var(--dur-default) var(--ease-standard)}
+.ts input:checked + .slider{background:var(--accent)}
+.ts input:checked + .slider::before{transform:translateX(20px)}
+.tlabel{font-size:14px;margin-left:10px}
+.trow{display:flex;align-items:center;gap:12px;margin-bottom:18px;cursor:pointer}
+</style>
+<h2>States</h2>
+<div class="panel">
+  <label class="trow"><span class="tlabel" style="margin-left:0">Freeze monitoring on pause</span>
+    <span class="ts"><input type="checkbox"><span class="slider"></span></span></label>
+  <label class="trow"><span class="tlabel" style="margin-left:0">Preserve folder structure</span>
+    <span class="ts"><input type="checkbox" checked><span class="slider"></span></span></label>
+  <p class="note" style="margin:0">Both are live — click them.</p>
+</div>
+
+<h2>Geometry</h2>
+<table>
+<tr><th>Part</th><th>Value</th></tr>
+<tr><td>Track</td><td><code>48 × 28</code>, radius <code>34px</code></td></tr>
+<tr><td>Knob</td><td><code>20 × 20</code>, radius <code>50%</code>, inset <code>4px</code></td></tr>
+<tr><td>Travel</td><td><code>translateX(20px)</code></td></tr>
+<tr><td>Easing</td><td><code>cubic-bezier(.4, 0, .2, 1)</code> over <code>0.3s</code></td></tr>
+<tr><td>Knob shadow</td><td><code>0 1px 4px rgba(0,0,0,.15)</code></td></tr>
+<tr><td>Checked track</td><td><code>var(--accent)</code></td></tr>
+</table>
+<p class="note"><b>Row layout is label-left, control-right</b>, wrapped in a single <code>&lt;label&gt;</code> with <code>display:flex; gap:12px</code> so the text is part of the hit target. The real input is visually hidden rather than removed, which keeps it keyboard-focusable.</p>
+
+</body></html>

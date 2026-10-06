@@ -1,0 +1,61 @@
+name: CI
+
+# The tests, on Windows and Ubuntu, for every push to a release branch and
+# every pull request. They run under Node, with no window: the shared UI's own
+# real-Electron and visual tests are @diamonddigitaldev/electron-kit's.
+
+on:
+  push:
+    branches: [master, '2.0.0']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # npm 12, as on the development machine: it only runs the install scripts
+      # package.json allows (ffmpeg-static downloads its binary in one).
+      - name: Install npm 12
+        run: npm install -g npm@12
+
+      # Windows runners install global packages outside Node's own folder, and
+      # setup-node puts Node's folder, with its bundled npm, first on PATH.
+      - name: Put npm 12 first on PATH
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: npm prefix -g >> $env:GITHUB_PATH
+
+      - name: Install dependencies
+        run: |
+          npm --version
+          npm ci
+
+      # ffmpeg-static downloads FFmpeg in an install script, which npm only runs
+      # when package.json's allowScripts approves it. Without the binary, the
+      # tests that need it skip, and electron-builder leaves it out of the build
+      # without a word, so this fails instead.
+      - name: Check FFmpeg and FFprobe are there
+        run: node -e "for (const [name, file] of [['FFmpeg', require('ffmpeg-static')], ['FFprobe', require('ffprobe-static').path]]) { require('fs').accessSync(file); console.log(name + ':', file); }"
+
+      - name: Run the tests
+        run: npm test

@@ -1,0 +1,68 @@
+<!-- @dsCard group="Patterns" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>Feedback & Error Surfacing</title>
+<style>
+:root{
+  --accent:#9740fb; --accent-hover:#b06cff; --accent-muted:#c796ff; --accent-rgb:151,64,251;
+  --bg:#212529; --surface:#2b3035; --surface-2:#343a40; --border:#495057;
+  --text:#dee2e6; --text-dim:rgba(222,226,230,.75); --text-faint:rgba(222,226,230,.5);
+  --success:#198754; --warning:#ffc107; --danger:#dc3545; --info:#0dcaf0;
+  --success-rgb:25,135,84; --warning-rgb:255,193,7; --danger-rgb:220,53,69;
+  --radius-control:5px; --radius-card:8px; --radius-zone:12px;
+  --dur-micro:120ms; --dur-state:.2s; --dur-default:.3s;
+  --ease-standard:cubic-bezier(.4,0,.2,1);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;padding:40px;background:var(--bg);color:var(--text);
+  font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;font-size:16px;line-height:1.5;
+}
+h1{font-size:24px;margin:0 0 6px;font-weight:600;letter-spacing:-.01em}
+.sub{color:var(--text-dim);font-size:14px;margin:0 0 32px;max-width:70ch}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-faint);
+   margin:36px 0 14px;font-weight:600}
+h2:first-of-type{margin-top:0}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.stack{display:flex;flex-direction:column;gap:10px}
+.grid{display:grid;gap:14px}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);padding:18px}
+code,.mono{font-family:Consolas,'Courier New',monospace;font-size:12.5px}
+code{background:rgba(255,255,255,.07);padding:2px 6px;border-radius:4px;color:var(--accent-muted)}
+.note{font-size:13px;color:var(--text-dim);margin-top:10px;max-width:74ch}
+.note b{color:var(--text);font-weight:600}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{text-align:left;color:var(--text-faint);font-weight:600;font-size:11px;
+   text-transform:uppercase;letter-spacing:.08em;padding:0 14px 8px 0;border-bottom:1px solid var(--border)}
+td{padding:9px 14px 9px 0;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.swatch{width:26px;height:26px;border-radius:5px;border:1px solid rgba(255,255,255,.16);display:inline-block;vertical-align:middle}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:50rem;
+     background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border)}
+.caption{font-size:11.5px;color:var(--text-faint);margin-top:8px}
+</style>
+</head><body>
+<h1>Feedback & Error Surfacing</h1>
+<p class="sub">The weakest area of the house style. Everything is a native blocking dialog, which does not scale to batch operations.</p>
+
+<h2>What exists today</h2>
+<table>
+<tr><th>Situation</th><th>Current treatment</th><th>Verdict</th></tr>
+<tr><td>Update available / ready</td><td>Native <code>dialog.showMessageBox</code></td><td>Fine — rare, needs a decision</td></tr>
+<tr><td>Output file exists</td><td>Native dialog: Cancel / Overwrite / Save as New</td><td>Fine for one file, <b>painful for fifty</b></td></tr>
+<tr><td>Conversion failed</td><td>Native dialog, <b>one per failed file, mid-queue</b></td><td><b>Wrong</b> — blocks the batch</td></tr>
+<tr><td>Unsupported file dropped</td><td><b>Nothing at all</b></td><td><b>Wrong</b> — silent rejection</td></tr>
+<tr><td>Background operation done</td><td>OS <code>Notification</code> when unfocused (Dropgate only)</td><td>Good — worth copying</td></tr>
+</table>
+
+<h2>The rule to adopt</h2>
+<p class="note"><b>A blocking dialog is for a decision only the user can make, right now.</b> Anything reporting what already happened belongs in a toast or an inline status row. A failure inside a batch is a report, not a decision — it should mark the job and let the queue continue, with the detail available afterwards.</p>
+
+<h2>Two specific traps</h2>
+<p class="note"><b><code>body { user-select: none }</code> makes error text uncopyable.</b> File Converter sets it globally to stop text selection dragging the UI, which also means a user cannot copy the ffmpeg error to report it. Scope the rule to the chrome and let messages and paths stay selectable.</p>
+<p class="note"><b>A per-file conflict prompt does not scale.</b> Offer "apply to all remaining" on the first prompt, or resolve the whole batch up front, before any work starts.</p>
+
+<h2>Silent failure is the worst outcome</h2>
+<p class="note">Two real examples worth remembering. File Converter drops unsupported files from a drop with no feedback whatsoever — the user sees nothing happen and cannot tell the app from a broken one. And its <code>debug.log</code> is the only record of a failure, with no way to open it from inside the app. <b>If the app knows something went wrong, the user must be able to find out what.</b></p>
+
+</body></html>

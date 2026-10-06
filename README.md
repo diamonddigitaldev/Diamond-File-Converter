@@ -11,7 +11,7 @@
 
   ![license](https://img.shields.io/badge/license-Apache%202.0-blue?style=flat-square)
   ![version](https://img.shields.io/badge/version-1.0.0-brightgreen?style=flat-square)
-  ![platform](https://img.shields.io/badge/platform-Windows-lightgrey?style=flat-square)
+  ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=flat-square)
 
   [![discord](https://img.shields.io/discord/667479986214666272?logo=discord&logoColor=white&style=flat-square)](https://diamonddigital.dev/discord)
   [![buy me a coffee](https://img.shields.io/badge/-Buy%20Me%20a%20Coffee-ffdd00?logo=Buy%20Me%20A%20Coffee&logoColor=000000&style=flat-square)](https://www.buymeacoffee.com/willtda)
@@ -30,9 +30,28 @@
 
 ## Installation
 
-1. Download the latest release from the [releases page](https://github.com/diamonddigitaldev/Diamond-File-Converter/releases).
-2. Run the installer and follow the on-screen instructions.
-3. Launch Diamond File Converter and start converting!
+Download the files for your system from the [releases page](https://github.com/diamonddigitaldev/Diamond-File-Converter/releases). In the names below, `<version>` is the release's version, such as `2.0.0`.
+
+### Windows
+
+Download **Diamond-File-Converter-Setup-`<version>`.exe** and run it. It asks who it's for: only you (the default, with no administrator prompt) or everyone on the computer. If Diamond File Converter is already installed for everyone, as every version before 2.0.0-beta.6 was, that copy is updated instead. It then asks which file types to open with it, all ticked, and whether to add **Convert with Diamond File Converter** to the menu files and folders show when you right-click them.
+
+> [!NOTE]
+> You may get a Windows SmartScreen popup when trying to run the installer. This is normal as the installer is not signed.
+
+### Linux
+
+- **Debian, Ubuntu and derivatives:** download **Diamond-File-Converter-`<version>`.deb**, then run `sudo apt install ./Diamond-File-Converter-<version>.deb`. Diamond File Converter is then in your applications menu under Sound & Video.
+- **Fedora, openSUSE and others using RPM:** download **Diamond-File-Converter-`<version>`.rpm** and install it with your package manager, such as `sudo dnf install ./Diamond-File-Converter-<version>.rpm`.
+- **Anywhere else:** download **Diamond-File-Converter-`<version>`.AppImage**, make it executable with `chmod +x`, and run it.
+
+Linux builds start with 2.0. With the `.deb` or `.rpm`, the app is in your file manager's "Open with" for the files it converts. Opening files from a terminal (`diamond-file-converter file.mp4`) works too.
+
+### On every system
+
+FFmpeg and FFprobe are bundled, so there is nothing else to install and nothing to add to your PATH. The `latest.yml`, `latest-linux.yml` and `.blockmap` files on each release are for the app's updater: you don't need to download them.
+
+To go back to an earlier version, uninstall the app and install that version from the releases page.
 
 ## Usage
 

@@ -1,0 +1,97 @@
+<!-- @dsCard group="Foundations" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>Motion</title>
+<style>
+:root{
+  --accent:#9740fb; --accent-hover:#b06cff; --accent-muted:#c796ff; --accent-rgb:151,64,251;
+  --bg:#212529; --surface:#2b3035; --surface-2:#343a40; --border:#495057;
+  --text:#dee2e6; --text-dim:rgba(222,226,230,.75); --text-faint:rgba(222,226,230,.5);
+  --success:#198754; --warning:#ffc107; --danger:#dc3545; --info:#0dcaf0;
+  --success-rgb:25,135,84; --warning-rgb:255,193,7; --danger-rgb:220,53,69;
+  --radius-control:5px; --radius-card:8px; --radius-zone:12px;
+  --dur-micro:120ms; --dur-state:.2s; --dur-default:.3s;
+  --ease-standard:cubic-bezier(.4,0,.2,1);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;padding:40px;background:var(--bg);color:var(--text);
+  font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;font-size:16px;line-height:1.5;
+}
+h1{font-size:24px;margin:0 0 6px;font-weight:600;letter-spacing:-.01em}
+.sub{color:var(--text-dim);font-size:14px;margin:0 0 32px;max-width:70ch}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-faint);
+   margin:36px 0 14px;font-weight:600}
+h2:first-of-type{margin-top:0}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.stack{display:flex;flex-direction:column;gap:10px}
+.grid{display:grid;gap:14px}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);padding:18px}
+code,.mono{font-family:Consolas,'Courier New',monospace;font-size:12.5px}
+code{background:rgba(255,255,255,.07);padding:2px 6px;border-radius:4px;color:var(--accent-muted)}
+.note{font-size:13px;color:var(--text-dim);margin-top:10px;max-width:74ch}
+.note b{color:var(--text);font-weight:600}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{text-align:left;color:var(--text-faint);font-weight:600;font-size:11px;
+   text-transform:uppercase;letter-spacing:.08em;padding:0 14px 8px 0;border-bottom:1px solid var(--border)}
+td{padding:9px 14px 9px 0;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.swatch{width:26px;height:26px;border-radius:5px;border:1px solid rgba(255,255,255,.16);display:inline-block;vertical-align:middle}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:50rem;
+     background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border)}
+.caption{font-size:11.5px;color:var(--text-faint);margin-top:8px}
+</style>
+</head><body>
+<h1>Motion</h1>
+<p class="sub">Five durations and three easings. The duration says what kind of change it is, so pick by meaning rather than by feel.</p>
+
+<style>
+.demo{width:100%;height:56px;border-radius:var(--radius-card);background:var(--surface);
+      border:1px solid var(--border);display:flex;align-items:center;padding:0 16px;cursor:pointer}
+.demo:hover{background:rgba(var(--accent-rgb),.06);border-color:var(--accent)}
+.d1{transition:background-color var(--dur-micro) ease,border-color var(--dur-micro) ease}
+.d2{transition:background-color var(--dur-state) ease-in-out,border-color var(--dur-state) ease-in-out}
+.d3{transition:background-color var(--dur-default),border-color var(--dur-default)}
+@keyframes pulse{0%,100%{opacity:.75}50%{opacity:.5}}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+.knob{width:48px;height:28px;border-radius:34px;background:var(--surface-2);position:relative;cursor:pointer}
+.knob::after{content:"";position:absolute;width:20px;height:20px;left:4px;top:4px;border-radius:50%;
+  background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.15);transition:transform var(--dur-default) var(--ease-standard)}
+.knob:hover{background:var(--accent)}
+.knob:hover::after{transform:translateX(20px)}
+</style>
+<h2>Durations — hover each row</h2>
+<div class="stack">
+  <div class="demo d1"><b style="width:90px">120ms</b> <span style="color:var(--text-dim)">Micro — hover and press on small controls (row delete, icon buttons)</span></div>
+  <div class="demo d2"><b style="width:90px">0.2s</b> <span style="color:var(--text-dim)">State — a surface changing meaning (drop zone arming)</span></div>
+  <div class="demo d3"><b style="width:90px">0.3s</b> <span style="color:var(--text-dim)">Default — everything else</span></div>
+</div>
+<table style="margin-top:20px">
+<tr><th>Duration</th><th>Name</th><th>Used for</th></tr>
+<tr><td><code>120ms ease</code></td><td>micro</td><td>Small-control hover</td></tr>
+<tr><td><code>0.2s ease-in-out</code></td><td>state</td><td>Surface state change</td></tr>
+<tr><td><code>0.3s</code></td><td>default</td><td>General transitions</td></tr>
+<tr><td><code>0.4s ease</code></td><td>enter</td><td>Page-load fade-in</td></tr>
+<tr><td><code>2s ease-in-out ∞</code></td><td>ambient</td><td>Loading pulse / breathe</td></tr>
+</table>
+
+<h2>Easing</h2>
+<div class="row" style="align-items:flex-start;gap:32px">
+  <div><div class="knob"></div><div class="caption">cubic-bezier(.4, 0, .2, 1)<br>knob travel — the only custom curve</div></div>
+  <div><div style="width:56px;height:56px;border-radius:8px;background:rgba(var(--accent-rgb),.25);border:1px solid var(--accent);animation:pulse 2s infinite ease-in-out"></div><div class="caption">ambient pulse — "still loading"</div></div>
+  <div><div style="width:56px;height:56px;display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--accent);animation:spin 1.4s linear infinite">◠</div><div class="caption">spin 1.4s linear — work in progress</div></div>
+</div>
+
+<h2>Timings shared with the JS side</h2>
+<table>
+<tr><th>Value</th><th>Meaning</th></tr>
+<tr><td><code>500ms</code></td><td>Debounce — window-bounds saves, Explorer multi-file batching</td></tr>
+<tr><td><code>3000ms</code></td><td>Progress bar reset after completion</td></tr>
+<tr><td><code>4500ms</code></td><td>Toast auto-dismiss</td></tr>
+<tr><td><code>2000ms</code></td><td>Idle before the video control bar hides</td></tr>
+<tr><td><code>5000ms</code></td><td>Delay before the startup update check</td></tr>
+</table>
+<p class="note"><b>Disabled and busy is <code>opacity: 0.5</code> plus <code>pointer-events: none</code></b> — applied as inline style, not a class.</p>
+
+</body></html>

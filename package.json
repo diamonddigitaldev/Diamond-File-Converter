@@ -1,7 +1,7 @@
 {
     "name": "diamond-file-converter",
-    "version": "1.0.0",
-    "description": "An Electron-based Windows app for converting audio, video, and image files.",
+    "version": "2.0.0-beta.6",
+    "description": "An Electron-based desktop app for converting audio, video, and image files.",
     "main": "src/main.js",
     "funding": {
         "type": "buymeacoffee",
@@ -9,52 +9,31 @@
     },
     "scripts": {
         "start": "electron .",
-        "build": "electron-builder"
+        "build": "electron-builder",
+        "test": "node --test"
     },
     "repository": {
         "type": "git",
         "url": "https://github.com/diamonddigitaldev/Diamond-File-Converter"
     },
-    "build": {
-        "appId": "com.diamonddigitaldev.diamondfileconverter",
-        "productName": "Diamond File Converter",
-        "artifactName": "Diamond-File-Converter-Setup-${version}.${ext}",
-        "extraResources": [
-            {
-                "from": "node_modules/ffmpeg-static/ffmpeg.exe",
-                "to": "ffmpeg/ffmpeg.exe"
-            }
-        ],
-        "publish": {
-            "provider": "github",
-            "owner": "diamonddigitaldev",
-            "repo": "Diamond-File-Converter"
-        },
-        "win": {
-            "target": [
-                "nsis"
-            ],
-            "icon": "src/assets/diamondfileconverter.ico"
-        },
-        "nsis": {
-            "perMachine": true,
-            "createDesktopShortcut": true,
-            "menuCategory": "Diamond Digital Development"
-        }
-    },
     "keywords": [],
     "author": "Diamond Digital Development <https://diamonddigital.dev>",
     "license": "Apache-2.0",
     "devDependencies": {
-        "electron": "^41.1.0",
-        "electron-builder": "^26.8.1"
+        "electron": "^44.4.5",
+        "electron-builder": "^26.15.3"
     },
     "dependencies": {
+        "@diamonddigitaldev/electron-kit": "0.1.0-beta.8",
         "bootstrap": "^5.3.3",
         "electron-store": "^11.0.2",
-        "electron-updater": "^6.8.3",
+        "electron-updater": "^6.8.9",
         "ffmpeg-static": "^5.2.0",
-        "fluent-ffmpeg": "^2.1.3",
+        "ffprobe-static": "^3.1.0",
         "material-icons": "^1.13.14"
+    },
+    "allowScripts": {
+        "ffmpeg-static": true,
+        "electron-winstaller": true
     }
 }

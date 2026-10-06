@@ -6,86 +6,400 @@
     <title>Diamond File Converter</title>
     <link rel="stylesheet" href="../node_modules/bootstrap/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="../node_modules/material-icons/iconfont/round.css">
+    <link rel="stylesheet" href="../node_modules/@diamonddigitaldev/electron-kit/css/kit.css">
+    <link rel="stylesheet" href="styles/accent.css">
     <link rel="stylesheet" href="styles.css">
-    <script>
-        (() => {
-            const mql = window.matchMedia("(prefers-color-scheme: dark)");
-            const apply = () => document.documentElement.setAttribute("data-bs-theme", mql.matches ? "dark" : "light");
-            apply();
-            mql.addEventListener("change", apply);
-        })();
-    </script>
+    <!-- Draws the page in the OS theme before the body parses, then follows it. -->
+    <script src="../node_modules/@diamonddigitaldev/electron-kit/page/theme.js"></script>
 </head>
-<body class="p-4">
+<body>
 
-    <div class="container">
+    <!-- kit.ui.mountShell() (renderer.js) builds the frame around what's
+         here: the nav rail (Convert and Join, then Settings and Collapse), and
+         the header with the app's title and the toolbar below, over the two
+         sections. Convert and Join are siblings you switch between, not a
+         place you have to back out of; each keeps its own state while hidden.
 
-        <div class="mx-auto" style="max-width:580px">
+         Each section's icon is its identity: the same glyph names it in the
+         rail and sits at the top of its empty-state drop zone. -->
 
-        <h3 class="mb-4 text-center">Diamond File Converter</h3>
+        <!-- One toolbar for both sections, adding to whichever is showing.
+             It used to be hidden on Join, which took the buttons' 31px out
+             of a header whose title is 24px tall — so the title and
+             everything under it jumped 7px on every switch. -->
+            <div id="toolbar" class="d-flex gap-2 align-items-center">
+                <button id="btn-add-files" class="btn btn-sm btn-secondary d-inline-flex align-items-center gap-1">
+                    <span class="material-icons-round" aria-hidden="true" style="font-size:16px">note_add</span>Add Files
+                </button>
+                <!-- Add Folder still opens the picker on one click. The options
+                     get their own trigger beside it rather than turning the
+                     button into a menu — adding a folder is the two-click path
+                     and it must not grow a step. -->
+                <div class="scan-options">
+                    <button id="btn-add-folder" class="btn btn-sm btn-secondary d-inline-flex align-items-center gap-1">
+                        <span class="material-icons-round" aria-hidden="true" style="font-size:16px">create_new_folder</span>Add Folder
+                    </button>
+                    <button id="btn-scan-options" class="btn btn-sm btn-secondary scan-options-toggle"
+                            title="Folder Options" aria-label="Folder Options" aria-haspopup="true" aria-expanded="false">
+                        <span class="material-icons-round" aria-hidden="true" style="font-size:16px">expand_more</span>
+                    </button>
 
-        <div id="drop-zone" class="drop-zone text-center mb-3">
-            <div id="dz-empty">
-                <span class="material-icons-round drop-icon">upload_file</span>
-                <p class="drop-label mb-1">Drag & Drop Files Here</p>
-                <p class="text-secondary small mb-2">or</p>
-                <button id="browse-btn" class="btn btn-sm btn-secondary">Select Files</button>
-            </div>
-            <div id="dz-has-files" class="d-none">
-                <span class="material-icons-round accent" style="font-size:28px">add_circle_outline</span>
-                <p class="drop-label mb-1"><span id="dz-file-count"></span></p>
-                <p class="text-secondary small mb-2">drag and drop more files or</p>
-                <div class="d-flex gap-2 justify-content-center">
-                    <button id="browse-more-btn" class="btn btn-sm btn-secondary">Select More Files</button>
-                    <button id="btn-clear-all" class="btn btn-sm btn-outline-secondary">Clear All</button>
+                    <div id="scan-popover" class="scan-popover d-none" role="dialog" aria-label="Folder Options">
+                        <p class="scan-popover-title">Folder Options</p>
+
+                        <label class="scan-opt">
+                            <input type="checkbox" id="scan-recursive" class="form-check-input">
+                            <span>Include subfolders</span>
+                        </label>
+
+                        <p class="scan-popover-label">Only add</p>
+                        <label class="scan-opt">
+                            <input type="checkbox" id="scan-kind-audio" class="form-check-input" data-kind="audio">
+                            <span>Audio</span>
+                        </label>
+                        <label class="scan-opt">
+                            <input type="checkbox" id="scan-kind-video" class="form-check-input" data-kind="video">
+                            <span>Video</span>
+                        </label>
+                        <label class="scan-opt">
+                            <input type="checkbox" id="scan-kind-image" class="form-check-input" data-kind="image">
+                            <span>Images</span>
+                        </label>
+
+                        <label class="scan-opt">
+                            <input type="checkbox" id="scan-symlinks" class="form-check-input">
+                            <span>Follow shortcuts</span>
+                        </label>
+
+                        <p class="scan-popover-note">Applies to the next folder you add or drop.</p>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div id="file-list-section" class="d-none mb-3">
-            <div id="file-list"></div>
-        </div>
+        <!-- Convert: its drop target, the selection bar, the grid and the action bar. -->
+        <div id="convert-view" class="convert-view">
 
-        <div id="format-section" class="d-none mb-3 text-center">
-            <p class="text-secondary small mb-2">Convert to:</p>
-            <div id="format-grid"></div>
-        </div>
+        <!-- Empty state: the kit's drop zone (renderer.js, kit.ui.dropZone()) -->
+        <div id="empty-state" class="empty-state"></div>
 
-        <div id="action-convert" class="d-none mb-3">
-            <button id="btn-start-convert" class="btn btn-primary w-100" disabled>Convert</button>
-        </div>
-
-        <div id="action-progress" class="d-none mb-3">
-            <p class="small fw-semibold mb-1 text-truncate" id="progress-current-file"></p>
-            <div class="progress mb-2" style="height:8px">
-                <div id="progress-bar-fill" class="progress-bar" style="width:0%"></div>
+        <!-- The bulk bar (Bulk Edit), shown when a selection exists -->
+        <div id="bulk-bar" class="bulk-bar d-none">
+            <input type="checkbox" id="bulk-select-all" class="form-check-input card-select" title="Select all">
+            <span id="bulk-count" class="fw-semibold"></span>
+            <div class="bulk-sep"></div>
+            <label class="small text-body-secondary" for="bulk-target" id="bulk-target-label">Convert all to</label>
+            <select id="bulk-target" class="form-select form-select-sm bulk-select"></select>
+            <span id="bulk-target-note" class="small text-body-secondary"></span>
+            <div class="ms-auto d-flex gap-2">
+                <button id="bulk-edit" class="btn btn-sm btn-primary d-inline-flex align-items-center gap-1">
+                    <span class="material-icons-round" style="font-size:15px" aria-hidden="true">tune</span>Bulk Edit
+                </button>
+                <button id="bulk-remove" class="btn btn-sm btn-outline-danger">Remove</button>
+                <button id="bulk-deselect" class="btn btn-sm btn-outline-secondary d-none">Deselect</button>
             </div>
-            <div class="d-flex justify-content-between align-items-center">
-                <span class="text-secondary small d-inline-flex align-items-center">
-                    <span class="material-icons-round converting-spin me-1" style="font-size:15px">sync</span>
-                    <span id="progress-status">Converting...</span>
-                </span>
-                <span id="progress-label" class="text-secondary small">0%</span>
-            </div>
-            <button id="btn-cancel" class="btn btn-sm btn-outline-secondary mt-2">Cancel</button>
         </div>
 
-        <div id="action-done" class="d-none mb-3">
-            <div class="done-card p-3 rounded">
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <span class="material-icons-round text-success">check_circle</span>
-                    <span class="fw-semibold" id="done-summary"></span>
+        <!-- The grid -->
+        <div id="grid-scroll" class="grid-scroll d-none">
+            <div id="job-grid" class="job-grid"></div>
+        </div>
+
+        <!-- Footer: the kit's action bar (renderer.js, kit.ui.actionBar()) -->
+        <footer id="action-bar" class="action-bar d-none"></footer>
+
+        </div>
+
+        <!-- Join: an ordered list of clips that become one file. Deliberately a
+             list and not a canvas — the order is the whole model. -->
+        <div id="join-view" class="join-view">
+            <!-- The same drop zone as Convert's, from the kit (renderer.js,
+                 setupJoin): only the icon and the label change. -->
+            <div id="join-empty" class="empty-state"></div>
+
+            <div id="join-body" class="join-body d-none">
+                <div class="join-scroll">
+                    <ol id="join-list" class="join-list"></ol>
+                    <button id="btn-join-add-more" class="btn btn-sm btn-secondary join-add-more d-inline-flex align-items-center gap-1">
+                        <span class="material-icons-round" style="font-size:16px" aria-hidden="true">add</span>Add More
+                    </button>
                 </div>
-                <div id="done-file-list" class="mb-3"></div>
-                <button id="btn-convert-another" class="btn btn-sm btn-outline-secondary">Convert More Files</button>
+
+                <aside class="join-side">
+                    <div id="join-plan" class="join-plan" role="status"></div>
+
+                    <label class="form-label" for="join-format">Join into</label>
+                    <select id="join-format" class="form-select form-select-sm"></select>
+
+                    <label class="form-label mt-2" for="join-name">File name</label>
+                    <input id="join-name" class="form-control form-control-sm" value="joined" spellcheck="false">
+
+                    <label class="form-label mt-2" for="join-dir">Save to</label>
+                    <div class="input-group input-group-sm">
+                        <input id="join-dir" class="form-control" readonly placeholder="Choose a folder…">
+                        <button id="btn-join-browse" class="btn btn-outline-secondary" type="button">Browse</button>
+                    </div>
+
+                    <div id="join-errors" class="form-text text-danger"></div>
+
+                    <div id="join-progress"></div>
+
+                    <div class="join-actions">
+                        <button id="btn-join-clear" class="btn btn-outline-secondary btn-sm">Clear</button>
+                        <button id="btn-join-cancel" class="btn btn-danger btn-sm d-none">Cancel</button>
+                        <button id="btn-join-run" class="btn btn-primary btn-sm" disabled>Join</button>
+                    </div>
+                </aside>
             </div>
         </div>
 
-        </div>
+    <!-- New Job dialog. In-page Bootstrap modal per the house pattern: border-0
+         header and footer, centred, icon + title in a flex row, neutral cancel
+         and semantic confirm. Every control is built from the target format's
+         capabilities, so an invalid combination cannot be selected. -->
+    <div class="modal fade" id="job-modal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
 
+          <div class="modal-header border-0 pb-2">
+            <h5 class="modal-title d-flex align-items-center gap-2">
+              <span class="material-icons-round accent" aria-hidden="true">tune</span>
+              <span id="jm-title">Advanced Options</span>
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+
+          <div class="modal-body pt-0">
+            <p id="jm-scope" class="text-body-secondary small mb-3"></p>
+
+            <div class="jm-row">
+              <label class="form-label" for="jm-target">Convert to</label>
+              <select id="jm-target" class="form-select form-select-sm"></select>
+              <div id="jm-target-note" class="form-text"></div>
+            </div>
+
+            <h6 class="jm-section">Output</h6>
+            <div class="jm-grid">
+              <div class="jm-row">
+                <label class="form-label" for="jm-routing">Destination</label>
+                <select id="jm-routing" class="form-select form-select-sm">
+                  <option value="alongside">Next to each source file</option>
+                  <option value="fixed">A folder I choose</option>
+                  <option value="mirror">Mirror the source folders</option>
+                </select>
+              </div>
+              <div class="jm-row">
+                <label class="form-label" for="jm-outdir">Folder</label>
+                <div class="input-group input-group-sm">
+                  <input id="jm-outdir" class="form-control" placeholder="Not set" readonly>
+                  <button id="jm-outdir-browse" class="btn btn-outline-secondary" type="button">Browse</button>
+                </div>
+              </div>
+              <div class="jm-row">
+                <label class="form-label" for="jm-name">Name template</label>
+                <input id="jm-name" class="form-control form-control-sm" placeholder="{name}">
+                <div class="form-text">{name} {ext} {src} {index} {date}</div>
+              </div>
+              <div class="jm-row">
+                <label class="form-label" for="jm-conflict">If it already exists</label>
+                <select id="jm-conflict" class="form-select form-select-sm">
+                  <option value="ask">Ask me</option>
+                  <option value="unique">Save as a new file</option>
+                  <option value="overwrite">Overwrite</option>
+                  <option value="skip">Skip the file</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="jm-video-section">
+              <h6 class="jm-section" id="jm-video-title">Video</h6>
+              <div class="jm-grid">
+                <div class="jm-row jm-vcodec-only">
+                  <label class="form-label" for="jm-vmode">Stream</label>
+                  <select id="jm-vmode" class="form-select form-select-sm"></select>
+                </div>
+                <div class="jm-row jm-vencode jm-vcodec-only">
+                  <label class="form-label" for="jm-vcodec">Codec</label>
+                  <select id="jm-vcodec" class="form-select form-select-sm"></select>
+                </div>
+                <div class="jm-row jm-vencode jm-vcodec-only jm-row-wide">
+                  <label class="form-label" for="jm-quality-mode">Quality</label>
+                  <div class="input-group input-group-sm">
+                    <select id="jm-quality-mode" class="form-select jm-fixed-sm">
+                      <option value="crf">Constant quality</option>
+                      <option value="bitrate">Target bitrate</option>
+                    </select>
+                    <input id="jm-crf" class="form-control" type="number" min="0" max="63" placeholder="auto">
+                    <input id="jm-vbitrate" class="form-control d-none" type="number" min="1" placeholder="auto">
+                    <span id="jm-vbitrate-unit" class="input-group-text d-none">kbps</span>
+                  </div>
+                  <div id="jm-crf-note" class="form-text"></div>
+                </div>
+                <div class="jm-row jm-vencode jm-vcodec-only">
+                  <label class="form-label" for="jm-encpreset">Encoder preset</label>
+                  <select id="jm-encpreset" class="form-select form-select-sm"></select>
+                </div>
+                <div class="jm-row jm-vencode jm-row-wide">
+                  <label class="form-label" for="jm-width">Resize</label>
+                  <div class="input-group input-group-sm">
+                    <input id="jm-width" class="form-control" type="number" min="1" placeholder="auto">
+                    <span class="input-group-text">&times;</span>
+                    <input id="jm-height" class="form-control" type="number" min="1" placeholder="auto">
+                    <select id="jm-fit" class="form-select jm-fixed-sm">
+                      <option value="contain">Contain</option>
+                      <option value="cover">Cover</option>
+                      <option value="stretch">Stretch</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="jm-row jm-vencode">
+                  <label class="form-label" for="jm-fps">Frame rate</label>
+                  <input id="jm-fps" class="form-control form-control-sm" type="number" min="1" placeholder="source">
+                </div>
+              </div>
+            </div>
+
+            <div id="jm-audio-section">
+              <h6 class="jm-section">Audio</h6>
+              <div class="jm-grid">
+                <div class="jm-row">
+                  <label class="form-label" for="jm-amode">Stream</label>
+                  <select id="jm-amode" class="form-select form-select-sm"></select>
+                </div>
+                <div class="jm-row jm-aencode">
+                  <label class="form-label" for="jm-acodec">Codec</label>
+                  <select id="jm-acodec" class="form-select form-select-sm"></select>
+                </div>
+                <div class="jm-row jm-aencode">
+                  <label class="form-label" for="jm-abitrate">Bitrate</label>
+                  <div class="input-group input-group-sm">
+                    <input id="jm-abitrate" class="form-control" type="number" min="1" placeholder="auto">
+                    <span class="input-group-text">kbps</span>
+                  </div>
+                </div>
+                <div class="jm-row jm-aencode">
+                  <label class="form-label" for="jm-arate">Sample rate</label>
+                  <select id="jm-arate" class="form-select form-select-sm">
+                    <option value="">Source</option>
+                    <option value="44100">44.1 kHz</option>
+                    <option value="48000">48 kHz</option>
+                    <option value="96000">96 kHz</option>
+                  </select>
+                </div>
+                <div class="jm-row jm-aencode">
+                  <label class="form-label" for="jm-achannels">Channels</label>
+                  <select id="jm-achannels" class="form-select form-select-sm">
+                    <option value="">Source</option>
+                    <option value="1">Mono</option>
+                    <option value="2">Stereo</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div id="jm-image-section">
+              <h6 class="jm-section">Image</h6>
+              <div class="jm-row">
+                <label class="form-label" for="jm-iquality">Quality</label>
+                <div class="d-flex align-items-center gap-2">
+                  <input id="jm-iquality" class="form-range" type="range">
+                  <span id="jm-iquality-value" class="small text-body-secondary" style="min-width:3.5rem"></span>
+                </div>
+                <div id="jm-iquality-note" class="form-text"></div>
+              </div>
+            </div>
+
+            <div id="jm-trim-section">
+              <!-- Trim and frame selection are the same span control under two
+                   names. Cutting a clip and choosing which frames to export both
+                   come out as -ss/-t, so the slider is shared; what changes is
+                   the heading, whether there are two handles or one, and the
+                   count of images it is about to write. -->
+              <h6 class="jm-section" id="jm-trim-title">Trim</h6>
+
+              <div id="jm-frames-choice" class="frame-choice d-none" role="group" aria-label="How many frames">
+                <button type="button" class="frame-choice-btn selected" data-frame-mode="frames" aria-pressed="true">
+                  Every frame in the range
+                </button>
+                <button type="button" class="frame-choice-btn" data-frame-mode="thumbnail" aria-pressed="false">
+                  A single frame
+                </button>
+              </div>
+
+              <div id="jm-trim-wrap">
+                <!-- Exact values over the ends they set. The slider shows where
+                     a span sits in the clip; these say precisely where it is,
+                     and take a typed time for anything a drag cannot reach. -->
+                <div class="trim-fields">
+                  <div class="trim-field">
+                    <label class="form-label" for="jm-trim-start-input" id="jm-trim-start-name">Start</label>
+                    <input id="jm-trim-start-input" class="form-control form-control-sm trim-input"
+                           type="text" inputmode="decimal" spellcheck="false" autocomplete="off"
+                           aria-describedby="jm-trim-error">
+                  </div>
+                  <span id="jm-trim-kept" class="trim-kept text-body-secondary"></span>
+                  <div class="trim-field trim-field-end" id="jm-trim-end-field">
+                    <label class="form-label" for="jm-trim-end-input">End</label>
+                    <input id="jm-trim-end-input" class="form-control form-control-sm trim-input"
+                           type="text" inputmode="decimal" spellcheck="false" autocomplete="off"
+                           aria-describedby="jm-trim-error">
+                  </div>
+                </div>
+                <div id="jm-trim-error" class="form-text text-danger d-none" role="alert"></div>
+                <div id="jm-trim-slider" class="trim-slider">
+                  <div class="trim-track"></div>
+                  <div id="jm-trim-range" class="trim-range"></div>
+                  <div id="jm-trim-thumb-start" class="trim-thumb" data-handle="start"
+                       tabindex="0" role="slider" aria-label="Trim start"></div>
+                  <div id="jm-trim-thumb-end" class="trim-thumb" data-handle="end"
+                       tabindex="0" role="slider" aria-label="Trim end"></div>
+                </div>
+                <!-- Under the slider, each frame beneath the end of the span it
+                     shows, so the picture sits where the hand already is. -->
+                <div id="jm-frame-previews" class="frame-previews d-none">
+                  <figure class="frame-preview">
+                    <img id="jm-frame-start" alt="">
+                    <figcaption id="jm-frame-start-cap">First frame</figcaption>
+                  </figure>
+                  <figure class="frame-preview" id="jm-frame-end-wrap">
+                    <img id="jm-frame-end" alt="">
+                    <figcaption id="jm-frame-end-cap">Last frame</figcaption>
+                  </figure>
+                </div>
+                <div class="form-text" id="jm-trim-help">Drag either end, or type an exact time. It moves in whole seconds; hold <kbd>Shift</kbd> for finer steps.</div>
+                <div id="jm-frames-estimate" class="form-text d-none"></div>
+              </div>
+              <div id="jm-trim-unavailable" class="form-text d-none">
+                Duration is not known for this file, so it cannot be trimmed.
+              </div>
+            </div>
+
+            <h6 class="jm-section">Command preview</h6>
+            <pre id="jm-preview" class="jm-preview"></pre>
+            <!-- Says whose command is on show when the edit covers several
+                 cards. The preview can only ever be one file's. -->
+            <div id="jm-preview-note" class="form-text"></div>
+            <div id="jm-errors" class="form-text text-danger"></div>
+          </div>
+
+          <div class="modal-footer border-0 pt-0">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" id="jm-apply">Apply</button>
+          </div>
+
+        </div>
+      </div>
     </div>
 
+    <!-- Prompts and toasts are the kit's (kit.ui.confirm(), kit.ui.toast()):
+         it makes their elements when one is first shown. -->
+
     <script src="../node_modules/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- kit.js first: display.js takes the house's wording from its kit.format.
+         display.js is dual-loaded: required by tests in Node, loaded here as a
+         plain script. It must come before renderer.js, which reads it off the
+         global. -->
+    <script src="../node_modules/@diamonddigitaldev/electron-kit/page/kit.js"></script>
+    <script src="core/display.js"></script>
     <script src="renderer.js"></script>
 </body>
 </html>

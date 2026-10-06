@@ -1,0 +1,112 @@
+[
+  {
+    "file": "foundations/colour.html",
+    "title": "Colour & Accent",
+    "group": "Foundations"
+  },
+  {
+    "file": "foundations/wash-ladder.html",
+    "title": "Wash Formulas",
+    "group": "Foundations"
+  },
+  {
+    "file": "foundations/type.html",
+    "title": "Typography",
+    "group": "Foundations"
+  },
+  {
+    "file": "foundations/spacing-radii.html",
+    "title": "Spacing & Radii",
+    "group": "Foundations"
+  },
+  {
+    "file": "foundations/motion.html",
+    "title": "Motion",
+    "group": "Foundations"
+  },
+  {
+    "file": "components/buttons.html",
+    "title": "Buttons",
+    "group": "Components"
+  },
+  {
+    "file": "components/drop-zone.html",
+    "title": "Drop Zone",
+    "group": "Components"
+  },
+  {
+    "file": "components/file-row.html",
+    "title": "File Row & List",
+    "group": "Components"
+  },
+  {
+    "file": "components/toggle.html",
+    "title": "Toggle Switch",
+    "group": "Components"
+  },
+  {
+    "file": "components/status-card.html",
+    "title": "Status Card",
+    "group": "Components"
+  },
+  {
+    "file": "components/progress.html",
+    "title": "Progress",
+    "group": "Components"
+  },
+  {
+    "file": "components/toast.html",
+    "title": "Toast",
+    "group": "Components"
+  },
+  {
+    "file": "components/modal.html",
+    "title": "Modal Dialog",
+    "group": "Components"
+  },
+  {
+    "file": "components/mode-tiles.html",
+    "title": "Mode Tiles",
+    "group": "Components"
+  },
+  {
+    "file": "components/inputs.html",
+    "title": "Inputs & Form Rows",
+    "group": "Components"
+  },
+  {
+    "file": "shell/window-chrome.html",
+    "title": "Window Chrome",
+    "group": "Shell"
+  },
+  {
+    "file": "shell/popup-window.html",
+    "title": "Popup Window",
+    "group": "Shell"
+  },
+  {
+    "file": "shell/context-menu.html",
+    "title": "Context Menu",
+    "group": "Shell"
+  },
+  {
+    "file": "patterns/settings-placement.html",
+    "title": "Settings Placement",
+    "group": "Patterns"
+  },
+  {
+    "file": "patterns/feedback.html",
+    "title": "Feedback & Error Surfacing",
+    "group": "Patterns"
+  },
+  {
+    "file": "patterns/theme.html",
+    "title": "Theming",
+    "group": "Patterns"
+  },
+  {
+    "file": "shell/nav-rail.html",
+    "title": "Navigation Rail",
+    "group": "Shell"
+  }
+]

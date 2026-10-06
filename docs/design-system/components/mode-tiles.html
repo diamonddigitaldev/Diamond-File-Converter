@@ -1,0 +1,100 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>Mode Tiles</title>
+<style>
+:root{
+  --accent:#9740fb; --accent-hover:#b06cff; --accent-muted:#c796ff; --accent-rgb:151,64,251;
+  --bg:#212529; --surface:#2b3035; --surface-2:#343a40; --border:#495057;
+  --text:#dee2e6; --text-dim:rgba(222,226,230,.75); --text-faint:rgba(222,226,230,.5);
+  --success:#198754; --warning:#ffc107; --danger:#dc3545; --info:#0dcaf0;
+  --success-rgb:25,135,84; --warning-rgb:255,193,7; --danger-rgb:220,53,69;
+  --radius-control:5px; --radius-card:8px; --radius-zone:12px;
+  --dur-micro:120ms; --dur-state:.2s; --dur-default:.3s;
+  --ease-standard:cubic-bezier(.4,0,.2,1);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;padding:40px;background:var(--bg);color:var(--text);
+  font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;font-size:16px;line-height:1.5;
+}
+h1{font-size:24px;margin:0 0 6px;font-weight:600;letter-spacing:-.01em}
+.sub{color:var(--text-dim);font-size:14px;margin:0 0 32px;max-width:70ch}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-faint);
+   margin:36px 0 14px;font-weight:600}
+h2:first-of-type{margin-top:0}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.stack{display:flex;flex-direction:column;gap:10px}
+.grid{display:grid;gap:14px}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);padding:18px}
+code,.mono{font-family:Consolas,'Courier New',monospace;font-size:12.5px}
+code{background:rgba(255,255,255,.07);padding:2px 6px;border-radius:4px;color:var(--accent-muted)}
+.note{font-size:13px;color:var(--text-dim);margin-top:10px;max-width:74ch}
+.note b{color:var(--text);font-weight:600}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{text-align:left;color:var(--text-faint);font-weight:600;font-size:11px;
+   text-transform:uppercase;letter-spacing:.08em;padding:0 14px 8px 0;border-bottom:1px solid var(--border)}
+td{padding:9px 14px 9px 0;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.swatch{width:26px;height:26px;border-radius:5px;border:1px solid rgba(255,255,255,.16);display:inline-block;vertical-align:middle}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:50rem;
+     background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border)}
+.caption{font-size:11.5px;color:var(--text-faint);margin-top:8px}
+</style>
+</head><body>
+<h1>Mode Tiles</h1>
+<p class="sub">A mutually exclusive chooser built from tiles rather than radio inputs. The house has no radio groups — this is the pattern used wherever one of several modes must be picked.</p>
+
+<style>
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;max-width:460px}
+.tile{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+  height:100%;padding:.75rem .5rem;border:2px solid var(--border);border-radius:var(--radius-control);
+  background:var(--bg);cursor:pointer;
+  transition:border-color var(--dur-state) var(--ease-state),box-shadow var(--dur-state) var(--ease-state),background-color var(--dur-state) var(--ease-state)}
+.tile:hover{border-color:rgba(var(--accent-rgb),.5);background:rgba(var(--accent-rgb),.04)}
+.tile.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);background:rgba(var(--accent-rgb),.04)}
+.tile.locked{pointer-events:none;opacity:.5}
+.tile .ic{font-size:2rem;line-height:1;margin-bottom:.25rem;color:var(--text-faint)}
+.tile.selected .ic{color:var(--accent)}
+.tile .t{font-size:.875rem;font-weight:600}
+.tile .d{font-size:.7rem;color:var(--text-dim)}
+.ring{box-shadow:0 0 0 1px var(--accent),0 0 0 .2rem rgba(var(--accent-rgb),.35)}
+</style>
+
+<h2>States</h2>
+<div class="tiles">
+  <div class="tile selected"><div class="ic">◉</div><div class="t">Manual settings</div><div class="d">Set the format, quality and trim yourself</div></div>
+  <div class="tile locked" title="Nothing saved yet"><div class="ic">○</div><div class="t">From a template</div><div class="d">Start from something already saved</div></div>
+</div>
+<p class="caption">Selected · locked. Hover the left tile to see the idle-to-hover wash.</p>
+
+<div class="tiles" style="margin-top:18px">
+  <div class="tile"><div class="ic">○</div><div class="t">Idle</div><div class="d">Neither chosen</div></div>
+  <div class="tile selected ring"><div class="ic">◉</div><div class="t">Focused</div><div class="d">Keyboard focus ring</div></div>
+</div>
+
+<h2>The recipe</h2>
+<table>
+<tr><th>Part</th><th>Value</th></tr>
+<tr><td>Container</td><td>Two equal columns, <code>0.5rem</code> gap. Fixed 50/50 — tiles do not wrap.</td></tr>
+<tr><td>Tile</td><td><code>2px</code> border, <code>--radius-control</code>, <code>.75rem .5rem</code> padding, column flex centred, <code>height:100%</code> so a taller description does not leave a short neighbour</td></tr>
+<tr><td>Idle border</td><td><code>var(--bs-border-color)</code> — <b>a theme token, never a fixed white alpha</b>, or it breaks in light mode</td></tr>
+<tr><td>Hover</td><td>border <code>rgba(accent, .5)</code>, fill <code>rgba(accent, .04)</code> — the same wash ladder as the card grid</td></tr>
+<tr><td>Selected</td><td>border <code>accent</code> <b>plus</b> <code>box-shadow: 0 0 0 1px accent</code></td></tr>
+<tr><td>Locked</td><td><code>pointer-events:none; opacity:.5</code> and a <code>title</code> saying why</td></tr>
+<tr><td>Icon</td><td><code>2rem</code>, <code>--bs-secondary-color</code> → <code>--accent</code> when selected</td></tr>
+<tr><td>Title / description</td><td><code>0.875rem</code>/600 and <code>0.7rem</code> muted</td></tr>
+<tr><td>Transition</td><td><code>--dur-state --ease-state</code> on border, shadow and background</td></tr>
+</table>
+<p class="note"><b>Why a shadow as well as a border.</b> Growing the border to 3px on selection would change the box size and shift everything beside it. A 1px shadow in the same colour sits outside the border and reads as a thicker edge with no reflow.</p>
+
+<h2>Behaviour</h2>
+<p class="note"><b>One source of truth.</b> A click sets a single state variable, then every tile recomputes its own <code>selected</code> class from it. Do not toggle tiles against each other.</p>
+<p class="note"><b>Strictly one or the other.</b> Re-clicking the active tile does nothing. Craftbox's create-server source tiles are tri-state — clicking the selected one deselects back to "from scratch" — but that only works because it has a meaningful third state. Where there are exactly two modes, deselection would leave the form in no mode at all.</p>
+<p class="note"><b>Fail closed, then unlock.</b> A tile with nothing behind it ships locked and is enabled at runtime once its data exists — Craftbox locks Template until a template is saved. Enforce it in the handler as well as the CSS: <code>pointer-events:none</code> stops a mouse but not a keyboard or a programmatic activation.</p>
+<p class="note"><b>Keyboard operable.</b> <code>role="button"</code>, <code>tabindex="0"</code> (<code>-1</code> when locked), <code>aria-pressed</code>, and Enter/Space activation, with a <code>:focus-visible</code> ring. The original pattern has only <code>role="button"</code> and cannot be reached from the keyboard at all — do not copy that part.</p>
+
+<h2>Dependent sections</h2>
+<p class="note">The chooser swaps which controls appear below it, by toggling <code>d-none</code>. Both branches stay in the DOM. <b>Values in the hidden branch are kept, not cleared</b>, so switching back and forth is lossless — but only the active branch is read when the work runs, and the card shows only the active branch.</p>
+
+</body></html>
