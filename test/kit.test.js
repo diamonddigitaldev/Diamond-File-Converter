@@ -53,12 +53,23 @@ test("the updater is the kit's: DFC passes updates, and has no updater or update
     assert.equal(version.isOfferableUpdate("1.0.0", "2.0.0-alpha.1", "stable"), false);
 });
 
-test("the build extends the kit's base config, and keeps DFC's own", () => {
-    const pkg = require("../package.json");
-    assertBuildExtendsKit(pkg);
-    assert.deepEqual(pkg.build.publish, { provider: "github", owner: "diamonddigitaldev", repo: "Diamond-File-Converter" });
-    assert.equal(pkg.build.nsis.perMachine, true);
-    assert.equal(pkg.build.nsis.include, "installer.nsh");
+test("the build is the kit's config(), with DFC's own: its 22 types and its right-click entry, on files and folders", () => {
+    const build = require("../electron-builder.cjs");
+    assertBuildExtendsKit(build);
+    assert.equal(require("../package.json").build, undefined, "electron-builder would read package.json's build first");
+    assert.ok(!fs.existsSync(path.join(__dirname, "..", "installer.nsh")), "the kit's installer adds the right-click entry");
+    assert.deepEqual(build.publish, { provider: "github", owner: "diamonddigitaldev", repo: "Diamond-File-Converter" });
+    assert.equal(build.appId, "com.diamonddigitaldev.diamondfileconverter");
+    // The same ID in main.js, for Windows' notifications and taskbar grouping.
+    assert.match(read("main.js"), /\.start\(\{[^]*?appId: "com\.diamonddigitaldev\.diamondfileconverter",/);
+    assert.equal(build.fileAssociations, undefined, "the kit's installer asks for each type instead");
+    const script = fs.readFileSync(build.nsis.include, "utf8");
+    for (const ext of ["mp3", "wma", "mp4", "flv", "jpg", "tiff"]) assert.ok(script.includes(`DiamondFileConverter.${ext}`), ext);
+    assert.equal(script.match(/WriteRegStr SHELL_CONTEXT "Software\\Classes\\\.[a-z0-9]+\\OpenWithProgids"/g)?.length, 22);
+    // The key installer.nsh wrote, so an install upgraded from it shows the entry once.
+    assert.ok(script.includes("Software\\Classes\\*\\shell\\DiamondFileConverter"));
+    assert.ok(script.includes("Software\\Classes\\Directory\\shell\\DiamondFileConverter"));
+    assert.ok(script.includes("Convert with Diamond File Converter"));
 });
 
 test("the Credits tab is given the app's name, not package.json's npm name", () => {
@@ -161,7 +172,7 @@ test("every icon is hidden from screen readers, and every icon-only button has a
 });
 
 test("ffmpeg and ffprobe are packed per platform, where main.js looks for them, and only once", () => {
-    const { build } = require("../package.json");
+    const build = require("../electron-builder.cjs");
     const main = read("main.js");
     const exe = { win: ".exe", linux: "" };
     for (const platform of ["win", "linux"]) {
@@ -179,7 +190,7 @@ test("ffmpeg and ffprobe are packed per platform, where main.js looks for them, 
 });
 
 test("the Windows installer is the one called Setup: Linux's files are named for the app and version only", () => {
-    const { build } = require("../package.json");
+    const build = require("../electron-builder.cjs");
     assert.equal(build.artifactName, "Diamond-File-Converter-${version}.${ext}");
     // The installer's name is what its update files point at: unchanged from 2.0.0.
     assert.equal(build.nsis.artifactName, "Diamond-File-Converter-Setup-${version}.${ext}");

@@ -2024,6 +2024,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         toolbar: $("toolbar"),
         credits: { logo: "assets/diamondfileconverter.png" },
         onViewChange,
+        // Restart Now asks first while a conversion or a join runs: the restart would stop it.
+        busy: () => (converting ? "A conversion is running." : joinRunning ? "A join is running." : null),
     });
 
     FORMATS = await api.getFormats();

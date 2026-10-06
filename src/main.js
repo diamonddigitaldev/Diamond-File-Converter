@@ -42,6 +42,9 @@ function extensionsOfKind(kind) {
 const kit = require("@diamonddigitaldev/electron-kit/main").start({
     // package.json's name is the npm name, which names the userData folder too.
     name: APP_NAME,
+    // electron-builder.cjs's appId: Windows shows the app's notifications, and
+    // groups its windows under its pinned icon, only when the two match.
+    appId: "com.diamonddigitaldev.diamondfileconverter",
     settings: {
         defaults: SETTINGS_DEFAULTS,
         // Version 2: the settings v1 wrote that 2.0 can't show, and the store
