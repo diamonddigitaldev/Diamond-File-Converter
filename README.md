@@ -34,7 +34,7 @@ Download the files for your system from the [releases page](https://github.com/d
 
 ### Windows
 
-Download **Diamond-File-Converter-Setup-`<version>`.exe** and run it. It installs for all users, so it will ask for administrator rights.
+Download **Diamond-File-Converter-Setup-`<version>`.exe** and run it. It asks who it's for: only you (the default, with no administrator prompt) or everyone on the computer. If Diamond File Converter is already installed for everyone, as every version before 2.0.0-beta.6 was, that copy is updated instead. It then asks which file types to open with it, all ticked, and whether to add **Convert with Diamond File Converter** to the menu files and folders show when you right-click them.
 
 > [!NOTE]
 > You may get a Windows SmartScreen popup when trying to run the installer. This is normal as the installer is not signed.
@@ -45,7 +45,7 @@ Download **Diamond-File-Converter-Setup-`<version>`.exe** and run it. It install
 - **Fedora, openSUSE and others using RPM:** download **Diamond-File-Converter-`<version>`.rpm** and install it with your package manager, such as `sudo dnf install ./Diamond-File-Converter-<version>.rpm`.
 - **Anywhere else:** download **Diamond-File-Converter-`<version>`.AppImage**, make it executable with `chmod +x`, and run it.
 
-Linux builds start with 2.0. For now, the app isn't offered in "Open with" for media files on Linux, and the dock may show a generic icon for its window; opening files from a terminal (`diamond-file-converter file.mp4`) works.
+Linux builds start with 2.0. With the `.deb` or `.rpm`, the app is in your file manager's "Open with" for the files it converts. Opening files from a terminal (`diamond-file-converter file.mp4`) works too.
 
 ### On every system
 

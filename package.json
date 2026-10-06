@@ -1,6 +1,6 @@
 {
     "name": "diamond-file-converter",
-    "version": "2.0.0-beta.5",
+    "version": "2.0.0-beta.6",
     "description": "An Electron-based desktop app for converting audio, video, and image files.",
     "main": "src/main.js",
     "funding": {
@@ -16,99 +16,6 @@
         "type": "git",
         "url": "https://github.com/diamonddigitaldev/Diamond-File-Converter"
     },
-    "build": {
-        "extends": "@diamonddigitaldev/electron-kit/builder/base.json",
-        "appId": "com.diamonddigitaldev.diamondfileconverter",
-        "files": [
-            "**/*",
-            "!test-media",
-            "!test-media/**/*",
-            "!node_modules/ffmpeg-static/ffmpeg{,.exe}",
-            "!node_modules/ffprobe-static/bin/**"
-        ],
-        "productName": "Diamond File Converter",
-        "artifactName": "Diamond-File-Converter-${version}.${ext}",
-        "fileAssociations": [
-            {
-                "ext": [
-                    "mp3",
-                    "wav",
-                    "flac",
-                    "ogg",
-                    "aac",
-                    "m4a",
-                    "opus",
-                    "wma"
-                ],
-                "name": "Audio File",
-                "role": "Editor"
-            },
-            {
-                "ext": [
-                    "mp4",
-                    "mkv",
-                    "webm",
-                    "avi",
-                    "mov",
-                    "wmv",
-                    "flv"
-                ],
-                "name": "Video File",
-                "role": "Editor"
-            },
-            {
-                "ext": [
-                    "jpg",
-                    "jpeg",
-                    "png",
-                    "webp",
-                    "gif",
-                    "bmp",
-                    "tiff"
-                ],
-                "name": "Image File",
-                "role": "Editor"
-            }
-        ],
-        "publish": {
-            "provider": "github",
-            "owner": "diamonddigitaldev",
-            "repo": "Diamond-File-Converter"
-        },
-        "win": {
-            "icon": "src/assets/diamondfileconverter.ico",
-            "extraResources": [
-                {
-                    "from": "node_modules/ffmpeg-static/ffmpeg.exe",
-                    "to": "ffmpeg/ffmpeg.exe"
-                },
-                {
-                    "from": "node_modules/ffprobe-static/bin/win32/x64/ffprobe.exe",
-                    "to": "ffmpeg/ffprobe.exe"
-                }
-            ]
-        },
-        "linux": {
-            "icon": "src/assets/diamondfileconverter.png",
-            "category": "AudioVideo",
-            "extraResources": [
-                {
-                    "from": "node_modules/ffmpeg-static/ffmpeg",
-                    "to": "ffmpeg/ffmpeg"
-                },
-                {
-                    "from": "node_modules/ffprobe-static/bin/linux/x64/ffprobe",
-                    "to": "ffmpeg/ffprobe"
-                }
-            ]
-        },
-        "nsis": {
-            "artifactName": "Diamond-File-Converter-Setup-${version}.${ext}",
-            "perMachine": true,
-            "createDesktopShortcut": true,
-            "include": "installer.nsh"
-        }
-    },
     "keywords": [],
     "author": "Diamond Digital Development <https://diamonddigital.dev>",
     "license": "Apache-2.0",
@@ -117,7 +24,7 @@
         "electron-builder": "^26.15.3"
     },
     "dependencies": {
-        "@diamonddigitaldev/electron-kit": "0.1.0-beta.3",
+        "@diamonddigitaldev/electron-kit": "0.1.0-beta.8",
         "bootstrap": "^5.3.3",
         "electron-store": "^11.0.2",
         "electron-updater": "^6.8.9",

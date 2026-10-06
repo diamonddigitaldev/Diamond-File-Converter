@@ -833,7 +833,7 @@ card("shell/context-menu.html", "Context Menu",
 !macro customUninstall
   DeleteRegKey HKCR "*\\shell\\&lt;App&gt;"
 !macroend</pre></div>
-<p class="note">Lives in <code>installer.nsh</code>, referenced from <code>build.nsis.include</code>. <b>Always pair customInstall with customUninstall</b> — an uninstall that leaves the key behind puts a dead entry in every user's context menu.</p>
+<p class="note">Made by electron-kit's <code>config()</code> from <code>contextMenu</code> in <code>electron-builder.cjs</code>: the installer asks before adding it, and uninstalling takes it away. An app never writes its own <code>installer.nsh</code>.</p>
 
 <h2>The batching problem</h2>
 <p class="note"><b>Windows launches one process per selected file.</b> Selecting 30 files spawns 30 processes, 29 of which hit the single-instance lock and forward their path through <code>second-instance</code>. Collect those arrivals and debounce for <code>500ms</code> before handing them to the renderer, or the queue is rebuilt 30 times. Dropgate's <code>BATCH_DEBOUNCE_MS</code> is the reference.</p>
