@@ -2724,9 +2724,9 @@ the Windows installer is the kit's asking installer and `installer.nsh` is gone.
 It also passes its `appId` to the kit, says when it's busy, and takes the kit's
 Update tab changes since 0.1.0-beta.3.
 
-> **Status: passed 2026-10-07.** Will ran the installer and checked the upgrade
-> from an install for everyone and the taskbar pin on his PC; the rest was
-> signed off by a code review against electron-kit's CI install check. Two
+> **Status: signed off by Will 2026-10-07** on a code review against
+> electron-kit's CI install check, after he'd run the installer itself. The
+> upgrade's administrator prompt and the taskbar pin weren't run by hand. Two
 > findings: the right-click box's text was clipped (electron-kit #50, in
 > beta.7), and Restart Now could keep asking after a run that threw (#9).
 
