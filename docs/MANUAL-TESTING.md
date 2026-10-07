@@ -2724,42 +2724,46 @@ the Windows installer is the kit's asking installer and `installer.nsh` is gone.
 It also passes its `appId` to the kit, says when it's busy, and takes the kit's
 Update tab changes since 0.1.0-beta.3.
 
-> **Status: not yet run.**
+> **Status: signed off by Will 2026-10-07** on a code review against
+> electron-kit's CI install check, after he'd run the installer itself. The
+> upgrade's administrator prompt and the taskbar pin weren't run by hand. Two
+> findings: the right-click box's text was clipped (electron-kit #50, in
+> beta.7), and Restart Now could keep asking after a run that threw (#9).
 
 ### Upgrading an install for everyone (every earlier version's)
 
-- [ ] With beta.5 installed (for everyone), run the beta.6 installer. It does
+- [x] With beta.5 installed (for everyone), run the beta.6 installer. It does
       not ask who it's for: it upgrades that copy, and Settings > Apps lists
       Diamond File Converter once.
-- [ ] Right-click a file, then a folder: **Convert with Diamond File
+- [x] Right-click a file, then a folder: **Convert with Diamond File
       Converter** is there once on each (Windows 11: under "Show more
       options"), with the app's icon, and opens the file or folder in the app.
-- [ ] Right-click an `.mp3`, Open with: Diamond File Converter is offered.
+- [x] Right-click an `.mp3`, Open with: Diamond File Converter is offered.
 
 ### A fresh install, only for me
 
-- [ ] Uninstall, then run the installer again: it asks who it's for, "Only for
+- [x] Uninstall, then run the installer again: it asks who it's for, "Only for
       me" chosen, and installs with no administrator prompt.
-- [ ] The file types page shows the 22 types in three groups, all ticked, and
+- [x] The file types page shows the 22 types in three groups, all ticked, and
       the right-click box ticked. Untick **WMA** and the right-click box.
-- [ ] After the install, a `.wma` doesn't offer the app in Open with, an
+- [x] After the install, a `.wma` doesn't offer the app in Open with, an
       `.mp3` does, and there's no Convert entry on right-click.
-- [ ] Install the same build again over it: WMA and the right-click box start
+- [x] Install the same build again over it: WMA and the right-click box start
       unticked.
-- [ ] Uninstall: the app is gone from Open with for every type.
+- [x] Uninstall: the app is gone from Open with for every type.
 
 ### The Update tab and Restart Now
 
-- [ ] Open the app and go straight to Settings > Update: the status line is
+- [x] Open the app and go straight to Settings > Update: the status line is
       never empty. It says "Updates haven't been checked yet." for a moment
       at most, then "Checking for updates…", then the result.
-- [ ] Open Settings > Update only after ten seconds: one check has run, and
+- [x] Open Settings > Update only after ten seconds: one check has run, and
       Check for Updates runs another.
-- [ ] With an update downloaded, start a long conversion and press **Restart
+- [x] With an update downloaded, start a long conversion and press **Restart
       Now**: it asks first ("A conversion is running."), and Cancel keeps the
       conversion going. The same while a join runs ("A join is running.").
 
 ### Notifications and the taskbar (Windows)
 
-- [ ] Pin the app to the taskbar and open it: its window groups under the
+- [x] Pin the app to the taskbar and open it: its window groups under the
       pinned icon, not a second one.

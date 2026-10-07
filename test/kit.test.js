@@ -151,6 +151,13 @@ test("the Title Case slips DESIGN.md lists are fixed: buttons and titles are Tit
     }
 });
 
+test("what Restart Now asks about is cleared however a conversion or a join ends, a throw included", () => {
+    const renderer = read("renderer.js");
+    assert.match(renderer, /busy: \(\) => \(converting \? "A conversion is running\." : joinRunning \? "A join is running\." : null\)/);
+    assert.match(renderer, /\} finally \{\r?\n\s+converting = false;/);
+    assert.match(renderer, /\} finally \{\r?\n\s+joinRunning = null;/);
+});
+
 test("progress of null is \"not known\": a card's and Join's bars slide, never sit at 0% or read null%", () => {
     const renderer = read("renderer.js");
     assert.match(renderer, /progress\.set\(typeof job\.progress === "number" \? job\.progress : null\)/);
