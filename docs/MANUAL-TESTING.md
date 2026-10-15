@@ -2767,3 +2767,41 @@ Update tab changes since 0.1.0-beta.3.
 
 - [x] Pin the app to the taskbar and open it: its window groups under the
       pinned icon, not a second one.
+
+## Convert Again: a converted card can be converted again (2026-10-15)
+
+Will found it on beta.6: once a card had converted, its format and Advanced
+Options could still be changed, but nothing would run them. Convert skips a
+card that's Done, and only a failed card had Retry. Now a converted card keeps
+the format and options that made its file, locked as a card being converted
+is, and **Convert Again** under it unlocks it at Ready. Then Convert runs it
+(and only it) again. This replaces beta.5's "when the batch finishes … the
+format select all work again" for a card that converted; a card that failed or
+was cancelled still unlocks when the batch ends.
+
+> **Status: not yet run by hand.** Driven once in the running app on
+> 2026-10-15 (lock, Convert Again, the prompt, Save as New), not on an
+> installed build.
+
+### Locked once converted
+
+- [ ] Convert a file. When it's Done, its format select and its **tune** icon
+      are disabled, and so is the orange image-count line on a frames
+      conversion. **Remove** still works.
+- [ ] Under it: **Show in Folder** (or **Open Folder** for frames) and
+      **Convert Again**.
+- [ ] With only converted cards, **Convert all to** in the bar is disabled; select
+      one and **Bulk Edit** is disabled too. Add a new file and both work again,
+      and change only the new card.
+
+### Convert Again
+
+- [ ] Click **Convert Again**: the card reads Ready with the same format and
+      settings line, its buttons go, its format select and tune icon work, and
+      the keyboard focus is on its format select.
+- [ ] Change a setting in Advanced Options and press **Convert**: only this
+      card runs. As its output name is taken, **File Already Exists** asks.
+- [ ] **Save as New** writes `name (1).ext` beside the first file, which is
+      untouched. Do it again on the same card with **Overwrite**: the first
+      file is replaced. **Skip This File** leaves the card Skipped and writes
+      nothing.

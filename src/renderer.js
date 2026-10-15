@@ -24,9 +24,9 @@ let converting = false;
 // when Convert was pressed, so nothing edited on them now would take effect.
 let inFlight = new Set();
 
-/** Is this job part of the conversion that is running, queued or not? */
+/** Are this card's format and options fixed: in the run, or converted until Convert Again? */
 function isLocked(job) {
-    return inFlight.has(job.id);
+    return display.isLocked(job, inFlight);
 }
 
 // Loaded as a plain script by index.html — the renderer has no Node access,
@@ -331,8 +331,8 @@ function setTarget(ids, targetExt) {
 
     for (const job of jobs) {
         if (!set.has(job.id)) continue;
-        // The per-card select is disabled mid-run, but the bulk bar can still
-        // reach a job in the batch.
+        // The per-card select is disabled on a locked card, but the bulk bar
+        // can still reach one in the batch or one that has converted.
         if (isLocked(job)) continue;
         // Guard against a stale bulk option: never assign a format the source
         // cannot produce. Does not apply when clearing.
@@ -348,17 +348,10 @@ function setTarget(ids, targetExt) {
 
         job.targetExt = next;
 
-        // A job that already finished, failed or was cancelled becomes runnable
-        // again under a new target, so send it back to pending rather than
-        // leaving a stale "Done" or an old error sitting on the card.
-        if (job.status !== "pending") {
-            job.status = "pending";
-            job.error = null;
-            job.progress = 0;
-            job.outputPath = null;
-            job.isDirectory = false;
-            job.fileCount = 0;
-        }
+        // A job that failed or was cancelled becomes runnable again under a
+        // new target, so send it back to pending rather than leaving an old
+        // error sitting on the card. (A finished one is locked, above.)
+        if (job.status !== "pending") display.reopen(job);
 
         updateCard(job);
     }
@@ -576,7 +569,8 @@ function paintCard(card, job) {
     if (running) progress.set(typeof job.progress === "number" ? job.progress : null);
 
     // The format and the options lock while the job is in flight, queued as
-    // well as running: both were sent to main when Convert was pressed.
+    // well as running (both were sent to main when Convert was pressed), and
+    // once it has converted, until Convert Again (display.isLocked).
     const locked = isLocked(job);
     const select = card.querySelector(".card-target");
     select.disabled = locked;
@@ -598,24 +592,23 @@ function renderCardActions(card, job) {
     actions.dataset.key = key;
     actions.innerHTML = "";
 
-    const buttons = [];
-
-    if (job.status === "running") {
-        buttons.push(makeAction("Cancel", "btn-outline-danger", () => api.cancelJob(job.id)));
-    } else if (job.status === "done" && job.outputPath) {
-        buttons.push(makeAction(
-            job.isDirectory ? "Open Folder" : "Show in Folder",
-            "btn-outline-secondary",
-            () => (job.isDirectory ? api.openPath(job.outputPath) : api.showInFolder(job.outputPath))
-        ));
-    } else if (job.status === "error") {
-        buttons.push(makeAction("Retry", "btn-outline-secondary", () => {
-            job.status = "pending";
-            job.error = null;
-            job.progress = 0;
+    const handlers = {
+        cancel: () => api.cancelJob(job.id),
+        reveal: () => (job.isDirectory ? api.openPath(job.outputPath) : api.showInFolder(job.outputPath)),
+        retry: () => {
+            display.reopen(job);
             updateCard(job);
-        }));
-    }
+        },
+        // Unlocks the card at Ready, with the format and options it converted
+        // with, for Convert to run again. Its button goes with the Done, so
+        // the keyboard carries on from the format.
+        convertAgain: () => {
+            display.reopen(job);
+            updateCard(job);
+            card.querySelector(".card-target").focus();
+        },
+    };
+    const buttons = display.cardActions(job).map(({ id, label, variant }) => makeAction(label, variant, handlers[id]));
 
     actions.classList.toggle("d-none", buttons.length === 0);
     for (const b of buttons) actions.appendChild(b);
@@ -679,10 +672,24 @@ function renderSelection() {
     const shared = [...new Set(scope.map(j => j.targetExt))];
     fillTargetSelect(select, targets, shared.length === 1 ? shared[0] : null);
 
-    select.disabled = targets.length === 0 || converting;
+    lockBulkControls();
     $("bulk-target-note").textContent = targets.length === 0
         ? `No format works for every ${everything ? "queued" : "selected"} file`
         : "";
+}
+
+/**
+ * The bulk bar's format and Bulk Edit are off while converting, and while
+ * every card they'd apply to is locked: setTarget and the dialog pass a locked
+ * card by, so a scope of converted cards would take a pick and change nothing.
+ * Called with the bar and with every card's repaint, as a card's lock changes.
+ */
+function lockBulkControls() {
+    const scope = bulkScope();
+    const open = scope.some(j => !isLocked(j));
+    const targets = display.commonTargets(scope.map(j => j.ext), TARGETS);
+    $("bulk-target").disabled = targets.length === 0 || converting || !open;
+    $("bulk-edit").disabled = converting || !open;
 }
 
 /** The bar under the grid (kit.ui.actionBar()): made once, in DOMContentLoaded. */
@@ -728,7 +735,7 @@ function renderActionBar() {
         canRun: jobs.some(j => j.targetExt && j.status !== "done"),
         canClear: !converting,
     });
-    $("bulk-edit").disabled = converting;
+    lockBulkControls();
 }
 
 // -- New Job dialog ----------------------------------------------------------
@@ -1487,7 +1494,8 @@ async function startConversion() {
     // with a format, so fixing one failed file and pressing Convert again
     // resubmitted the whole finished batch — and every one of those outputs
     // then collided with the file the previous run had just written.
-    // Re-running a finished card is what its own Retry button is for.
+    // Re-running a finished card is what its own Convert Again button is for:
+    // it sends that card back to Ready, and only that card runs again.
     const runnable = jobs.filter(j => j.targetExt && j.status !== "done");
     if (runnable.length === 0) return;
 

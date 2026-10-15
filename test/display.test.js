@@ -651,7 +651,69 @@ test("convert: an already-converted card is not resubmitted", () => {
     const filter = renderer.match(/const runnable = jobs\.filter\([^)]*\)/);
     assert.ok(filter, "expected startConversion to filter the job list");
     assert.match(filter[0], /status !== "done"/,
-        "Convert must skip cards that already converted; Retry is what re-runs one");
+        "Convert must skip cards that already converted; Convert Again is what re-runs one");
+});
+
+// ---------------------------------------------------------------------------
+// A converted card: locked until Convert Again (Will, 2026-10-15). Its options
+// could be changed and nothing would ever run them: Convert skips a Done card,
+// and Retry was only offered on a failed one.
+// ---------------------------------------------------------------------------
+
+test("card: a converted card is locked, as a card in the run is, and nothing else is", () => {
+    const inFlight = new Set(["queued"]);
+    assert.equal(d.isLocked({ id: "queued", status: STATUS.PENDING }, inFlight), true);
+    assert.equal(d.isLocked({ id: "a", status: STATUS.DONE }, inFlight), true);
+    for (const status of [STATUS.PENDING, STATUS.ERROR, STATUS.CANCELLED, STATUS.SKIPPED]) {
+        assert.equal(d.isLocked({ id: "a", status }, inFlight), false, status);
+    }
+});
+
+test("card: a converted card offers Convert Again beside its folder, and only it", () => {
+    const labels = (job) => d.cardActions(job).map(a => a.label);
+    assert.deepEqual(labels({ status: STATUS.DONE, outputPath: "C:\\out\\clip.mp4" }), ["Show in Folder", "Convert Again"]);
+    assert.deepEqual(labels({ status: STATUS.DONE, outputPath: "C:\\out\\clip", isDirectory: true }), ["Open Folder", "Convert Again"]);
+    assert.deepEqual(labels({ status: STATUS.DONE, outputPath: null }), ["Convert Again"],
+        "a Done card without a path can still be converted again");
+    assert.deepEqual(labels({ status: STATUS.ERROR }), ["Retry"]);
+    assert.deepEqual(labels({ status: STATUS.RUNNING }), ["Cancel"]);
+    for (const status of [STATUS.PENDING, STATUS.CANCELLED, STATUS.SKIPPED]) {
+        assert.deepEqual(labels({ status }), [], `${status}: Convert in the bar runs it`);
+    }
+    for (const job of [{ status: STATUS.DONE, outputPath: "x" }, { status: STATUS.ERROR }, { status: STATUS.RUNNING }]) {
+        for (const { label } of d.cardActions(job)) {
+            assert.match(label, /^[A-Z][a-z]*( ([A-Z][a-z]*|a|an|and|in|of|on|or|the|to))*$/, `"${label}" is in Title Case`);
+        }
+    }
+});
+
+test("card: Convert Again sends the card back to Ready with its format and options, unlocked", () => {
+    const settings = { video: { crf: 30 } };
+    const job = {
+        id: "a", ext: "mov", targetExt: "mp4", settings, status: STATUS.DONE, progress: 100,
+        error: null, outputPath: "C:\\out\\clip", isDirectory: true, fileCount: 30,
+    };
+    d.reopen(job);
+    assert.deepEqual(d.describeStatus(job), { text: "Ready", tone: "ready" });
+    assert.equal(d.isLocked(job, new Set()), false, "its format and Advanced Options open again");
+    assert.equal(job.targetExt, "mp4");
+    assert.equal(job.settings, settings, "the options it converted with are kept, to change or run as they are");
+    assert.deepEqual([job.progress, job.outputPath, job.isDirectory, job.fileCount], [0, null, false, 0]);
+    assert.deepEqual(d.cardActions(job), [], "its buttons go with the Done");
+});
+
+test("card: the renderer takes the lock, the buttons and the reset from display.js", () => {
+    // The renderer can't be loaded here, so this holds it to the rules above:
+    // a Convert Again it wires, and no lock or reset of its own beside them.
+    const renderer = stripSource(fs.readFileSync(path.join(__dirname, "..", "src", "renderer.js"), "utf8"));
+    assert.match(renderer, /function isLocked\(job\) \{\s*return display\.isLocked\(job, inFlight\);\s*\}/);
+    assert.match(renderer, /display\.cardActions\(job\)\.map\(/);
+    for (const id of ["cancel", "reveal", "retry", "convertAgain"]) {
+        assert.match(renderer, new RegExp(`\\b${id}: \\(\\) =>`), `the card wires ${id}`);
+    }
+    assert.match(renderer, /convertAgain: \(\) => \{\s*display\.reopen\(job\);/);
+    assert.equal(renderer.match(/job\.status = "pending"/g)?.length ?? 0, 1,
+        "only startConversion sets a card pending itself; every reset is display.reopen()");
 });
 
 test("dialog: a codec pick is recorded before the controls are rebuilt", () => {
