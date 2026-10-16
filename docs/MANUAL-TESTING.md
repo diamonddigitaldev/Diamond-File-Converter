@@ -16,6 +16,11 @@ sections — the history is useful.
 > section has been deleted rather than carried as dead weight — the feature it
 > covered was removed in `09eaca3` and no longer exists to test.
 >
+> **2026-10-16, for 2.0.0-beta.7: Will cleared every box still open as
+> passed**, across all sections, and they are ticked. The status lines below
+> are kept as they were written, so where one says a box was left open or
+> failed, it was cleared by that sign-off, not by a separate run.
+>
 > A written checklist is not a passed one. Every section carries its own status
 > line; do not describe any build as tested on the strength of this file
 > existing.
@@ -1071,12 +1076,12 @@ ordering.
       that specifically claims a single Cancel All press aborts everything.
       This box only covers the original complaint (the button being
       unreachable/inert), which is resolved.
-- [ ] Not applicable — depends on the above. *(Original box text was already
+- [x] Not applicable — depends on the above. *(Original box text was already
       lost before this session — see the 09-03 session note elsewhere in this
       file. The underlying blocker this depended on — the footer button being
       unreachable — is now gone, but without knowing what this item
       originally tested, it can't be verified here rather than guessed at.)*
-- [ ] Not applicable — depends on the above. *(Same as above — original text
+- [x] Not applicable — depends on the above. *(Same as above — original text
       unknown, not guessed at.)*
 
 ### The queue keeps moving after a prompt
@@ -1113,7 +1118,7 @@ queue would stall — so this is the case that proves it does.
 - [x] Tick "Apply to all remaining" on the first prompt and choose Overwrite.
       One dialog fired (for `f3.webm`, the first in scan order that session),
       and all eight converted afterwards.
-- [ ] Could not verify as specified — **Task Manager is on this environment's
+- [x] Could not verify as specified — **Task Manager is on this environment's
       denylist for this session** and could not be opened to count
       `ffmpeg.exe` processes. As indirect, weaker evidence: the app's own
       per-card progress state never showed more than **two** cards reading
@@ -1134,7 +1139,7 @@ queue would stall — so this is the case that proves it does.
 - [x] With no collision at all, no dialog ever appears. Held throughout this
       whole pass — the large majority of conversions run this session had no
       pre-existing output and none of them raised a prompt.
-- [ ] Not independently tested this pass — per-card Cancel on a running
+- [x] Not independently tested this pass — per-card Cancel on a running
       conversion wasn't specifically exercised against alpha.5. (It was
       confirmed working in the alpha.1 section, which this is a regression
       check against.)
@@ -1216,7 +1221,7 @@ is actually junk (rename a `.txt` to `.mp4`).
 
 ### One message, not two
 
-- [ ] Put a `.txt` **and** a renamed junk `.mp4` in a folder, and drop it. The
+- [x] Put a `.txt` **and** a renamed junk `.mp4` in a folder, and drop it. The
       two are caught by different checks, but you get **one** toast listing
       both — not two toasts wording the same thing differently. Tried
       2026-09-05 with a folder holding `note.txt` plus a `.txt` renamed to
@@ -1244,7 +1249,7 @@ is actually junk (rename a `.txt` to `.mp4`).
 - [x] Nested subfolders are still walked. Verified by adding a folder whose
       only content one level down (in a subfolder) was a single video file —
       it was picked up and queued along with everything at the top level.
-- [ ] An unreadable file still gets its own red "Could not read …" toast.
+- [x] An unreadable file still gets its own red "Could not read …" toast.
       Could not verify as literally worded. What this environment could
       produce: a `.txt` renamed to `.mp4` (added to the queue, card marked
       "MP4 · unreadable"), and pressing Convert on it did produce a red
@@ -1256,13 +1261,13 @@ is actually junk (rename a `.txt` to `.mp4`).
       drive from the sandbox's point of view, and `chmod` against it did not
       actually restrict the native Windows app's access. Leaving unticked
       rather than treating the conversion-failure toast as the same thing.
-- [ ] Drag and drop, **Add Files**, **Add Folder** and **Menu → Open Folder**
+- [x] Drag and drop, **Add Files**, **Add Folder** and **Menu → Open Folder**
       all behave the same as each other. Verified for three of the four:
       **Add Files**, **Add Folder**, and **Menu → Open Folder** all produced
       identical toasts on the same test folders/files this pass. Drag and
       drop not attempted — File Explorer access this session is click-only
       (no drag-drop), so it could not be driven from here.
-- [ ] Check the toast in **both themes** — the list's inset background and the
+- [x] Check the toast in **both themes** — the list's inset background and the
       underlined action button must be readable on all four toast colours
       (info, success, warning, danger). Not attempted this pass — the app
       appears to follow the OS theme with no in-app toggle, and switching the
@@ -1346,7 +1351,7 @@ two or three `.txt` files.
       file in the folder and then explain why, which is honest and useless.)*
       Confirmed: with Audio and Video off and only Images ticked, clicking
       Images did nothing — the checkbox stayed checked and blue.
-- [ ] The options apply to a **dropped** folder too, not only the button — a
+- [x] The options apply to a **dropped** folder too, not only the button — a
       drop can contain folders, and having the setting cover one route but not
       the other would be baffling. Could not verify the drag-and-drop route
       specifically — File Explorer access this session is click-only. Did
@@ -1500,7 +1505,7 @@ bottom — e.g. `Source\2024\holiday\clip.mp4` and `Source\2023\misc\song.mp3`.
       Applied — settings persisted correctly this time
       (`mirrorRoot` defaulted to the file's own containing folder) and the
       output landed flat in the chosen destination, not alongside the source.
-- [ ] *(Only if you have two drives.)* Not attempted — this machine's test
+- [x] *(Only if you have two drives.)* Not attempted — this machine's test
       setup only used one drive for the pass. Per the checklist's own caveat,
       skipping this is expected when the hardware doesn't support it.
 
@@ -1544,11 +1549,11 @@ rate (it will not). An MP3 or two for the audio-only case.
 - [x] Go back to Join: your clip list is still there too.
 - [x] Queue files in Files, switch to Join, add different files. The two lists
       are independent and neither disturbs the other.
-- [ ] Not verified — drag-and-drop onto the window wasn't exercisable through
+- [x] Not verified — drag-and-drop onto the window wasn't exercisable through
       this pass's input method (files were added via the Select Files dialog
       throughout). The list-independence and view-switching this depends on
       were confirmed, so this is a gap in coverage, not a known failure.
-- [ ] Not verified, for the same reason (no way to check "inert while Join is
+- [x] Not verified, for the same reason (no way to check "inert while Join is
       showing" without also being able to drive drag/drop and the keyboard
       shortcuts against the Files grid for comparison in the same pass).
 
@@ -1664,7 +1669,7 @@ rate (it will not). An MP3 or two for the audio-only case.
       2026-09-03, after a join that was interrupted at the output-exists
       prompt: `%TEMP%` held no `dfc-join-*` entry at all. The earlier pass
       could not reach that filesystem and left this open.)*
-- [ ] Not tried this pass.
+- [x] Not tried this pass.
 ---
 
 ## 2.0.0-alpha.5 — Advanced options actually stick
@@ -1911,7 +1916,7 @@ danger are white on colour.
       confirms the headline fix: the prompt's buttons (**Cancel All · Skip
       This File · Overwrite · Save as New**) are now inside the dialog itself,
       not a footer button a window-modal dialog was blocking.
-- [ ] **FAILED (partially).** With the prompt open, press **Cancel All**. The
+- [x] **FAILED (partially).** With the prompt open, press **Cancel All**. The
       dialog closes and **every card** reads Cancelled — the one that was
       prompting and the five behind it. **Not what happened.** Reproduced
       twice: queued the six colliding files (`large` + `small1–5`), pressed
@@ -1960,7 +1965,7 @@ danger are white on colour.
 
 > ### Not testable by an agent — the user tests this one
 >
-> - [ ] Press **Escape** at the conflict prompt. It aborts the **whole run**,
+> - [x] Press **Escape** at the conflict prompt. It aborts the **whole run**,
 >       the same as Cancel All. This is intended.
 >
 > Computer-use cannot send the Escape key, so an automated pass cannot verify
@@ -2039,13 +2044,13 @@ itself in the same circumstances.
 This is the case the previous pass was hitting. It needs enough files that they
 are still being read when you answer, so use a folder, not six files.
 
-- [ ] Queue **thirty or more** colliding files — a folder ingest of a
+- [x] Queue **thirty or more** colliding files — a folder ingest of a
       directory whose outputs already exist is the easiest way — and press
       **Convert**.
-- [ ] Press **Cancel All** on the first prompt **as soon as it appears**,
+- [x] Press **Cancel All** on the first prompt **as soon as it appears**,
       without waiting. Still exactly one dialog: every card ends Cancelled and
       no second prompt opens, however quickly you answered.
-- [ ] Repeat, this time ticking **Apply to all remaining files** with **Skip
+- [x] Repeat, this time ticking **Apply to all remaining files** with **Skip
       This File** instead. One dialog again, and every card reads Skipped —
       the choice is not forgotten half way through.
 
@@ -2096,7 +2101,7 @@ are still being read when you answer, so use a folder, not six files.
 
 > ### Not testable by an agent — the user tests this one
 >
-> - [ ] Press **Escape** at the conflict prompt instead of clicking Cancel
+> - [x] Press **Escape** at the conflict prompt instead of clicking Cancel
 >       All. One press aborts the **whole run**, exactly as Cancel All does.
 >       This is intended.
 >
@@ -2148,75 +2153,75 @@ named by one glyph, not two — in `docs/design-system/` (regenerate with
 
 ### Nothing moves when you switch
 
-- [ ] Launch the app. The rail reads **Convert** and **Join**, and Convert is
+- [x] Launch the app. The rail reads **Convert** and **Join**, and Convert is
       highlighted *immediately*, before anything is clicked. *(It used to light
       up only after a round trip through Join — the first launch showed no
       section at all.)*
-- [ ] Click Join, then Convert, then Join again, watching the title **Diamond
+- [x] Click Join, then Convert, then Join again, watching the title **Diamond
       File Converter**. It does not move by a pixel. *(It jumped up 7px on
       Join.)*
-- [ ] Same switch, watching the drop zone's dashed border. It stays exactly
+- [x] Same switch, watching the drop zone's dashed border. It stays exactly
       where it is — same size, same position — and only the icon and the
       label inside it change.
-- [ ] Same switch, watching **Add Files** and **Add Folder** in the header.
+- [x] Same switch, watching **Add Files** and **Add Folder** in the header.
       They are there on both sections, in the same place, at the same size,
       with the options caret beside Add Folder on both.
-- [ ] Both themes.
+- [x] Both themes.
 
 ### Nothing moves when you collapse
 
-- [ ] With the rail expanded, press **Collapse**, watching the three icons —
+- [x] With the rail expanded, press **Collapse**, watching the three icons —
       Convert, Join and the chevron. They stay on their lines while the rail
       narrows: the labels disappear, and nothing slides up or down. *(Each
       item used to shrink by 1.6px, so the icons below it crept upward.)*
-- [ ] Press **Expand**. The same in reverse, and the chevron *turns* to face
+- [x] Press **Expand**. The same in reverse, and the chevron *turns* to face
       the other way rather than flipping.
-- [ ] Do it from Join as well. The collapse must not care which section is
+- [x] Do it from Join as well. The collapse must not care which section is
       showing.
-- [ ] Collapsed, hover each icon: the hover wash is the same rounded box as
+- [x] Collapsed, hover each icon: the hover wash is the same rounded box as
       when expanded, just narrower.
 
 ### The two sections read as one app
 
-- [ ] Convert's zone, top to bottom: a green ⇄ arrow, "Drag & Drop Files or
+- [x] Convert's zone, top to bottom: a green ⇄ arrow, "Drag & Drop Files or
       Folders Here", a grey "or", **Select Files**. The ⇄ is the same glyph
       as the Convert item on the rail.
-- [ ] Join's zone, top to bottom: the green two-into-one arrow, "Drag & Drop
+- [x] Join's zone, top to bottom: the green two-into-one arrow, "Drag & Drop
       Files to Join Here", a grey "or", **Select Files**. The same four lines,
       the same colours on each, the same glyph as the Join item on the rail.
       *(It had five lines, and the extra one was in body colour, not grey.)*
-- [ ] Click anywhere in Join's zone that is not the button: the file dialog
+- [x] Click anywhere in Join's zone that is not the button: the file dialog
       opens. Click the button: it opens once, not twice. *(Convert's zone has
       always done this; Join's only answered to its button.)*
-- [ ] Hover Join's zone: the same green wash as Convert's. Drag a file over it:
+- [x] Hover Join's zone: the same green wash as Convert's. Drag a file over it:
       the same stronger wash.
 
 ### The toolbar adds to whichever section is showing
 
-- [ ] On Join, **Add Files** → pick two clips. They are listed on Join, and
+- [x] On Join, **Add Files** → pick two clips. They are listed on Join, and
       Convert's grid is untouched.
-- [ ] On Join, **Add Folder** → a folder of clips. Every supported file in it
+- [x] On Join, **Add Folder** → a folder of clips. Every supported file in it
       is listed, in name order, and the toast reads *Added N files* — with
       *skipped M* and a **Show them** link if the folder held anything the
       app cannot join. *(Join could not take a folder at all; a dropped one
       bounced with "None of those are files this can join.")*
-- [ ] Drop a folder onto Join's zone. The same result as Add Folder.
-- [ ] Untick **Include subfolders** in the options caret, then Add Folder a
+- [x] Drop a folder onto Join's zone. The same result as Add Folder.
+- [x] Untick **Include subfolders** in the options caret, then Add Folder a
       folder that has a subfolder of clips. The subfolder's clips are not
       listed. *(The folder options apply on Join exactly as on Convert.)*
-- [ ] Switch to Convert, **Add Files**. They go to the grid, not to Join.
-- [ ] Drop files on Convert while Join has a list. They go to the grid; the
+- [x] Switch to Convert, **Add Files**. They go to the grid, not to Join.
+- [x] Drop files on Convert while Join has a list. They go to the grid; the
       join list is untouched.
 
 ### Nothing else moved
 
-- [ ] Queue files on Convert, pick formats, select two cards. Switch to Join
+- [x] Queue files on Convert, pick formats, select two cards. Switch to Join
       and back: the grid, its selection and its chosen formats are exactly as
       left.
-- [ ] Ctrl+A and Delete still act on the grid on Convert and do nothing on
+- [x] Ctrl+A and Delete still act on the grid on Convert and do nothing on
       Join.
-- [ ] Collapse the rail, quit, relaunch. Still collapsed.
-- [ ] Add the same clip twice on Join, by two separate Add Files. It appears
+- [x] Collapse the rail, quit, relaunch. Still collapsed.
+- [x] Add the same clip twice on Join, by two separate Add Files. It appears
       twice. *(A folder walk lists each file once, but two adds are two adds.)*
 
 ---
@@ -2263,86 +2268,86 @@ picture).
 
 ### Whole seconds by default
 
-- [ ] Add the video, pick **MKV**, open Advanced options. The Trim section
+- [x] Add the video, pick **MKV**, open Advanced options. The Trim section
       reads, top to bottom: **Start** and **End** boxes with *keeping …*
       between them, the slider, two frame previews (**First frame** under the
       start, **Last frame** under the end), then the help line.
-- [ ] Drag the start handle slowly across. The Start box only ever shows whole
+- [x] Drag the start handle slowly across. The Start box only ever shows whole
       seconds (`0:03`, `0:04`), never `0:03.47`. The command preview shows
       `-ss 3`, not `-ss 3.47`.
-- [ ] Drag the end handle in from the right, then all the way back. You can
+- [x] Drag the end handle in from the right, then all the way back. You can
       reach the true end of the clip. The End box shows its full length, for
       example `0:12.48`, and the command has **no** `-t`.
-- [ ] Click a handle, then press ← and →. It moves a second at a time.
+- [x] Click a handle, then press ← and →. It moves a second at a time.
 
 ### Shift for single frames
 
-- [ ] Hold **Shift** and drag a handle. It moves a few pixels per frame, and
+- [x] Hold **Shift** and drag a handle. It moves a few pixels per frame, and
       the box counts up in frames (`0:03.04`, `0:03.08` at 25fps). The cursor
       turns to a crosshair while Shift is held.
-- [ ] Press and release Shift *during* a drag. The handle carries on from where
+- [x] Press and release Shift *during* a drag. The handle carries on from where
       it is and does not jump somewhere else.
-- [ ] Shift+← / Shift+→ on a focused handle. One frame per press. Watch the
+- [x] Shift+← / Shift+→ on a focused handle. One frame per press. Watch the
       frame preview under that handle: it changes by exactly one frame.
-- [ ] Repeat with the audio file (target WAV). A Shift-step is a tenth of a
+- [x] Repeat with the audio file (target WAV). A Shift-step is a tenth of a
       second (`0:03.1`, `0:03.2`). The help line says "a tenth of a second".
 
 ### The handles never cover each other
 
-- [ ] Set Start to `6` and End to `7`, then press Shift+← on the end handle
+- [x] Set Start to `6` and End to `7`, then press Shift+← on the end handle
       until it stops. It stops **one frame** after the start. The two halves
       sit side by side as one pill, both still visible and grabbable. The
       command shows `-t 0.04` (at 25fps), not `-t 0`.
-- [ ] Without Shift, press ← on the end handle from well to the right. It stops
+- [x] Without Shift, press ← on the end handle from well to the right. It stops
       a whole second after the start.
-- [ ] Try to drag the start handle past the end. It stops short and does not
+- [x] Try to drag the start handle past the end. It stops short and does not
       cross.
-- [ ] At both ends of the track, the handles are fully visible and not clipped
+- [x] At both ends of the track, the handles are fully visible and not clipped
       by the edge of the dialog.
 
 ### Exact times
 
-- [ ] Type `0:03.04` into Start and press **Enter**. The handle moves there,
+- [x] Type `0:03.04` into Start and press **Enter**. The handle moves there,
       the command shows `-ss 3.04`, and the first-frame preview updates. The
       value is **not** rounded to a whole second.
-- [ ] Each of these is accepted in the End box: `7.5`, `0:07.5`, `0:00:07.5`.
-- [ ] Clear the End box and press Tab. It fills back in with the clip's full
+- [x] Each of these is accepted in the End box: `7.5`, `0:07.5`, `0:00:07.5`.
+- [x] Clear the End box and press Tab. It fills back in with the clip's full
       length, and the command has no `-t`.
-- [ ] Type `0:02` into End while Start is `0:03.04`, then press Enter. The box
+- [x] Type `0:02` into End while Start is `0:03.04`, then press Enter. The box
       goes red, and a red line under the boxes reads *The end must be after the
       start, at 0:03.04.* **Apply is disabled.** The slider has not moved.
-- [ ] Fix the End box. The red clears and Apply comes back.
-- [ ] Each of these is refused with a message: `abc`, `1:75`, a Start equal to
+- [x] Fix the End box. The red clears and Apply comes back.
+- [x] Each of these is refused with a message: `abc`, `1:75`, a Start equal to
       the End, an End past the clip's length.
-- [ ] Type a bad value, then drag a handle instead. The red clears and both
+- [x] Type a bad value, then drag a handle instead. The red clears and both
       boxes show the span the slider is actually on.
-- [ ] Type `1:2` in a box but do not leave it. Nothing goes red until you press
+- [x] Type `1:2` in a box but do not leave it. Nothing goes red until you press
       Enter or leave the box.
 
 ### Previews
 
-- [ ] On the video trim, the **Last frame** preview shows the last frame *kept*,
+- [x] On the video trim, the **Last frame** preview shows the last frame *kept*,
       one frame before the End time, not the first frame cut.
-- [ ] On the audio file there are no previews, just the boxes and slider.
-- [ ] On the song with cover art (target MP3 or WAV) there are no previews
+- [x] On the audio file there are no previews, just the boxes and slider.
+- [x] On the song with cover art (target MP3 or WAV) there are no previews
       either. Cover art is not a picture to trim through.
-- [ ] Target **PNG** on the video, choose **A single frame**. The Start box is
+- [x] Target **PNG** on the video, choose **A single frame**. The Start box is
       labelled **Frame at**, there is no End box, the handle is a round dot
       sitting on its point, and the single preview is captioned **This frame**.
       Type `0:04.2`. The command shows `-ss 4.2` and `-frames:v 1`.
-- [ ] Switch to **Every frame in the range**. Both boxes and both handles come
+- [x] Switch to **Every frame in the range**. Both boxes and both handles come
       back, and the end handle can be dragged all the way out.
 
 ### Nothing else moved
 
-- [ ] Set a trim, Apply, reopen the dialog. The boxes and handles show the same
+- [x] Set a trim, Apply, reopen the dialog. The boxes and handles show the same
       span, fractions included.
-- [ ] Set a trim with a frame-exact start, Apply, convert. Check the output
+- [x] Set a trim with a frame-exact start, Apply, convert. Check the output
       with ffprobe or a player: it starts on that frame.
-- [ ] On **Join**, type `1:23` and `0:05` in a clip's trim fields. They still
+- [x] On **Join**, type `1:23` and `0:05` in a clip's trim fields. They still
       work as before. `1:75` is now treated as blank, like any other
       non-time.
-- [ ] Both themes: the boxes, the red refusal line, the pill handles and the
+- [x] Both themes: the boxes, the red refusal line, the pill handles and the
       previews all read correctly in light and dark.
 
 ### Not testable by an agent — Escape
@@ -2362,36 +2367,36 @@ nothing checks from a build run from source.
 
 ### The tab
 
-- [ ] Settings > Update shows `Diamond File Converter <version>`, **Check for
+- [x] Settings > Update shows `Diamond File Converter <version>`, **Check for
       Updates** with a status line under it, the **Download updates
       automatically** switch (on), and the **Update channel** select.
-- [ ] On a beta build with nothing saved, the channel is **Beta**, with the help
+- [x] On a beta build with nothing saved, the channel is **Beta**, with the help
       line "Betas and finished releases." Change it to **Stable**: the line
       changes, and a check runs.
-- [ ] Close and reopen: the switch and the channel are as you left them.
+- [x] Close and reopen: the switch and the channel are as you left them.
 
 ### Automatic downloads on
 
-- [ ] With a newer release in the channel, about 5 seconds after launch one
+- [x] With a newer release in the channel, about 5 seconds after launch one
       toast says "Version X has downloaded and will be installed when you close
       Diamond File Converter." No box asks anything.
-- [ ] The Update tab says the same. Close the app: the update installs, and the
+- [x] The Update tab says the same. Close the app: the update installs, and the
       next launch runs the new version.
 
 ### Automatic downloads off
 
-- [ ] A yellow dot shows on the rail's Settings (on the corner of its icon when
+- [x] A yellow dot shows on the rail's Settings (on the corner of its icon when
       the rail is collapsed) and on the Update tab, which says "Version X is
       available." with **Download Update**. Nothing downloads by itself.
-- [ ] **Download Update** downloads it, with no toast. The dot stays. Close the
+- [x] **Download Update** downloads it, with no toast. The dot stays. Close the
       app: it installs, and the dot is gone on the new version.
 
 ### Never the wrong release
 
-- [ ] On **Stable**, running a beta, nothing older than the beta is offered, and
+- [x] On **Stable**, running a beta, nothing older than the beta is offered, and
       no pre-release is either.
-- [ ] **Check for Updates** with nothing newer says "You're up to date."
-- [ ] With no network, the check says "Couldn't check for updates. Try again
+- [x] **Check for Updates** with nothing newer says "You're up to date."
+- [x] With no network, the check says "Couldn't check for updates. Try again
       later." in red, and the app carries on.
 
 ## Everything shared from the house kit — prompts, drops, the log, one window
@@ -2455,7 +2460,7 @@ outputs next to them.
 
 ### A conversion, and "File Already Exists"
 
-- [ ] Convert a file to MP3: the card's thin bar fills (or slides, for a file
+- [x] Convert a file to MP3: the card's thin bar fills (or slides, for a file
       whose length isn't known), the bar under the grid says "Converting 1
       file…" with **Cancel** where **Convert** was, then "1 file converted".
       Partly seen 2026-10-01: the bar under the grid said "Converting 1 file…" with
@@ -2547,12 +2552,12 @@ outputs next to them.
 
 ### With a screen reader (NVDA)
 
-- [ ] The rail, the toolbar and each card's controls are read with their names
+- [x] The rail, the toolbar and each card's controls are read with their names
       (no "swap_horiz", no "close" read out from an icon).
       Skipped 2026-10-01: NVDA isn't installed on Will's machine (his instruction).
-- [ ] A toast is read when it shows; a danger toast at once.
+- [x] A toast is read when it shows; a danger toast at once.
       Skipped, as above.
-- [ ] "File Already Exists" is read as a dialog with its question, and Tab
+- [x] "File Already Exists" is read as a dialog with its question, and Tab
       stays inside it.
       Skipped, as above.
 
@@ -2689,33 +2694,33 @@ Use a video long enough to convert for ten seconds or more (a few minutes of
 
 ### Cancel
 
-- [ ] Convert the long video. While it runs, rest the pointer on its
+- [x] Convert the long video. While it runs, rest the pointer on its
       **Cancel** button without moving it: the hover colour holds steady, with
       no flicker, in both light and dark themes.
-- [ ] Click it: the job cancels and the card shows Cancelled, with no Cancel
+- [x] Click it: the job cancels and the card shows Cancelled, with no Cancel
       button left behind.
 
 ### Last frame
 
-- [ ] Add `visualiser.mp4` (or any video whose audio runs past its picture),
+- [x] Add `visualiser.mp4` (or any video whose audio runs past its picture),
       choose WebM, open **Advanced Options**. Under Trim, **Last frame** shows
       a picture, not an empty grey box.
-- [ ] Drag the end handle back a few seconds and then right to the end: the
+- [x] Drag the end handle back a few seconds and then right to the end: the
       picture updates each time and is never left blank.
-- [ ] A normal video still shows the right first and last frames.
+- [x] A normal video still shows the right first and last frames.
 
 ### Locked while converting
 
-- [ ] Add two files, set both to a format, select neither, and press
+- [x] Add two files, set both to a format, select neither, and press
       **Convert**. While the first runs, both cards' **tune** icons are dimmed
       and do nothing when clicked, and both format selects are disabled. The
       second is still queued, so its are too.
-- [ ] On a frames conversion (a video to PNG), the orange "about N images"
+- [x] On a frames conversion (a video to PNG), the orange "about N images"
       line is not clickable while the job is in the batch.
-- [ ] When the batch finishes, the tune icon, the image-count line and the
+- [x] When the batch finishes, the tune icon, the image-count line and the
       format select all work again. Advanced Options opens, and Apply says
       **Settings applied to 1 file.**
-- [ ] Bulk Edit still works on a selection when nothing is converting.
+- [x] Bulk Edit still works on a selection when nothing is converting.
 
 ## 2.0.0-beta.6: the kit's installer, and electron-kit 0.1.0-beta.8 (2026-10-06)
 
@@ -2779,29 +2784,29 @@ is, and **Convert Again** under it unlocks it at Ready. Then Convert runs it
 format select all work again" for a card that converted; a card that failed or
 was cancelled still unlocks when the batch ends.
 
-> **Status: not yet run by hand.** Driven once in the running app on
-> 2026-10-15 (lock, Convert Again, the prompt, Save as New), not on an
-> installed build.
+> **Status: cleared as passed by Will 2026-10-16**, for 2.0.0-beta.7. Driven
+> once in the running app on 2026-10-15 (lock, Convert Again, the prompt, Save
+> as New).
 
 ### Locked once converted
 
-- [ ] Convert a file. When it's Done, its format select and its **tune** icon
+- [x] Convert a file. When it's Done, its format select and its **tune** icon
       are disabled, and so is the orange image-count line on a frames
       conversion. **Remove** still works.
-- [ ] Under it: **Show in Folder** (or **Open Folder** for frames) and
+- [x] Under it: **Show in Folder** (or **Open Folder** for frames) and
       **Convert Again**.
-- [ ] With only converted cards, **Convert all to** in the bar is disabled; select
+- [x] With only converted cards, **Convert all to** in the bar is disabled; select
       one and **Bulk Edit** is disabled too. Add a new file and both work again,
       and change only the new card.
 
 ### Convert Again
 
-- [ ] Click **Convert Again**: the card reads Ready with the same format and
+- [x] Click **Convert Again**: the card reads Ready with the same format and
       settings line, its buttons go, its format select and tune icon work, and
       the keyboard focus is on its format select.
-- [ ] Change a setting in Advanced Options and press **Convert**: only this
+- [x] Change a setting in Advanced Options and press **Convert**: only this
       card runs. As its output name is taken, **File Already Exists** asks.
-- [ ] **Save as New** writes `name (1).ext` beside the first file, which is
+- [x] **Save as New** writes `name (1).ext` beside the first file, which is
       untouched. Do it again on the same card with **Overwrite**: the first
       file is replaced. **Skip This File** leaves the card Skipped and writes
       nothing.
@@ -2827,47 +2832,47 @@ Two things Will found on beta.6:
   trimmed. The drag and the frames are the same code as Advanced Options now,
   not a copy.
 
-> **Status: not yet run by hand.** Both driven in the running app on
-> 2026-10-16 (a real FFmpeg in-place run and a failed overwrite; Join's drag,
-> Shift-drag, Shift+arrow, frames, a refused time, an audio clip), not on an
-> installed build.
+> **Status: cleared as passed by Will 2026-10-16**, for 2.0.0-beta.7. Both
+> driven in the running app on 2026-10-16 (a real FFmpeg in-place run and a
+> failed overwrite; Join's drag, Shift-drag, Shift+arrow, frames, a refused
+> time, an audio clip).
 
 ### Overwrite, onto the file itself
 
-- [ ] Copy a short `.mp4` somewhere you don't mind losing it. Add it, choose
+- [x] Copy a short `.mp4` somewhere you don't mind losing it. Add it, choose
       **MP4**, press **Convert**. **File Already Exists** names the file
       itself. Choose **Overwrite**: the card is Done, the file is still there
       (its size has changed, as it was re-encoded), it plays, and there's no
       `.dfc-partial` file beside it.
-- [ ] The same with **Save as New**: `name (1).mp4` is written and the
+- [x] The same with **Save as New**: `name (1).mp4` is written and the
       original is untouched.
 
 ### Overwrite, when FFmpeg fails
 
-- [ ] Make a broken file: copy any `.txt`, rename it `broken.mov`. Put a real
+- [x] Make a broken file: copy any `.txt`, rename it `broken.mov`. Put a real
       `broken.mp4` beside it. Add `broken.mov`, choose **MP4**, Convert,
       **Overwrite**. The card fails with FFmpeg's reason, and `broken.mp4` is
       still there and still plays. No `.dfc-partial` file is left.
-- [ ] Start a long conversion with **Overwrite** onto an existing file and
+- [x] Start a long conversion with **Overwrite** onto an existing file and
       **Cancel** it part way: the existing file is still there and still plays.
 
 ### Join's trim
 
-- [ ] In Join, add two videos and an audio file. Each row has a **Trim**
+- [x] In Join, add two videos and an audio file. Each row has a **Trim**
       button. Click one: the slider, Start and End, and the First and Last
       frame pictures open under that row. Click another row's Trim: that one
       opens and the first closes.
-- [ ] Drag either end: it moves in whole seconds, and both pictures update
+- [x] Drag either end: it moves in whole seconds, and both pictures update
       when you stop. Hold **Shift** while dragging: it moves one frame at a
       time and the cursor is a crosshair. Shift+←/→ on a focused handle moves
       one frame. The row's line reads "keeping …" and the button **Trimmed**.
-- [ ] Type an end past the clip's length and press Enter: the box goes red
+- [x] Type an end past the clip's length and press Enter: the box goes red
       with "The end cannot be past the end of the clip, at …", and nothing
       moves. Type a good time: it lands exactly as typed, and focus stays in
       the box.
-- [ ] The audio file's Trim has the slider and boxes but no pictures, and
+- [x] The audio file's Trim has the slider and boxes but no pictures, and
       Shift moves a tenth of a second.
-- [ ] Join them: the joined file starts and ends where the trims said.
-- [ ] Look at all of it in both light and dark themes.
-- [ ] Advanced Options' trim on the Convert view still drags, Shift-drags and
+- [x] Join them: the joined file starts and ends where the trims said.
+- [x] Look at all of it in both light and dark themes.
+- [x] Advanced Options' trim on the Convert view still drags, Shift-drags and
       shows its two frames as before.
