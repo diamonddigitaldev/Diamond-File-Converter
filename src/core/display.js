@@ -200,6 +200,52 @@
         }
     }
 
+    /**
+     * Whether a card's format and options are fixed. A card in the conversion
+     * that is running is, queued as well as converting: both were sent to main
+     * when Convert was pressed. So is a card that has converted: it keeps the
+     * format and options that made its file, as Dropgate's finished upload
+     * cards do, until Convert Again reopens it. Left unlocked, its options
+     * could be changed under a "Done" that no longer described them, and
+     * nothing would ever run them.
+     */
+    function isLocked(job, inFlight) {
+        return inFlight.has(job.id) || job.status === STATUS.DONE;
+    }
+
+    /**
+     * Send a card back to Ready, keeping its format and options. What it
+     * wrote before is left on disk: a run onto the same name meets the
+     * "File Already Exists" prompt like any other.
+     */
+    function reopen(job) {
+        job.status = STATUS.PENDING;
+        job.error = null;
+        job.progress = 0;
+        job.outputPath = null;
+        job.isDirectory = false;
+        job.fileCount = 0;
+        return job;
+    }
+
+    /** The buttons under a card, in order: an id the renderer wires, and the label. */
+    function cardActions(job) {
+        const button = (id, label, variant = "btn-outline-secondary") => ({ id, label, variant });
+        switch (job.status) {
+            case STATUS.RUNNING:
+                return [button("cancel", "Cancel", "btn-outline-danger")];
+            case STATUS.DONE:
+                return [
+                    ...(job.outputPath ? [button("reveal", job.isDirectory ? "Open Folder" : "Show in Folder")] : []),
+                    button("convertAgain", "Convert Again"),
+                ];
+            case STATUS.ERROR:
+                return [button("retry", "Retry")];
+            default:
+                return [];
+        }
+    }
+
     /** "3 files converted, 1 failed, 2 skipped" — the post-run summary, in the kit's words. Skipped is told from cancelled. */
     function summarise(jobs) {
         const tally = (status) => jobs.filter(j => j.status === status).length;
@@ -781,6 +827,9 @@
         checkTrimEntry,
         describeMeta,
         describeStatus,
+        isLocked,
+        reopen,
+        cardActions,
         summarise,
         overallProgress,
         iconForKind,

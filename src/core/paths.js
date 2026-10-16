@@ -149,6 +149,18 @@ function resolveOutputPath(job, context = {}) {
     }
 }
 
+/**
+ * Where to write an output that replaces something already on disk, until it
+ * has finished: "clip.dfc-partial.mp4" beside "clip.mp4". The extension stays
+ * last because ffmpeg picks the muxer from it.
+ */
+function getStagingPath(outputPath, isDirectory) {
+    if (isDirectory) return getUniqueDirPath(`${outputPath}.dfc-partial`);
+    const ext = path.extname(outputPath);
+    const stem = path.basename(outputPath, ext);
+    return getUniquePath(path.join(path.dirname(outputPath), `${stem}.dfc-partial${ext}`));
+}
+
 /** Create the directory an output will be written into. */
 function ensureParentDir(outputPath, isDirectory) {
     const dir = isDirectory ? outputPath : path.dirname(outputPath);
@@ -163,5 +175,6 @@ module.exports = {
     sanitiseName,
     resolveOutputDir,
     resolveOutputPath,
+    getStagingPath,
     ensureParentDir,
 };

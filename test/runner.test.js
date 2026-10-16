@@ -197,8 +197,11 @@ test("runner: a job skipped at the prompt frees its slot", async () => {
         const runner = new JobRunner({
             ffmpegPath: "ffmpeg",
             concurrency: 1,
-            spawn: () => {
+            // "write" replaces the colliding file, so this ffmpeg has to write
+            // one, or the runner rightly reports a replace that produced nothing.
+            spawn: (_cmd, args) => {
                 const child = fakeChild();
+                fs.writeFileSync(args[args.length - 1], "");
                 setImmediate(() => child.emit("close", 0));
                 return child;
             },
@@ -374,5 +377,105 @@ test("runner: one Cancel All ends a batch whose files are still arriving", async
             "every card ends Cancelled, including the ones that arrived after the abort");
     } finally {
         cleanup();
+    }
+});
+
+// ---------------------------------------------------------------------------
+// Replacing a file that is already there
+// ---------------------------------------------------------------------------
+
+/**
+ * A runner whose fake ffmpeg either writes `written` to the path it was given
+ * (its last argument) and exits 0, or writes a little and fails, as ffmpeg
+ * does on its own input ("cannot edit existing files in-place").
+ */
+function replacingRunner({ fail, written = "new" }) {
+    const seen = [];
+    const runner = new JobRunner({
+        ffmpegPath: "ffmpeg",
+        concurrency: 1,
+        spawn: (_cmd, args) => {
+            const target = args[args.length - 1];
+            seen.push(target);
+            const child = fakeChild();
+            setImmediate(() => {
+                if (fail) {
+                    // ffmpeg refuses an in-place edit without opening the
+                    // output, so only a different target is touched.
+                    if (!fs.existsSync(target)) fs.writeFileSync(target, "partial");
+                    child.emit("close", 1);
+                } else {
+                    fs.writeFileSync(target, written);
+                    child.emit("close", 0);
+                }
+            });
+            return child;
+        },
+    });
+    return { runner, seen };
+}
+
+async function runOne(runner, job) {
+    const done = new Promise(resolve => runner.once("idle", resolve));
+    runner.enqueue(job);
+    runner.start();
+    await done;
+}
+
+test("runner: a failed Replace onto the input itself leaves the input in place", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dfc-runner-"));
+    try {
+        const input = path.join(dir, "clip.mp4");
+        fs.writeFileSync(input, "original");
+        const job = createJob({ inputPath: input, targetExt: "mp4", output: { onConflict: CONFLICT.OVERWRITE } });
+
+        const { runner, seen } = replacingRunner({ fail: true });
+        await runOne(runner, job);
+
+        assert.equal(job.status, STATUS.ERROR);
+        assert.notEqual(seen[0], input, "ffmpeg is never pointed at its own input");
+        assert.equal(fs.readFileSync(input, "utf8"), "original", "the input survives the failure");
+        assert.deepEqual(fs.readdirSync(dir), ["clip.mp4"], "no staging file is left behind");
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("runner: a successful Replace onto the input swaps the new file in", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dfc-runner-"));
+    try {
+        const input = path.join(dir, "clip.mp4");
+        fs.writeFileSync(input, "original");
+        const job = createJob({ inputPath: input, targetExt: "mp4", output: { onConflict: CONFLICT.OVERWRITE } });
+
+        const { runner } = replacingRunner({ fail: false, written: "converted" });
+        await runOne(runner, job);
+
+        assert.equal(job.status, STATUS.DONE);
+        assert.equal(job.outputPath, input);
+        assert.equal(fs.readFileSync(input, "utf8"), "converted");
+        assert.deepEqual(fs.readdirSync(dir), ["clip.mp4"]);
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("runner: a failed Replace keeps the file it would have replaced", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dfc-runner-"));
+    try {
+        const input = path.join(dir, "clip.mov");
+        const existing = path.join(dir, "clip.mp4");
+        fs.writeFileSync(input, "");
+        fs.writeFileSync(existing, "keep me");
+        const job = createJob({ inputPath: input, targetExt: "mp4", output: { onConflict: CONFLICT.OVERWRITE } });
+
+        const { runner } = replacingRunner({ fail: true });
+        await runOne(runner, job);
+
+        assert.equal(job.status, STATUS.ERROR);
+        assert.equal(fs.readFileSync(existing, "utf8"), "keep me");
+        assert.deepEqual(fs.readdirSync(dir).sort(), ["clip.mov", "clip.mp4"]);
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
     }
 });
