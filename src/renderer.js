@@ -1645,6 +1645,11 @@ let joinTrimOpen = null;     // the id of the clip whose trim is open, if any
  */
 async function addJoinPaths(inputPaths) {
     if (!inputPaths || inputPaths.length === 0) return;
+    // The list is what's being joined, so it holds still until the join ends.
+    if (joinRunning) {
+        kit.ui.toast("Wait for the join to finish before adding more files.", { type: "warning" });
+        return;
+    }
     try {
         const result = await api.scanPaths(inputPaths, buildScanOptions());
         const added = await addJoinClips(result.files);
@@ -2052,7 +2057,30 @@ function renderJoinActions() {
     $("btn-join-run").classList.toggle("d-none", Boolean(joinRunning));
     $("btn-join-cancel").classList.toggle("d-none", !joinRunning);
     $("btn-join-clear").disabled = Boolean(joinRunning);
-    joinProgress.element.classList.toggle("d-none", !joinRunning);
+    renderJoinLock();
+    $("join-progress").classList.toggle("d-none", !joinRunning);
+}
+
+/**
+ * While a join runs, everything that configures it is greyed out and locked:
+ * the clip list (order, trims, removing, Add More) and the side's fields. The
+ * list is made inert rather than each control disabled, so the rows keep their
+ * own disabled states (the first row's Move Up) for when it unlocks.
+ */
+function renderJoinLock() {
+    const locked = Boolean(joinRunning);
+    const scroll = document.querySelector("#join-body .join-scroll");
+    scroll.inert = locked;
+    scroll.classList.toggle("is-locked", locked);
+    for (const id of ["join-format", "join-name", "btn-join-browse"]) $(id).disabled = locked;
+}
+
+/** Join's progress: the bar, then "Joining 42%" under it, left-aligned. */
+function setJoinProgress(percent) {
+    joinProgress.set(percent);
+    $("join-progress-text").textContent = typeof percent === "number"
+        ? `Joining ${Math.round(Math.min(100, Math.max(0, percent)))}%`
+        : "Joining…";
 }
 
 async function runJoin() {
@@ -2078,7 +2106,7 @@ async function runJoin() {
 
     joinRunning = generateId();
     spec.id = joinRunning;
-    joinProgress.set(0);
+    setJoinProgress(0);
     renderJoinActions();
 
     // However it ends, as a conversion's.
@@ -2106,8 +2134,7 @@ let joinProgress = null;
 
 function setupJoin() {
     joinProgress = kit.ui.progress({ label: "Joining" });
-    joinProgress.element.classList.add("join-progress", "d-none");
-    $("join-progress").replaceWith(joinProgress.element);
+    $("join-progress").prepend(joinProgress.element);
 
     // The same drop zone as Convert's, from the kit, so the two sections read
     // as one app: only the icon and the label change. Files dropped anywhere
@@ -2367,7 +2394,7 @@ api.onJobProgress(({ jobId, percent }) => {
     // A join is a job too, and it is the only one with no card to land on.
     if (jobId === joinRunning) {
         // null when the length isn't known: the bar slides instead of reading "null%".
-        joinProgress?.set(typeof percent === "number" ? percent : null);
+        if (joinProgress) setJoinProgress(typeof percent === "number" ? percent : null);
         return;
     }
     const job = jobs.find(j => j.id === jobId);
