@@ -161,8 +161,21 @@ test("what Restart Now asks about is cleared however a conversion or a join ends
 test("progress of null is \"not known\": a card's and Join's bars slide, never sit at 0% or read null%", () => {
     const renderer = read("renderer.js");
     assert.match(renderer, /progress\.set\(typeof job\.progress === "number" \? job\.progress : null\)/);
-    assert.match(renderer, /joinProgress\?\.set\(typeof percent === "number" \? percent : null\)/);
+    assert.match(renderer, /setJoinProgress\(typeof percent === "number" \? percent : null\)/);
     assert.ok(!/style\.width = `\$\{percent\}%`/.test(renderer), "Join's bar used to read \"null%\"");
+});
+
+test("Join's bar has \"Joining XX%\" under it, and its settings lock while it runs", () => {
+    const renderer = read("renderer.js");
+    const html = read("index.html");
+    assert.match(html, /id="join-progress-text"/);
+    assert.match(renderer, /`Joining \$\{Math\.round\(/);
+    assert.match(renderer, /: "Joining…";/);
+    // The list goes inert and grey; the side's fields are disabled.
+    assert.match(renderer, /scroll\.inert = locked;/);
+    assert.match(renderer, /\["join-format", "join-name", "btn-join-browse"\]\) \$\(id\)\.disabled = locked;/);
+    // A drop during a join doesn't change what's being joined.
+    assert.match(renderer, /if \(joinRunning\) \{\r?\n\s+kit\.ui\.toast\("Wait for the join to finish/);
 });
 
 test("every icon is hidden from screen readers, and every icon-only button has a name", () => {

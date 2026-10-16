@@ -29,7 +29,7 @@ sections — the history is useful.
 
 ```
 npm install
-npm test          # expect 198 passing, 0 failing
+npm test          # expect 207 passing, 0 failing
 npm start
 ```
 
@@ -2876,3 +2876,43 @@ Two things Will found on beta.6:
 - [x] Look at all of it in both light and dark themes.
 - [x] Advanced Options' trim on the Convert view still drags, Shift-drags and
       shows its two frames as before.
+
+## Join says how far it is, and locks while it runs (2026-10-16)
+
+Two things Will found on beta.7:
+
+- **Join's bar had no words.** It moved, but nothing said how far. It now has
+  **Joining 42%** under it, left-aligned, and **Joining…** while the length
+  isn't known (the bar slides then).
+- **Join's settings could be changed mid-join.** The clip list (order, trims,
+  Remove, Add More) and Join into, File name and Browse all stayed live while
+  a join ran, though nothing changed then would take effect. Now they're
+  greyed out and locked until it ends, however it ends. A file dropped on Join
+  during a run isn't added: a toast says to wait for the join to finish.
+
+> **Status: not yet run by hand.** Driven once in the running app on
+> 2026-10-16 (two clips needing a re-encode: the label read "Joining 48%",
+> left-aligned; the list was inert and greyed, the side's fields disabled, a
+> click on Remove did nothing; all of it came back after the join, with the
+> first row's Move Up still disabled).
+
+### Joining XX%
+
+- [ ] In Join, add two videos of different sizes (so they re-encode, which
+      takes long enough to watch), choose a folder, press **Join**. Under the
+      bar, on the left, it reads **Joining 0%** and counts up to the end.
+- [ ] When the join ends, the bar and its text go away.
+
+### Locked while joining
+
+- [ ] Open one clip's **Trim**, then press **Join**. While it runs, the list
+      is greyed out: Trim, the slider, Start and End, Move Up and Down, Remove
+      and **Add More** do nothing, and Tab doesn't reach them.
+- [ ] **Join into**, **File name** and **Browse** are greyed out and can't be
+      changed. **Clear** is disabled; **Cancel** works.
+- [ ] Drop a file on Join while it runs: it isn't added, and a toast says to
+      wait for the join to finish.
+- [ ] When it finishes, everything works again, and the first clip's Move Up
+      and the last clip's Move Down are still disabled.
+- [ ] Do it again and press **Cancel**: everything unlocks the same way.
+- [ ] Look at it in both light and dark themes.

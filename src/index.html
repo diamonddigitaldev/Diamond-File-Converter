@@ -141,7 +141,10 @@
 
                     <div id="join-errors" class="form-text text-danger"></div>
 
-                    <div id="join-progress"></div>
+                    <!-- The kit's bar goes in first (renderer.js, setupJoin). -->
+                    <div id="join-progress" class="join-progress d-none">
+                        <div id="join-progress-text" class="join-progress-text" aria-live="polite"></div>
+                    </div>
 
                     <div class="join-actions">
                         <button id="btn-join-clear" class="btn btn-outline-secondary btn-sm">Clear</button>
