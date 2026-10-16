@@ -2805,3 +2805,69 @@ was cancelled still unlocks when the batch ends.
       untouched. Do it again on the same card with **Overwrite**: the first
       file is replaced. **Skip This File** leaves the card Skipped and writes
       nothing.
+
+## Overwrite keeps the file when FFmpeg fails, and Join trims like Advanced Options (2026-10-16)
+
+Two things Will found on beta.6:
+
+- **A file converted onto itself disappeared.** Converting a file to its own
+  format (an `.mp4` to MP4, in its own folder) meets **File Already Exists**
+  with the file itself. **Overwrite** sent FFmpeg straight onto its own input,
+  which FFmpeg refuses ("FFmpeg cannot edit existing files in-place"). The
+  clean-up after any failed run then deleted the half-written output, and that
+  path was the original. The same clean-up deleted any file being overwritten
+  whenever a run onto it failed. Now a run that replaces something writes to
+  `name.dfc-partial.ext` beside it and swaps it in only when FFmpeg succeeds.
+  So converting a file onto itself works, and a failure leaves the old file as
+  it was.
+- **Join's trim was two text boxes.** Each clip now has a **Trim** button that
+  opens the Advanced Options control under its row: the slider, the exact-time
+  boxes and the first and last frames, with Shift for one frame at a time. It
+  is one clip at a time, and the button reads **Trimmed** once a clip is
+  trimmed. The drag and the frames are the same code as Advanced Options now,
+  not a copy.
+
+> **Status: not yet run by hand.** Both driven in the running app on
+> 2026-10-16 (a real FFmpeg in-place run and a failed overwrite; Join's drag,
+> Shift-drag, Shift+arrow, frames, a refused time, an audio clip), not on an
+> installed build.
+
+### Overwrite, onto the file itself
+
+- [ ] Copy a short `.mp4` somewhere you don't mind losing it. Add it, choose
+      **MP4**, press **Convert**. **File Already Exists** names the file
+      itself. Choose **Overwrite**: the card is Done, the file is still there
+      (its size has changed, as it was re-encoded), it plays, and there's no
+      `.dfc-partial` file beside it.
+- [ ] The same with **Save as New**: `name (1).mp4` is written and the
+      original is untouched.
+
+### Overwrite, when FFmpeg fails
+
+- [ ] Make a broken file: copy any `.txt`, rename it `broken.mov`. Put a real
+      `broken.mp4` beside it. Add `broken.mov`, choose **MP4**, Convert,
+      **Overwrite**. The card fails with FFmpeg's reason, and `broken.mp4` is
+      still there and still plays. No `.dfc-partial` file is left.
+- [ ] Start a long conversion with **Overwrite** onto an existing file and
+      **Cancel** it part way: the existing file is still there and still plays.
+
+### Join's trim
+
+- [ ] In Join, add two videos and an audio file. Each row has a **Trim**
+      button. Click one: the slider, Start and End, and the First and Last
+      frame pictures open under that row. Click another row's Trim: that one
+      opens and the first closes.
+- [ ] Drag either end: it moves in whole seconds, and both pictures update
+      when you stop. Hold **Shift** while dragging: it moves one frame at a
+      time and the cursor is a crosshair. Shift+←/→ on a focused handle moves
+      one frame. The row's line reads "keeping …" and the button **Trimmed**.
+- [ ] Type an end past the clip's length and press Enter: the box goes red
+      with "The end cannot be past the end of the clip, at …", and nothing
+      moves. Type a good time: it lands exactly as typed, and focus stays in
+      the box.
+- [ ] The audio file's Trim has the slider and boxes but no pictures, and
+      Shift moves a tenth of a second.
+- [ ] Join them: the joined file starts and ends where the trims said.
+- [ ] Look at all of it in both light and dark themes.
+- [ ] Advanced Options' trim on the Convert view still drags, Shift-drags and
+      shows its two frames as before.
