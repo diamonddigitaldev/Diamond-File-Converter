@@ -780,17 +780,116 @@ const TRIM_FINE_PX = 4;       // pixels of Shift-drag per fine step
 
 const FRAME_PREVIEW_DEBOUNCE = 220;   // ms after the slider settles
 
-let framePreviewTimer = null;
-let framePreviewToken = 0;
-
 /**
  * Where to actually decode a preview from. Seeking to exactly the duration
  * lands past the last frame and decodes nothing, which is precisely where the
  * end handle sits until someone drags it.
  */
-function previewAt(seconds) {
-    const limit = Math.max(0, trimState.duration - 0.05);
+function previewAt(seconds, duration = trimState.duration) {
+    const limit = Math.max(0, duration - 0.05);
     return Math.max(0, Math.min(seconds, limit));
+}
+
+/**
+ * The frame at the last point kept, rather than at the end itself. The end of
+ * a span is where it stops, so the frame sitting exactly there is the first
+ * one left out; the last one kept is a frame earlier, and that is the one
+ * worth seeing when deciding where a clip ends.
+ */
+function lastKeptAt(start, end, meta) {
+    const fps = meta?.video?.fps;
+    return Math.max(start, end - (fps > 0 ? 1 / fps : 0.04));
+}
+
+/**
+ * A painter for one set of frame previews: Advanced Options has one, and so
+ * does each clip opened for trimming in Join.
+ *
+ * Debounced and token-guarded: dragging a handle asks for a great many frames
+ * in quick succession, and a slow decode that lands after the user has moved on
+ * must not paint a frame they are no longer looking at.
+ */
+function framePreviewer() {
+    let timer = null;
+    let token = 0;
+    return (filePath, duration, wanted) => {
+        clearTimeout(timer);
+        timer = setTimeout(async () => {
+            const mine = ++token;
+            for (const [img, seconds] of wanted) {
+                let data = null;
+                try {
+                    data = await api.previewFrame({ inputPath: filePath, timestamp: previewAt(seconds, duration) });
+                } catch (_) {
+                    // A source that will not decode simply shows no preview.
+                }
+                if (mine !== token) return;
+                if (data) img.src = data;
+                else img.removeAttribute("src");
+            }
+        }, FRAME_PREVIEW_DEBOUNCE);
+    };
+}
+
+const paintModalFrames = framePreviewer();
+
+/**
+ * Drag and arrow-key handling for a pair of trim handles, shared by Advanced
+ * Options and Join so the two move alike.
+ *
+ * `span()` is the live { duration, start, end }, or null while there is
+ * nothing to trim. `step(fine)` is one step, coarse or fine, and
+ * `move(handle, seconds, fine)` places a handle and repaints.
+ */
+function wireTrimHandles(slider, thumbs, { span, step, move }) {
+    for (const [handle, thumb] of Object.entries(thumbs)) {
+        thumb.addEventListener("pointerdown", (e) => {
+            const at = span();
+            if (!at) return;
+            e.preventDefault();
+            thumb.setPointerCapture(e.pointerId);
+            // Tracked unsnapped and moved by each pointer event's own
+            // distance, not the distance from where the drag began. Shift can
+            // go down or up mid-drag, and measuring from the origin at the new
+            // rate would throw the handle to somewhere else entirely.
+            let lastX = e.clientX;
+            let raw = at[handle];
+
+            const onMove = (ev) => {
+                const { duration } = span() ?? at;
+                const width = slider.getBoundingClientRect().width || 1;
+                const perPixel = duration / width;
+                // Shift slows the drag to a few pixels per frame, however long
+                // the clip, so single frames can actually be reached by hand.
+                const rate = ev.shiftKey
+                    ? Math.min(perPixel, step(true) / TRIM_FINE_PX)
+                    : perPixel;
+                slider.classList.toggle("fine", ev.shiftKey);
+                raw = Math.max(0, Math.min(duration, raw + (ev.clientX - lastX) * rate));
+                lastX = ev.clientX;
+                move(handle, raw, ev.shiftKey);
+            };
+            const onUp = (ev) => {
+                thumb.releasePointerCapture(ev.pointerId);
+                thumb.removeEventListener("pointermove", onMove);
+                thumb.removeEventListener("pointerup", onUp);
+                slider.classList.remove("fine");
+            };
+            thumb.addEventListener("pointermove", onMove);
+            thumb.addEventListener("pointerup", onUp);
+        });
+
+        thumb.addEventListener("keydown", (e) => {
+            const at = span();
+            if (!at) return;
+            const fine = e.shiftKey;
+            const current = at[handle];
+            if (e.key === "ArrowLeft") { e.preventDefault(); move(handle, current - step(fine), fine); }
+            else if (e.key === "ArrowRight") { e.preventDefault(); move(handle, current + step(fine), fine); }
+            else if (e.key === "Home") { e.preventDefault(); move(handle, 0); }
+            else if (e.key === "End") { e.preventDefault(); move(handle, at.duration); }
+        });
+    }
 }
 
 /**
@@ -802,47 +901,17 @@ function trimHasPictures() {
     return !!(meta && meta.ok && meta.hasVideo && !meta.isStill);
 }
 
-/** How long one frame of the sample lasts, for stepping back off the end. */
-function sampleFrameLength() {
-    const fps = modalSample()?.meta?.video?.fps;
-    return fps > 0 ? 1 / fps : 0.04;
-}
-
-/**
- * Show the frames at either end of the span.
- *
- * Debounced and token-guarded: dragging a handle asks for a great many frames
- * in quick succession, and a slow decode that lands after the user has moved on
- * must not paint a frame they are no longer looking at.
- */
+/** Show the frames at either end of the span. */
 function requestFramePreviews() {
     const sample = modalSample();
     const visible = !$("jm-frame-previews").classList.contains("d-none");
     if (!visible || !sample || !trimState.available) return;
 
-    // The end of a span is where it stops, so the frame sitting exactly there
-    // is the first one left out. The last one kept is a frame earlier, and that
-    // is the one worth seeing when deciding where a clip ends.
-    const lastKept = Math.max(trimState.start, trimState.end - sampleFrameLength());
+    const lastKept = lastKeptAt(trimState.start, trimState.end, sample.meta);
     const wanted = isSingleFrame()
-        ? [["jm-frame-start", trimState.start]]
-        : [["jm-frame-start", trimState.start], ["jm-frame-end", lastKept]];
-
-    clearTimeout(framePreviewTimer);
-    framePreviewTimer = setTimeout(async () => {
-        const token = ++framePreviewToken;
-        for (const [id, seconds] of wanted) {
-            let data = null;
-            try {
-                data = await api.previewFrame({ inputPath: sample.filePath, timestamp: previewAt(seconds) });
-            } catch (_) {
-                // A source that will not decode simply shows no preview.
-            }
-            if (token !== framePreviewToken) return;
-            if (data) $(id).src = data;
-            else $(id).removeAttribute("src");
-        }
-    }, FRAME_PREVIEW_DEBOUNCE);
+        ? [[$("jm-frame-start"), trimState.start]]
+        : [[$("jm-frame-start"), trimState.start], [$("jm-frame-end"), lastKept]];
+    paintModalFrames(sample.filePath, trimState.duration, wanted);
 }
 
 /**
@@ -1069,54 +1138,11 @@ function initTrimSlider() {
         });
     }
 
-    for (const handle of ["start", "end"]) {
-        const thumb = $(`jm-trim-thumb-${handle}`);
-
-        thumb.addEventListener("pointerdown", (e) => {
-            if (!trimState.available) return;
-            e.preventDefault();
-            thumb.setPointerCapture(e.pointerId);
-            // Tracked unsnapped and moved by each pointer event's own
-            // distance, not the distance from where the drag began. Shift can
-            // go down or up mid-drag, and measuring from the origin at the new
-            // rate would throw the handle to somewhere else entirely.
-            let lastX = e.clientX;
-            let raw = trimState[handle];
-
-            const onMove = (ev) => {
-                const width = slider.getBoundingClientRect().width || 1;
-                const perPixel = trimState.duration / width;
-                // Shift slows the drag to a few pixels per frame, however long
-                // the clip, so single frames can actually be reached by hand.
-                const rate = ev.shiftKey
-                    ? Math.min(perPixel, currentTrimStep(true) / TRIM_FINE_PX)
-                    : perPixel;
-                slider.classList.toggle("fine", ev.shiftKey);
-                raw = Math.max(0, Math.min(trimState.duration, raw + (ev.clientX - lastX) * rate));
-                lastX = ev.clientX;
-                moveTrimHandle(handle, raw, ev.shiftKey);
-            };
-            const onUp = (ev) => {
-                thumb.releasePointerCapture(ev.pointerId);
-                thumb.removeEventListener("pointermove", onMove);
-                thumb.removeEventListener("pointerup", onUp);
-                slider.classList.remove("fine");
-            };
-            thumb.addEventListener("pointermove", onMove);
-            thumb.addEventListener("pointerup", onUp);
-        });
-
-        thumb.addEventListener("keydown", (e) => {
-            if (!trimState.available) return;
-            const fine = e.shiftKey;
-            const step = currentTrimStep(fine);
-            const current = trimState[handle];
-            if (e.key === "ArrowLeft") { e.preventDefault(); moveTrimHandle(handle, current - step, fine); }
-            else if (e.key === "ArrowRight") { e.preventDefault(); moveTrimHandle(handle, current + step, fine); }
-            else if (e.key === "Home") { e.preventDefault(); moveTrimHandle(handle, 0); }
-            else if (e.key === "End") { e.preventDefault(); moveTrimHandle(handle, trimState.duration); }
-        });
-    }
+    wireTrimHandles(slider, { start: $("jm-trim-thumb-start"), end: $("jm-trim-thumb-end") }, {
+        span: () => (trimState.available ? trimState : null),
+        step: currentTrimStep,
+        move: moveTrimHandle,
+    });
 }
 
 function fillSelect(select, options, current, placeholder) {
@@ -1608,15 +1634,7 @@ function onViewChange(name) {
 
 let joinClips = [];          // { id, filePath, meta, trim: { start, end } }
 let joinRunning = null;      // the id of the job in flight
-
-/**
- * "1:23" or "83" both mean 83 seconds. Blank means "no limit at this end", and
- * so, as it always has here, does anything that is not a time.
- */
-function parseTime(text) {
-    const value = display.parseTimecode(text);
-    return Number.isNaN(value) ? null : value;
-}
+let joinTrimOpen = null;     // the id of the clip whose trim is open, if any
 
 /**
  * Join's counterpart to ingestPaths: expand folders in the main process, then
@@ -1715,9 +1733,31 @@ function renderJoin() {
     renderJoinActions();
 }
 
+/** The line under a clip's name: its length, its size, and what it keeps. */
+function joinClipMetaText(clip) {
+    if (!clip.meta) return "Reading…";
+    if (!clip.meta.ok) return "unreadable";
+    const span = joinClipSpan(clip);
+    const bits = [kit.format.formatDuration(clip.meta.duration)];
+    if (clip.meta.video) bits.push(`${clip.meta.video.width}×${clip.meta.video.height}`);
+    if (span != null && Math.abs(span - clip.meta.duration) > 0.05) {
+        bits.push(`keeping ${display.formatTimecode(span)}`);
+    }
+    // A length that can't be known leaves no empty part before the first dot.
+    return bits.filter(Boolean).join(" · ");
+}
+
+/** A clip's length, when it is known well enough to trim against. */
+function joinClipDuration(clip) {
+    const d = clip.meta?.ok ? clip.meta.duration : null;
+    return typeof d === "number" && d > 0 ? d : 0;
+}
+
 function buildJoinRow(clip, index) {
-    const row = document.createElement("li");
-    row.className = "join-clip";
+    const item = document.createElement("li");
+    item.className = "join-clip";
+    const row = document.createElement("div");
+    row.className = "join-clip-row";
 
     const badge = document.createElement("span");
     badge.className = "join-index";
@@ -1731,27 +1771,33 @@ function buildJoinRow(clip, index) {
     name.title = clip.filePath;
     const meta = document.createElement("span");
     meta.className = "join-clip-meta";
-    if (!clip.meta) meta.textContent = "Reading…";
-    else if (!clip.meta.ok) { meta.textContent = "unreadable"; meta.classList.add("is-bad"); }
-    else {
-        const span = joinClipSpan(clip);
-        const bits = [kit.format.formatDuration(clip.meta.duration)];
-        if (clip.meta.video) bits.push(`${clip.meta.video.width}×${clip.meta.video.height}`);
-        if (span != null && Math.abs(span - clip.meta.duration) > 0.05) {
-            bits.push(`keeping ${kit.format.formatDuration(span)}`);
-        }
-        // A length that can't be known leaves no empty part before the first dot.
-        meta.textContent = bits.filter(Boolean).join(" · ");
-    }
+    meta.textContent = joinClipMetaText(clip);
+    meta.classList.toggle("is-bad", !!clip.meta && !clip.meta.ok);
     main.append(name, meta);
 
-    const trim = document.createElement("div");
-    trim.className = "join-trim";
-    trim.append(
-        timeInput(clip, "start", "from"),
-        Object.assign(document.createElement("span"), { className: "join-trim-sep", textContent: "→" }),
-        timeInput(clip, "end", "to"),
+    // Trimming opens under the row rather than living in it: the slider and
+    // its two frames need the row's whole width, and one clip at a time is all
+    // anyone trims.
+    const open = joinTrimOpen === clip.id;
+    const canTrim = joinClipDuration(clip) > 0;
+    const trimmed = clip.trim.start != null || clip.trim.end != null;
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = `btn btn-sm join-trim-toggle d-inline-flex align-items-center gap-1 ${open ? "btn-secondary" : "btn-outline-secondary"}`;
+    toggle.disabled = !canTrim;
+    toggle.title = canTrim ? "" : "Duration is not known for this file, so it cannot be trimmed.";
+    toggle.setAttribute("aria-expanded", String(open));
+    toggle.append(
+        Object.assign(document.createElement("span"), {
+            className: "material-icons-round", textContent: "content_cut",
+        }),
+        document.createTextNode(trimmed ? "Trimmed" : "Trim"),
     );
+    toggle.firstChild.setAttribute("aria-hidden", "true");
+    toggle.addEventListener("click", () => {
+        joinTrimOpen = open ? null : clip.id;
+        renderJoin();
+    });
 
     const move = document.createElement("div");
     move.className = "join-move";
@@ -1763,21 +1809,154 @@ function buildJoinRow(clip, index) {
     const remove = iconButton("close", "Remove", () => removeJoinClip(clip.id));
     remove.className = "join-remove";
 
-    row.append(badge, main, trim, move, remove);
-    return row;
+    row.append(badge, main, toggle, move, remove);
+    item.appendChild(row);
+    if (open && canTrim) item.appendChild(buildJoinTrim(clip, meta, toggle));
+    return item;
 }
 
-function timeInput(clip, which, placeholder) {
-    const input = document.createElement("input");
-    input.type = "text";
-    input.placeholder = placeholder;
-    input.spellcheck = false;
-    input.value = clip.trim[which] != null ? kit.format.formatDuration(clip.trim[which]) : "";
-    input.addEventListener("change", () => {
-        clip.trim[which] = parseTime(input.value);
-        renderJoin();
+/**
+ * One clip's trim: the Advanced Options span control, its exact-time boxes and
+ * its two frames, for this clip alone.
+ *
+ * Painted in place as it moves rather than through renderJoin, which rebuilds
+ * the list and would take the handle out from under a drag.
+ */
+function buildJoinTrim(clip, metaLine, toggle) {
+    const duration = joinClipDuration(clip);
+    const span = { duration, start: clip.trim.start ?? 0, end: clip.trim.end ?? duration };
+    const pictures = !!(clip.meta.hasVideo && !clip.meta.isStill);
+    const uid = `join-trim-${clip.id}`;
+    const el = (tag, className, props = {}) =>
+        Object.assign(document.createElement(tag), className ? { className } : {}, props);
+
+    const panel = el("div", "join-clip-trim");
+
+    const field = (which, label) => {
+        const wrap = el("div", `trim-field${which === "end" ? " trim-field-end" : ""}`);
+        const input = el("input", "form-control form-control-sm trim-input", {
+            id: `${uid}-${which}`, type: "text", inputMode: "decimal", spellcheck: false, autocomplete: "off",
+        });
+        input.setAttribute("aria-describedby", `${uid}-error`);
+        wrap.append(el("label", "form-label", { htmlFor: input.id, textContent: label }), input);
+        return { wrap, input };
+    };
+    const startField = field("start", "Start");
+    const endField = field("end", "End");
+    const kept = el("span", "trim-kept text-body-secondary");
+    const fields = el("div", "trim-fields");
+    fields.append(startField.wrap, kept, endField.wrap);
+
+    const error = el("div", "form-text text-danger d-none", { id: `${uid}-error`, role: "alert" });
+
+    const slider = el("div", "trim-slider");
+    const range = el("div", "trim-range");
+    const thumb = (handle, label) => {
+        const t = el("div", "trim-thumb", { tabIndex: 0 });
+        t.dataset.handle = handle;
+        t.setAttribute("role", "slider");
+        t.setAttribute("aria-label", label);
+        return t;
+    };
+    const thumbs = { start: thumb("start", "Trim start"), end: thumb("end", "Trim end") };
+    slider.append(el("div", "trim-track"), range, thumbs.start, thumbs.end);
+
+    const frame = (caption) => {
+        const figure = el("figure", "frame-preview");
+        const img = el("img", "", { alt: "" });
+        figure.append(img, el("figcaption", "", { textContent: caption }));
+        return { figure, img };
+    };
+    const first = frame("First frame");
+    const last = frame("Last frame");
+    const previews = el("div", "frame-previews");
+    previews.append(first.figure, last.figure);
+
+    const help = el("div", "form-text", {
+        textContent: pictures
+            ? "Drag either end, or type an exact time. It moves in whole seconds; hold Shift to move one frame at a time."
+            : "Drag either end, or type an exact time. It moves in whole seconds; hold Shift to move a tenth of a second at a time.",
     });
-    return input;
+
+    panel.append(fields, error, slider);
+    if (pictures) panel.appendChild(previews);
+    panel.appendChild(help);
+
+    const paintFrames = framePreviewer();
+    const errors = { start: null, end: null };
+    const setError = (which, message) => {
+        errors[which] = message;
+        (which === "start" ? startField : endField).input.classList.toggle("is-invalid", !!message);
+        const shown = [errors.start, errors.end].filter(Boolean);
+        error.textContent = shown.join(" ");
+        error.classList.toggle("d-none", shown.length === 0);
+    };
+
+    const paint = () => {
+        const pct = (v) => `${(v / duration) * 100}%`;
+        thumbs.start.style.left = pct(span.start);
+        thumbs.end.style.left = pct(span.end);
+        range.style.left = pct(span.start);
+        range.style.width = pct(span.end - span.start);
+        startField.input.value = display.formatTimecode(span.start) ?? "0:00";
+        endField.input.value = display.formatTimecode(span.end) ?? "";
+        setError("start", null);
+        setError("end", null);
+        kept.textContent = `keeping ${display.formatTimecode(span.end - span.start) ?? "0:00"}`;
+        for (const handle of ["start", "end"]) {
+            const t = thumbs[handle];
+            t.setAttribute("aria-valuemin", "0");
+            t.setAttribute("aria-valuemax", String(Math.round(duration)));
+            t.setAttribute("aria-valuenow", String(Math.round(span[handle])));
+            t.setAttribute("aria-valuetext", kit.format.formatDuration(span[handle]) ?? "");
+        }
+        if (pictures) {
+            paintFrames(clip.filePath, duration, [
+                [first.img, span.start],
+                [last.img, lastKeptAt(span.start, span.end, clip.meta)],
+            ]);
+        }
+    };
+
+    // The clip keeps only the ends that were moved, exactly as Advanced
+    // Options reads its slider back, so an untouched clip runs whole.
+    const commit = () => {
+        const round = (v) => Math.round(v * 1000) / 1000;
+        clip.trim.start = span.start > 0 ? round(span.start) : null;
+        clip.trim.end = span.end >= duration ? null : round(span.end);
+        paint();
+        metaLine.textContent = joinClipMetaText(clip);
+        toggle.lastChild.textContent = clip.trim.start != null || clip.trim.end != null ? "Trimmed" : "Trim";
+        renderJoinActions();
+    };
+
+    const step = (fine) => display.trimStep(clip.meta, fine);
+    wireTrimHandles(slider, thumbs, {
+        span: () => span,
+        step,
+        move: (handle, seconds, fine = false) => {
+            span[handle] = display.placeTrimHandle(handle, seconds, { ...span, step: step(fine) });
+            commit();
+        },
+    });
+
+    for (const [which, { input }] of [["start", startField], ["end", endField]]) {
+        // Checked when the box is left or Enter is pressed, not on every
+        // keystroke — "1:" on the way to "1:23" is not a mistake yet.
+        const take = () => {
+            const result = display.checkTrimEntry(which, input.value, span);
+            if (result.error) { setError(which, result.error); return; }
+            span[which] = result.value;
+            commit();
+        };
+        input.addEventListener("change", take);
+        input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") { e.preventDefault(); take(); }
+        });
+    }
+
+    paint();
+    return panel;
 }
 
 function iconButton(icon, title, onClick, disabled = false) {
