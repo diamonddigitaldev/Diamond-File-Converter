@@ -211,8 +211,18 @@ class JobRunner extends EventEmitter {
 
         const { outputPath, isDirectory } = resolved;
 
+        // Replacing something that is already there — another file, or the
+        // input itself — goes through a staging path beside it, swapped in only
+        // once ffmpeg succeeds. Writing straight onto it meant a failed run's
+        // partial-output cleanup deleted the file being replaced, and ffmpeg
+        // always fails onto its own input ("cannot edit existing files
+        // in-place"), so Replace on a same-format card deleted the original.
+        const writePath = fs.existsSync(outputPath)
+            ? paths.getStagingPath(outputPath, isDirectory)
+            : outputPath;
+
         try {
-            paths.ensureParentDir(outputPath, isDirectory);
+            paths.ensureParentDir(writePath, isDirectory);
         } catch (err) {
             this._finish(job, { status: STATUS.ERROR, error: `Could not create the output folder: ${err.message}` });
             this._pump();
@@ -235,9 +245,9 @@ class JobRunner extends EventEmitter {
                     listPath = path.join(tempDir, "list.txt");
                     fs.writeFileSync(listPath, buildConcatList(job.join.clips), "utf8");
                 }
-                args = buildJoinArgs(job.join, { outputPath, listPath });
+                args = buildJoinArgs(job.join, { outputPath: writePath, listPath });
             } else {
-                args = buildArgs(job, { outputPath });
+                args = buildArgs(job, { outputPath: writePath });
             }
         } catch (err) {
             this._cleanupTemp(tempDir);
@@ -247,7 +257,7 @@ class JobRunner extends EventEmitter {
         }
 
         const child = this.spawn(this.ffmpegPath, args, { windowsHide: true });
-        const entry = { job, child, outputPath, isDirectory, cancelled: false, stderr: "", tempDir };
+        const entry = { job, child, outputPath, writePath, isDirectory, cancelled: false, stderr: "", tempDir };
         this.active.set(job.id, entry);
 
         job.status = STATUS.RUNNING;
@@ -275,7 +285,7 @@ class JobRunner extends EventEmitter {
         child.on("error", (err) => {
             this.active.delete(job.id);
             this._cleanupTemp(entry.tempDir);
-            this._cleanupPartial(outputPath, isDirectory);
+            this._cleanupPartial(writePath, isDirectory);
             this._finish(job, { status: STATUS.ERROR, error: `Could not start ffmpeg: ${err.message}` });
             this._pump();
         });
@@ -285,9 +295,19 @@ class JobRunner extends EventEmitter {
             this._cleanupTemp(entry.tempDir);
 
             if (entry.cancelled || this._cancelledAll) {
-                this._cleanupPartial(outputPath, isDirectory);
+                this._cleanupPartial(writePath, isDirectory);
                 this._finish(job, { status: STATUS.CANCELLED });
             } else if (code === 0) {
+                if (writePath !== outputPath) {
+                    try {
+                        swapIn(writePath, outputPath, isDirectory);
+                    } catch (err) {
+                        this._cleanupPartial(writePath, isDirectory);
+                        this._finish(job, { status: STATUS.ERROR, error: `Could not replace the existing file: ${err.message}` });
+                        this._pump();
+                        return;
+                    }
+                }
                 this.emit("progress", { jobId: job.id, percent: 100 });
                 this._finish(job, {
                     status: STATUS.DONE,
@@ -296,7 +316,7 @@ class JobRunner extends EventEmitter {
                     fileCount: isDirectory ? countFiles(outputPath) : 1,
                 });
             } else {
-                this._cleanupPartial(outputPath, isDirectory);
+                this._cleanupPartial(writePath, isDirectory);
                 this._finish(job, {
                     status: STATUS.ERROR,
                     error: lastMeaningfulLine(entry.stderr) || `ffmpeg exited with code ${code}.`,
@@ -443,6 +463,18 @@ function durationOf(job) {
     if (start != null) return Math.max(0, full - start);
     if (end != null) return Math.min(full, end);
     return full;
+}
+
+/**
+ * Put a finished staged output where it belongs. A file renames over the old
+ * one in a single step; a frame folder can't, so the old folder goes first.
+ * A staged output that never appeared is an error, not a quiet success: the
+ * file it was meant to replace is still there, and the card must not say Done.
+ */
+function swapIn(stagedPath, outputPath, isDirectory) {
+    if (!fs.existsSync(stagedPath)) throw new Error("ffmpeg finished without writing anything.");
+    if (isDirectory) fs.rmSync(outputPath, { recursive: true, force: true });
+    fs.renameSync(stagedPath, outputPath);
 }
 
 function countFiles(dirPath) {
