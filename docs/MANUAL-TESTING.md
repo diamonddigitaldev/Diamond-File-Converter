@@ -2916,3 +2916,35 @@ Two things Will found on beta.7:
       and the last clip's Move Down are still disabled.
 - [ ] Do it again and press **Cancel**: everything unlocks the same way.
 - [ ] Look at it in both light and dark themes.
+
+## Join's long list still scrolls while it joins (2026-10-23)
+
+One thing Will found on beta.8:
+
+- **A long Join list couldn't be scrolled while it ran.** The lock made the
+  whole scrolling area inert, and an inert area takes its vertical scrollbar
+  and mouse wheel with it, so with many clips the ones below the fold couldn't
+  be looked at until the join ended. Now only the clips and **Add More** are
+  locked and greyed; the list around them scrolls as normal.
+
+> **Status: not yet run by hand.** Driven once in the running app on
+> 2026-10-23 (14 clips, so the list overflows; the lock simulated by setting
+> the running state): the mouse wheel and a click in the scrollbar's track both
+> scrolled the locked list, the clips and Add More stayed inert and at half
+> opacity, a forced click on a clip's Remove did nothing, and everything came
+> back at full opacity afterwards.
+
+### Scrolling while locked
+
+- [ ] In Join, add enough clips that the list needs a scrollbar (a dozen short
+      videos is plenty), choose a folder, and press **Join** with clips that
+      need a re-encode (different sizes), so it runs long enough to try this.
+- [ ] While it runs, scroll the list with the **mouse wheel**, by **dragging the
+      scrollbar** and by clicking in its track. All three work.
+- [ ] The clips and **Add More** are still greyed out and locked: Trim, Move Up
+      and Down, Remove and Add More do nothing, and Tab doesn't reach them.
+- [ ] **Join into**, **File name** and **Browse** are still greyed out;
+      **Clear** is disabled; **Cancel** works.
+- [ ] When the join ends, everything is back at full strength and you are
+      still where you scrolled to.
+- [ ] Look at it in both light and dark themes.
