@@ -668,7 +668,8 @@ a {
 .join-progress-text { margin-top: 0.35rem; font-size: 0.8rem; text-align: left; opacity: 0.75; }
 
 /* While a join runs the list can't change, and looks it. */
-.join-scroll.is-locked { opacity: 0.5; transition: opacity var(--dur-state) var(--ease-state); }
+.join-scroll > * { transition: opacity var(--dur-state) var(--ease-state); }
+.join-scroll.is-locked > * { opacity: 0.5; }
 
 .join-actions { margin-top: auto; padding-top: 0.9rem; display: flex; gap: 0.5rem; justify-content: flex-end; }
 

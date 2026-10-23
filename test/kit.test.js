@@ -171,8 +171,10 @@ test("Join's bar has \"Joining XX%\" under it, and its settings lock while it ru
     assert.match(html, /id="join-progress-text"/);
     assert.match(renderer, /`Joining \$\{Math\.round\(/);
     assert.match(renderer, /: "Joining…";/);
-    // The list goes inert and grey; the side's fields are disabled.
-    assert.match(renderer, /scroll\.inert = locked;/);
+    // The list and Add More go inert and grey; the side's fields are disabled.
+    // The scroller itself is never inert, or a long list couldn't be scrolled.
+    assert.match(renderer, /for \(const child of scroll\.children\) child\.inert = locked;/);
+    assert.ok(!/scroll\.inert\b/.test(renderer), "an inert scroller loses its scrollbar");
     assert.match(renderer, /\["join-format", "join-name", "btn-join-browse"\]\) \$\(id\)\.disabled = locked;/);
     // A drop during a join doesn't change what's being joined.
     assert.match(renderer, /if \(joinRunning\) \{\r?\n\s+kit\.ui\.toast\("Wait for the join to finish/);

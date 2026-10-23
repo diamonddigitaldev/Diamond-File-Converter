@@ -2065,12 +2065,14 @@ function renderJoinActions() {
  * While a join runs, everything that configures it is greyed out and locked:
  * the clip list (order, trims, removing, Add More) and the side's fields. The
  * list is made inert rather than each control disabled, so the rows keep their
- * own disabled states (the first row's Move Up) for when it unlocks.
+ * own disabled states (the first row's Move Up) for when it unlocks. The
+ * scroller itself stays live: an inert scroller takes its scrollbar and wheel
+ * with it, and a long list needs to be looked through while it joins.
  */
 function renderJoinLock() {
     const locked = Boolean(joinRunning);
     const scroll = document.querySelector("#join-body .join-scroll");
-    scroll.inert = locked;
+    for (const child of scroll.children) child.inert = locked;
     scroll.classList.toggle("is-locked", locked);
     for (const id of ["join-format", "join-name", "btn-join-browse"]) $(id).disabled = locked;
 }
