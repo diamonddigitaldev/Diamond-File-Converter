@@ -1,0 +1,104 @@
+"use strict";
+
+// The context bridge.
+//
+// v1 had no preload at all: the renderer ran with nodeIntegration:true and
+// contextIsolation:false and required fs, path and electron directly. This is
+// the app's own surface the renderer is allowed to touch, exposed under the
+// same `electronAPI` name the Dropgate client uses. The shared channels
+// (the version, settings, links out, the theme) are the kit's own preload's,
+// window.kitAPI, which the kit registers on the app's session: a dropped
+// File's path (kitAPI.getPathForFile) and the files the app is opened with
+// (kitAPI.onFilesOpened) are the kit's too.
+//
+// IMPORTANT: this file runs in a sandboxed preload, where require() is limited
+// to a small allowlist ("electron", "events", "timers", "url"). Requiring
+// ./constants here silently kills the whole bridge, so the channel names are
+// inlined below. test/preload.test.js asserts every one of them still matches
+// src/constants.js, so the two cannot drift apart unnoticed.
+
+const { contextBridge, ipcRenderer } = require("electron");
+
+const CH = {
+    JOB_RUN:               "job:run",
+    JOB_CANCEL:            "job:cancel",
+    JOB_PREVIEW:           "job:preview",
+    JOIN_RUN:              "join:run",
+    JOB_PROGRESS:          "job:progress",
+    JOB_STATUS:            "job:status",
+    QUEUE_CANCEL_ALL:      "queue:cancel-all",
+    QUEUE_SET_CONCURRENCY: "queue:set-concurrency",
+    PROBE_FILE:            "probe:file",
+    FS_SCAN:               "fs:scan",
+    PREVIEW_FRAME:         "preview:frame",
+    DIALOG_BROWSE_FILES:   "dialog:browse-files",
+    DIALOG_BROWSE_FOLDER:  "dialog:browse-folder",
+    DIALOG_CHOOSE_OUTPUT:  "dialog:choose-output",
+    SHELL_OPEN_PATH:       "shell:open-path",
+    SHELL_SHOW_IN_FOLDER:  "shell:show-in-folder",
+    APP_GET_FORMATS:       "app:get-formats",
+    CONFLICT_ASK:          "conflict:ask",
+    CONFLICT_ANSWER:       "conflict:answer",
+};
+
+/** Subscribe helper that hands back an unsubscribe function. */
+function on(channel, callback) {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+}
+
+contextBridge.exposeInMainWorld("electronAPI", {
+    // -- Jobs and queue -------------------------------------------------------
+    runJob:         (job)   => ipcRenderer.invoke(CH.JOB_RUN, job),
+    cancelJob:      (jobId) => ipcRenderer.invoke(CH.JOB_CANCEL, jobId),
+    previewJob:     (spec)  => ipcRenderer.invoke(CH.JOB_PREVIEW, spec),
+    runJoin:        (spec)  => ipcRenderer.invoke(CH.JOIN_RUN, spec),
+    cancelAll:      ()      => ipcRenderer.invoke(CH.QUEUE_CANCEL_ALL),
+    setConcurrency: (n)     => ipcRenderer.invoke(CH.QUEUE_SET_CONCURRENCY, n),
+
+    onJobProgress: (cb) => on(CH.JOB_PROGRESS, cb),
+    onJobStatus:   (cb) => on(CH.JOB_STATUS, cb),
+
+    // -- Inspection and ingest ------------------------------------------------
+    probeFile: (filePath)    => ipcRenderer.invoke(CH.PROBE_FILE, filePath),
+
+    /**
+     * One frame, decoded at a timestamp, as a data URL — or null if the source
+     * will not give one up. Used to choose a frame by looking at it rather than
+     * by guessing a number.
+     */
+    previewFrame: (request) => ipcRenderer.invoke(CH.PREVIEW_FRAME, request),
+    scanPaths: (paths, opts) => ipcRenderer.invoke(CH.FS_SCAN, paths, opts),
+
+    // -- Dialogs --------------------------------------------------------------
+    browseFiles:  () => ipcRenderer.invoke(CH.DIALOG_BROWSE_FILES),
+    browseFolder: () => ipcRenderer.invoke(CH.DIALOG_BROWSE_FOLDER),
+    chooseOutput: () => ipcRenderer.invoke(CH.DIALOG_CHOOSE_OUTPUT),
+
+    // -- Shell and app --------------------------------------------------------
+    openPath:     (target) => ipcRenderer.invoke(CH.SHELL_OPEN_PATH, target),
+    showInFolder: (target) => ipcRenderer.invoke(CH.SHELL_SHOW_IN_FOLDER, target),
+    getFormats:   ()       => ipcRenderer.invoke(CH.APP_GET_FORMATS),
+
+    // -- "File Already Exists" ------------------------------------------------
+    // Main asks ({ id, name, isDirectory }); the page asks the person, and answers.
+    onConflictAsk: (cb) => on(CH.CONFLICT_ASK, cb),
+    answerConflict: (id, answer) => ipcRenderer.invoke(CH.CONFLICT_ANSWER, id, answer),
+});
+
+// Path helpers. The renderer needs basename, extname and stem for display and
+// for working out a file's type; exposing these three beats exposing node:path.
+contextBridge.exposeInMainWorld("pathAPI", {
+    basename: (filePath) => String(filePath).split(/[\\/]/).pop() ?? "",
+    extname: (filePath) => {
+        const base = String(filePath).split(/[\\/]/).pop() ?? "";
+        const dot = base.lastIndexOf(".");
+        return dot > 0 ? base.slice(dot) : "";
+    },
+    stem: (filePath) => {
+        const base = String(filePath).split(/[\\/]/).pop() ?? "";
+        const dot = base.lastIndexOf(".");
+        return dot > 0 ? base.slice(0, dot) : base;
+    },
+});

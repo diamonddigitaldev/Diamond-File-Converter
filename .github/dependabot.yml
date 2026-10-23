@@ -1,0 +1,23 @@
+# Weekly, with patches and minors grouped into one pull request. Majors come
+# one at a time, and are taken on evidence: the real app driven, not only the
+# tests passing. The workflows' actions are kept current the same way.
+
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    target-branch: "2.0.0"
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    target-branch: "2.0.0"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        update-types: [minor, patch]

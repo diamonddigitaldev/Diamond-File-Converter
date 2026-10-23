@@ -1,0 +1,88 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>Modal Dialog</title>
+<style>
+:root{
+  --accent:#9740fb; --accent-hover:#b06cff; --accent-muted:#c796ff; --accent-rgb:151,64,251;
+  --bg:#212529; --surface:#2b3035; --surface-2:#343a40; --border:#495057;
+  --text:#dee2e6; --text-dim:rgba(222,226,230,.75); --text-faint:rgba(222,226,230,.5);
+  --success:#198754; --warning:#ffc107; --danger:#dc3545; --info:#0dcaf0;
+  --success-rgb:25,135,84; --warning-rgb:255,193,7; --danger-rgb:220,53,69;
+  --radius-control:5px; --radius-card:8px; --radius-zone:12px;
+  --dur-micro:120ms; --dur-state:.2s; --dur-default:.3s;
+  --ease-standard:cubic-bezier(.4,0,.2,1);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;padding:40px;background:var(--bg);color:var(--text);
+  font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;font-size:16px;line-height:1.5;
+}
+h1{font-size:24px;margin:0 0 6px;font-weight:600;letter-spacing:-.01em}
+.sub{color:var(--text-dim);font-size:14px;margin:0 0 32px;max-width:70ch}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-faint);
+   margin:36px 0 14px;font-weight:600}
+h2:first-of-type{margin-top:0}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.stack{display:flex;flex-direction:column;gap:10px}
+.grid{display:grid;gap:14px}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);padding:18px}
+code,.mono{font-family:Consolas,'Courier New',monospace;font-size:12.5px}
+code{background:rgba(255,255,255,.07);padding:2px 6px;border-radius:4px;color:var(--accent-muted)}
+.note{font-size:13px;color:var(--text-dim);margin-top:10px;max-width:74ch}
+.note b{color:var(--text);font-weight:600}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{text-align:left;color:var(--text-faint);font-weight:600;font-size:11px;
+   text-transform:uppercase;letter-spacing:.08em;padding:0 14px 8px 0;border-bottom:1px solid var(--border)}
+td{padding:9px 14px 9px 0;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.swatch{width:26px;height:26px;border-radius:5px;border:1px solid rgba(255,255,255,.16);display:inline-block;vertical-align:middle}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:50rem;
+     background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border)}
+.caption{font-size:11.5px;color:var(--text-faint);margin-top:8px}
+</style>
+</head><body>
+<h1>Modal Dialog</h1>
+<p class="sub">The house has exactly one in-page HTML dialog, in the Dropgate client. Its conventions are worth following, because the alternative is a native blocking message box.</p>
+
+<style>
+.backdrop{background:rgba(0,0,0,.5);border-radius:var(--radius-card);padding:40px 20px;display:flex;justify-content:center}
+.modal{background:var(--bg);border-radius:8px;max-width:460px;width:100%;box-shadow:0 1rem 3rem rgba(0,0,0,.4)}
+.mhead{display:flex;align-items:center;gap:8px;padding:16px 16px 8px;font-size:17px;font-weight:500}
+.mbody{padding:8px 16px 16px;font-size:14px}
+.mbody .lead{margin:0 0 8px}
+.mbody .caveat{color:var(--text-dim);font-size:13px;margin:0}
+.mfoot{display:flex;justify-content:flex-end;gap:8px;padding:8px 16px 16px}
+.btn{padding:7px 14px;font-size:14px;border-radius:5px;border:1px solid transparent;cursor:pointer;font-family:inherit}
+.b-sec{background:#6c757d;color:#fff}
+.b-out{background:transparent;border-color:#6c757d;color:var(--text-dim)}
+.b-warn{background:var(--warning);color:#000}
+</style>
+<div class="backdrop">
+  <div class="modal">
+    <div class="mhead"><span style="color:var(--warning)">⚠</span> Upload Security Warning</div>
+    <div class="mbody">
+      <p class="lead">This server does not support end-to-end encryption. Your file will be uploaded without encryption.</p>
+      <p class="caveat">The server administrator may be able to access your file contents.</p>
+    </div>
+    <div class="mfoot">
+      <button class="btn b-out">Cancel</button>
+      <button class="btn b-warn">Upload Anyway</button>
+    </div>
+  </div>
+</div>
+
+<h2>Conventions</h2>
+<table>
+<tr><th>Element</th><th>Rule</th></tr>
+<tr><td>Header &amp; footer</td><td><code>border-0</code> — no dividing rules</td></tr>
+<tr><td>Dialog</td><td><code>modal-dialog-centered</code></td></tr>
+<tr><td>Title</td><td>Semantic icon + text in <code>d-flex align-items-center gap-2</code></td></tr>
+<tr><td>Body</td><td>One plain statement, then one <code>text-body-secondary small mb-0</code> caveat</td></tr>
+<tr><td>Footer</td><td><b>Outlined</b> neutral cancel on the left, filled semantic confirm on the right — never two filled buttons</td></tr>
+<tr><td>Backdrop</td><td>Bootstrap default — <code>#000</code> at <code>.5</code></td></tr>
+<tr><td>Motion</td><td>Bootstrap default — backdrop <code>.15s linear</code>, dialog <code>translate(0,-50px) → 0</code> over <code>.3s ease-out</code></td></tr>
+</table>
+<p class="note"><b>Wrap it in a promise.</b> Dropgate's helper resolves <code>true</code> on confirm and <code>false</code> on <code>hidden.bs.modal</code>, removing both listeners in a shared cleanup, so the dialog reads as a plain <code>await</code> at the call site. This is the pattern the 2.0 "New Job" modal should use.</p>
+
+</body></html>

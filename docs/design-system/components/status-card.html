@@ -1,0 +1,69 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>Status Card</title>
+<style>
+:root{
+  --accent:#9740fb; --accent-hover:#b06cff; --accent-muted:#c796ff; --accent-rgb:151,64,251;
+  --bg:#212529; --surface:#2b3035; --surface-2:#343a40; --border:#495057;
+  --text:#dee2e6; --text-dim:rgba(222,226,230,.75); --text-faint:rgba(222,226,230,.5);
+  --success:#198754; --warning:#ffc107; --danger:#dc3545; --info:#0dcaf0;
+  --success-rgb:25,135,84; --warning-rgb:255,193,7; --danger-rgb:220,53,69;
+  --radius-control:5px; --radius-card:8px; --radius-zone:12px;
+  --dur-micro:120ms; --dur-state:.2s; --dur-default:.3s;
+  --ease-standard:cubic-bezier(.4,0,.2,1);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;padding:40px;background:var(--bg);color:var(--text);
+  font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;font-size:16px;line-height:1.5;
+}
+h1{font-size:24px;margin:0 0 6px;font-weight:600;letter-spacing:-.01em}
+.sub{color:var(--text-dim);font-size:14px;margin:0 0 32px;max-width:70ch}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-faint);
+   margin:36px 0 14px;font-weight:600}
+h2:first-of-type{margin-top:0}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.stack{display:flex;flex-direction:column;gap:10px}
+.grid{display:grid;gap:14px}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);padding:18px}
+code,.mono{font-family:Consolas,'Courier New',monospace;font-size:12.5px}
+code{background:rgba(255,255,255,.07);padding:2px 6px;border-radius:4px;color:var(--accent-muted)}
+.note{font-size:13px;color:var(--text-dim);margin-top:10px;max-width:74ch}
+.note b{color:var(--text);font-weight:600}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{text-align:left;color:var(--text-faint);font-weight:600;font-size:11px;
+   text-transform:uppercase;letter-spacing:.08em;padding:0 14px 8px 0;border-bottom:1px solid var(--border)}
+td{padding:9px 14px 9px 0;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.swatch{width:26px;height:26px;border-radius:5px;border:1px solid rgba(255,255,255,.16);display:inline-block;vertical-align:middle}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:50rem;
+     background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border)}
+.caption{font-size:11.5px;color:var(--text-faint);margin-top:8px}
+</style>
+</head><body>
+<h1>Status Card</h1>
+<p class="sub">Dropgate's signature component: an ambient pulse while a state is unknown, resolving into a semantic wash once it is known.</p>
+
+<style>
+@keyframes pulse{0%{opacity:.75}50%{opacity:.5}100%{opacity:.75}}
+.sc{padding:.75rem 1rem;border-radius:var(--radius-card);display:flex;align-items:center;gap:.5rem;
+  border:1px solid var(--border);margin-bottom:12px;font-size:14px}
+.sc.loading{animation:pulse 2s infinite ease-in-out}
+.sc.green{background:rgba(var(--success-rgb),.1);border-color:rgba(var(--success-rgb),.3);animation:none}
+.sc.yellow{background:rgba(var(--warning-rgb),.1);border-color:rgba(var(--warning-rgb),.3);animation:none}
+.sc.red{background:rgba(var(--danger-rgb),.1);border-color:rgba(var(--danger-rgb),.3);animation:none}
+.ico{font-size:24px;line-height:1}
+</style>
+<h2>Loading, then resolved</h2>
+<div class="sc loading"><span class="ico">◌</span><span>Checking security…</span></div>
+<div class="sc green"><span class="ico" style="color:var(--success)">✓</span><span>Your upload will be end-to-end encrypted.</span></div>
+<div class="sc yellow"><span class="ico" style="color:var(--warning)">⚠</span><span>This server does not advertise encryption.</span></div>
+<div class="sc red"><span class="ico" style="color:var(--danger)">✕</span><span>This connection is not secure.</span></div>
+
+<p class="note"><b>The pattern: pulse while unknown, then kill the animation and apply the wash.</b> The resolved state sets three things at once — the icon glyph, a Bootstrap text colour on the icon, and the wash class on the card. Because the layout is identical in every state, resolving causes no reflow.</p>
+
+<h2>Why it generalises</h2>
+<p class="note">This is the natural shape for a File Converter job card's status strip: unknown while the probe is in flight, then green for ready, yellow for "will re-encode", red for an unsupported combination. The ambient pulse is doing real work — it distinguishes "still checking" from "checked and fine", which a static grey card cannot.</p>
+
+</body></html>

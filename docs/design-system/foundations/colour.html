@@ -1,0 +1,86 @@
+<!-- @dsCard group="Foundations" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>Colour & Accent</title>
+<style>
+:root{
+  --accent:#9740fb; --accent-hover:#b06cff; --accent-muted:#c796ff; --accent-rgb:151,64,251;
+  --bg:#212529; --surface:#2b3035; --surface-2:#343a40; --border:#495057;
+  --text:#dee2e6; --text-dim:rgba(222,226,230,.75); --text-faint:rgba(222,226,230,.5);
+  --success:#198754; --warning:#ffc107; --danger:#dc3545; --info:#0dcaf0;
+  --success-rgb:25,135,84; --warning-rgb:255,193,7; --danger-rgb:220,53,69;
+  --radius-control:5px; --radius-card:8px; --radius-zone:12px;
+  --dur-micro:120ms; --dur-state:.2s; --dur-default:.3s;
+  --ease-standard:cubic-bezier(.4,0,.2,1);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;padding:40px;background:var(--bg);color:var(--text);
+  font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;font-size:16px;line-height:1.5;
+}
+h1{font-size:24px;margin:0 0 6px;font-weight:600;letter-spacing:-.01em}
+.sub{color:var(--text-dim);font-size:14px;margin:0 0 32px;max-width:70ch}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-faint);
+   margin:36px 0 14px;font-weight:600}
+h2:first-of-type{margin-top:0}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.stack{display:flex;flex-direction:column;gap:10px}
+.grid{display:grid;gap:14px}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);padding:18px}
+code,.mono{font-family:Consolas,'Courier New',monospace;font-size:12.5px}
+code{background:rgba(255,255,255,.07);padding:2px 6px;border-radius:4px;color:var(--accent-muted)}
+.note{font-size:13px;color:var(--text-dim);margin-top:10px;max-width:74ch}
+.note b{color:var(--text);font-weight:600}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{text-align:left;color:var(--text-faint);font-weight:600;font-size:11px;
+   text-transform:uppercase;letter-spacing:.08em;padding:0 14px 8px 0;border-bottom:1px solid var(--border)}
+td{padding:9px 14px 9px 0;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.swatch{width:26px;height:26px;border-radius:5px;border:1px solid rgba(255,255,255,.16);display:inline-block;vertical-align:middle}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:50rem;
+     background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border)}
+.caption{font-size:11.5px;color:var(--text-faint);margin-top:8px}
+</style>
+</head><body>
+<h1>Colour & Accent</h1>
+<p class="sub">Bootstrap 5.3's custom properties are the semantic base in all three apps. The house adds one thing on top: a per-app accent, bound into --bs-primary in both themes.</p>
+
+<h2>The per-app accent</h2>
+<p class="note">House rule: <b>per-app accent, everything else shared.</b> An app overrides these four values and nothing else. Accent is the app's identity in the taskbar; structure, motion and components stay identical.</p>
+<table>
+<tr><th>App</th><th></th><th>--accent</th><th>--accent-hover</th><th>--accent-muted</th></tr>
+<tr><td>Diamond File Converter</td><td><span class="swatch" style="background:#28a745"></span></td><td><code>#28a745</code></td><td><code>#34d058</code></td><td><code>#5dd879</code></td></tr>
+<tr><td>Diamond Media Player</td><td><span class="swatch" style="background:#9740fb"></span></td><td><code>#9740fb</code></td><td><code>#b06cff</code></td><td><code>#c796ff</code></td></tr>
+<tr><td>Dropgate client</td><td><span class="swatch" style="background:#0d6efd"></span></td><td><code>#0d6efd</code></td><td><code>#0a58ca</code></td><td><code>#6ea8fe</code></td></tr>
+</table>
+
+<h2>Binding the accent into Bootstrap</h2>
+<div class="panel"><pre class="mono" style="margin:0;white-space:pre-wrap;color:var(--text-dim)">:root,
+[data-bs-theme="light"],
+[data-bs-theme="dark"] {
+    --bs-primary:     var(--accent);
+    --bs-primary-rgb: var(--accent-rgb);
+    --bs-link-color:  var(--accent);
+}</pre></div>
+<p class="note"><b>Both themes, and the bare :root.</b> File Converter v1 remapped <code>--bs-primary</code> only inside <code>[data-bs-theme="dark"]</code>, so its primary button rendered Bootstrap blue in light mode and green in dark. Listing the bare <code>:root</code> alongside both themes also covers the "system" case, where neither attribute is set. Bootstrap derives <code>.btn-primary</code> from its own component variables rather than from <code>--bs-primary</code>, so the button additionally needs <code>--bs-btn-bg</code> set.</p>
+
+<h2>Semantic colours</h2>
+<table>
+<tr><th>Role</th><th></th><th>Hex</th><th>RGB triplet</th></tr>
+<tr><td>Success</td><td><span class="swatch" style="background:#198754"></span></td><td><code>#198754</code></td><td><code>25, 135, 84</code></td></tr>
+<tr><td>Warning</td><td><span class="swatch" style="background:#ffc107"></span></td><td><code>#ffc107</code></td><td><code>255, 193, 7</code></td></tr>
+<tr><td>Danger</td><td><span class="swatch" style="background:#dc3545"></span></td><td><code>#dc3545</code></td><td><code>220, 53, 69</code></td></tr>
+<tr><td>Info</td><td><span class="swatch" style="background:#0dcaf0"></span></td><td><code>#0dcaf0</code></td><td><code>13, 202, 240</code></td></tr>
+</table>
+
+<h2>Surfaces</h2>
+<table>
+<tr><th>Token</th><th>Light</th><th>Dark</th></tr>
+<tr><td><code>--bs-body-bg</code></td><td><span class="swatch" style="background:#fff"></span> <code>#fff</code></td><td><span class="swatch" style="background:#212529"></span> <code>#212529</code></td></tr>
+<tr><td><code>--bs-secondary-bg</code></td><td><span class="swatch" style="background:#e9ecef"></span> <code>#e9ecef</code></td><td><span class="swatch" style="background:#343a40"></span> <code>#343a40</code></td></tr>
+<tr><td><code>--bs-tertiary-bg</code></td><td><span class="swatch" style="background:#f8f9fa"></span> <code>#f8f9fa</code></td><td><span class="swatch" style="background:#2b3035"></span> <code>#2b3035</code></td></tr>
+<tr><td><code>--bs-border-color</code></td><td><span class="swatch" style="background:#dee2e6"></span> <code>#dee2e6</code></td><td><span class="swatch" style="background:#495057"></span> <code>#495057</code></td></tr>
+</table>
+<p class="note">Theme is driven by <code>data-bs-theme</code> on <code>&lt;html&gt;</code>, set by an inline script in <code>&lt;head&gt;</code> before the stylesheet parses so there is no flash. All three apps follow the OS only — <b>none has an in-app theme toggle or persists a preference.</b></p>
+
+</body></html>
